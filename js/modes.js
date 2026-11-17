@@ -1,0 +1,362 @@
+/* Einmaleins – Übungen: Trainer, Auswählen, Geteilt & Lücken, Reihen-Treppe, Blitztest */
+'use strict';
+
+const EX_ART = {
+  trainer: `<svg viewBox="0 0 48 48"><rect x="6" y="6" width="36" height="36" rx="10" fill="currentColor" opacity=".16"/><g fill="currentColor"><rect x="12" y="12" width="7" height="7" rx="2"/><rect x="21" y="12" width="7" height="7" rx="2"/><rect x="30" y="12" width="7" height="7" rx="2"/><rect x="12" y="21" width="7" height="7" rx="2"/><rect x="21" y="21" width="7" height="7" rx="2"/><rect x="30" y="21" width="7" height="7" rx="2"/><rect x="12" y="30" width="7" height="7" rx="2"/><rect x="21" y="30" width="16" height="7" rx="2" opacity=".55"/></g></svg>`,
+  choice: `<svg viewBox="0 0 48 48"><g fill="currentColor"><rect x="5" y="6" width="17" height="15" rx="5" opacity=".25"/><rect x="26" y="6" width="17" height="15" rx="5"/><rect x="5" y="25" width="17" height="15" rx="5" opacity=".25"/><rect x="26" y="25" width="17" height="15" rx="5" opacity=".25"/></g><path d="M30.5 14l3 3 6-6.5" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  inverse: `<svg viewBox="0 0 48 48"><rect x="6" y="8" width="36" height="32" rx="9" fill="currentColor" opacity=".16"/><circle cx="24" cy="15" r="3" fill="currentColor"/><circle cx="24" cy="33" r="3" fill="currentColor"/><rect x="12" y="22" width="24" height="4.5" rx="2.2" fill="currentColor"/></svg>`,
+  reihen: `<svg viewBox="0 0 48 48"><path d="M5 42h9v-8h9v-8h9v-8h9V8" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="40" cy="5" r="3.5" fill="currentColor"/></svg>`,
+  blitz: `<svg viewBox="0 0 48 48"><circle cx="24" cy="26" r="17" fill="currentColor" opacity=".16"/><path d="M26 6 14 28h9l-2 15 13-21h-9z" fill="currentColor"/></svg>`,
+};
+const EXERCISES = [
+  { id: 'trainer', name: 'Trainer', desc: 'Ergebnis eintippen. Was Mühe macht, kommt wieder.', color: 'teal', art: EX_ART.trainer },
+  { id: 'choice', name: 'Auswählen', desc: 'Aus vier Antworten die richtige antippen.', color: 'coral', art: EX_ART.choice },
+  { id: 'inverse', name: 'Geteilt & Lücken', desc: '56 : 8 = ?  und  ? · 8 = 56', color: 'blue', art: EX_ART.inverse },
+  { id: 'reihen', name: 'Reihen-Treppe', desc: 'Eine Reihe hinauf, dann gemischt.', color: 'purple', art: EX_ART.reihen },
+  { id: 'blitz', name: 'Blitztest', desc: '20 Rechnungen auf Zeit. Schaffst du 3 Sterne?', color: 'sun', art: EX_ART.blitz, bestText: (ms) => `${(ms / 1000).toFixed(1).replace('.', ',')} s` },
+];
+const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((x) => [x.id, x]));
+
+/* ---------------- Zahlenfeld ---------------- */
+const pad = { value: '', active: false, max: 3, onInput: null, onSubmit: null };
+function numpadHTML() {
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'];
+  return `<div class="numpad" role="group" aria-label="Zahlenfeld">${keys.map((k) => {
+    if (k === 'del') return `<button type="button" class="pad-key del" data-action="pad" data-k="del" aria-label="Löschen">${icon('back')}</button>`;
+    if (k === 'ok') return `<button type="button" class="pad-key ok" data-action="pad" data-k="ok" aria-label="Prüfen">OK</button>`;
+    return `<button type="button" class="pad-key" data-action="pad" data-k="${k}">${k}</button>`;
+  }).join('')}</div>`;
+}
+function padPress(k) {
+  if (!pad.active) return;
+  if (k === 'ok') { if (pad.value) pad.onSubmit?.(pad.value); return; }
+  if (k === 'del') pad.value = pad.value.slice(0, -1);
+  else if (/^\d$/.test(k) && pad.value.length < pad.max) pad.value = (pad.value === '0' ? '' : pad.value) + k;
+  else return;
+  sfx.tap();
+  pad.onInput?.(pad.value);
+}
+document.addEventListener('keydown', (e) => {
+  if (!pad.active || ui.modal || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.matches?.('input, textarea, select')) return;
+  if (/^\d$/.test(e.key)) { e.preventDefault(); padPress(e.key); flashKey(e.key); }
+  else if (e.key === 'Backspace') { e.preventDefault(); padPress('del'); flashKey('del'); }
+  else if (e.key === 'Enter') { e.preventDefault(); padPress('ok'); flashKey('ok'); }
+});
+function flashKey(k) {
+  const b = $(`.pad-key[data-k="${k}"]`);
+  if (!b) return;
+  b.classList.add('pressed');
+  setTimeout(() => b.classList.remove('pressed'), 120);
+}
+
+/* ---------------- Gemeinsamer Zustand ---------------- */
+const ex = { mode: null, picker: null, total: 20, i: 0, right: 0, wrong: 0, task: null, phase: 'ask', mistakes: [], t0: 0, tick: null, timers: [], reihe: 7, step: 0, stage: 'up', order: [] };
+const exLater = (fn, ms) => { const t = setTimeout(fn, ms); ex.timers.push(t); return t; };
+function stopExercise() {
+  ex.timers.forEach(clearTimeout); ex.timers = [];
+  clearInterval(ex.tick); ex.tick = null;
+  pad.active = false;
+}
+function openExercise(id) {
+  if (!EXERCISE_BY_ID[id]) return;
+  go('ex', { mode: id });
+}
+
+function inverseKinds() {
+  const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
+  const o = cls?.ops;
+  if (!o) return { div: true, gap: true };
+  const k = { div: !!o.div, gap: !!o.gap };
+  return k.div || k.gap ? k : { div: true, gap: true };
+}
+
+function renderExercise() {
+  stopExercise();
+  const m = ui.mode;
+  Object.assign(ex, { mode: m, i: 0, right: 0, wrong: 0, mistakes: [], phase: 'ask', task: null, t0: performance.now() });
+  if (m === 'reihen') { renderReihenStart(); return; }
+  ex.total = m === 'blitz' ? 20 : (db.settings.roundLen || 20);
+  const ps = practiceSettings();
+  const kinds = m === 'inverse' ? inverseKinds() : m === 'blitz' ? { mul: ps.ops.mul || (!ps.ops.div && !ps.ops.gap), div: ps.ops.div, gap: false } : null;
+  ex.picker = createPicker(buildPool(ps, kinds));
+  const info = EXERCISE_BY_ID[m];
+  $('#view').innerHTML = `<section class="mode ex-${m} c-${info.color}">
+    <div class="mode-bar">
+      <h1 class="mode-title">${esc(info.name)}</h1>
+      <div class="mode-controls">
+        ${m === 'blitz' ? `<span class="timer" id="timer">${icon('clock')} <b>0,0</b> s</span>` : `<div class="seg small" aria-label="Länge der Runde">${[10, 20, 30].map((n) => `<button class="seg-btn" data-action="round-len" data-n="${n}" aria-pressed="${ex.total === n}">${n}</button>`).join('')}</div>`}
+      </div>
+    </div>
+    <div class="progress" aria-hidden="true"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
+    <div class="progress-label"><span id="plabel"></span><span class="tally"><b class="ok">${icon('check')}<span id="t-ok">0</span></b><b class="bad">${icon('x')}<span id="t-bad">0</span></b></span></div>
+    <div id="stage" class="stage"></div>
+    <p class="mode-hint keys">${m === 'choice' ? 'Tasten 1–4 wählen eine Antwort.' : 'Du kannst auch mit der Tastatur tippen. Enter = prüfen.'}</p>
+  </section>`;
+  if (m === 'blitz') {
+    ex.t0 = performance.now();
+    ex.tick = setInterval(() => { const el = $('#timer b'); if (el) el.textContent = ((performance.now() - ex.t0) / 1000).toFixed(1).replace('.', ','); }, 100);
+  }
+  nextExTask();
+}
+
+function updateExProgress() {
+  const f = $('#pfill');
+  if (f) f.style.width = `${(ex.i / ex.total) * 100}%`;
+  const l = $('#plabel');
+  if (l) l.textContent = ex.i < ex.total ? `Rechnung ${ex.i + 1} von ${ex.total}` : 'Fertig!';
+  const o = $('#t-ok'), b = $('#t-bad');
+  if (o) o.textContent = ex.right;
+  if (b) b.textContent = ex.wrong;
+}
+
+function nextExTask() {
+  if (ex.i >= ex.total) { finishExercise(); return; }
+  ex.task = ex.picker.next();
+  ex.phase = 'ask';
+  updateExProgress();
+  if (ex.mode === 'choice') renderChoiceTask(); else renderInputTask();
+}
+
+/* ---------------- Eintippen (Trainer, Geteilt & Lücken, Blitztest) ---------------- */
+function renderInputTask() {
+  const t = ex.task;
+  $('#stage').innerHTML = `<div class="task-card" id="tcard">
+      <div class="task" id="task">${taskHTML(t, '<span class="slot" id="slot"><span class="slot-val"></span></span>')}</div>
+      <div class="feedback" id="fb" aria-live="polite"></div>
+    </div>
+    ${numpadHTML()}
+    ${ex.mode !== 'blitz' ? `<div class="row center under-pad"><button class="btn small ghost" data-action="ex-hint">${icon('help')} Tipp</button></div>` : ''}`;
+  pad.value = '';
+  pad.max = 3;
+  pad.active = true;
+  pad.onInput = (v) => {
+    const s = $('#slot .slot-val');
+    if (s) s.textContent = v;
+    $('#slot')?.classList.toggle('filled', !!v);
+    if (ex.phase === 'ask' && db.settings.autoCheck && v.length >= String(t.answer).length) submitInput(v);
+    if (ex.phase === 'fix' && Number(v) === t.answer) exLater(() => { ex.i++; nextExTask(); }, 450);
+  };
+  pad.onSubmit = (v) => {
+    if (ex.phase === 'ask') submitInput(v);
+    else if (ex.phase === 'fix') { ex.i++; nextExTask(); }
+  };
+}
+
+function submitInput(v) {
+  const t = ex.task;
+  if (ex.phase !== 'ask') return;
+  if (ex.mode === 'reihen') { ex.phase = 'done'; reiheAnswer(v); return; }
+  const ms = performance.now() - t.shownAt;
+  const ok = recordAnswer(t, v, ms);
+  const card = $('#tcard'), fb = $('#fb');
+  if (ok) {
+    ex.right++;
+    ex.phase = 'done';
+    pad.active = false;
+    sfx.good();
+    card.classList.add('good');
+    const fast = ms < 2500;
+    if (ex.mode !== 'blitz') fb.innerHTML = `<span class="fb-good">${icon('check')} ${pick(fast ? ['Blitzschnell!', 'Super schnell!', 'Wow!', 'Genau!'] : ['Richtig!', 'Genau!', 'Stimmt!', 'Gut gemacht!'])}</span>`;
+    updateExProgress();
+    exLater(() => { ex.i++; nextExTask(); }, ex.mode === 'blitz' ? 260 : 650);
+    return;
+  }
+  ex.wrong++;
+  ex.mistakes.push({ t, given: v });
+  sfx.bad();
+  card.classList.add('bad');
+  updateExProgress();
+  if (ex.mode === 'blitz') {
+    ex.phase = 'done';
+    pad.active = false;
+    fb.innerHTML = `<span class="fb-bad">${esc(taskText(t, true))}</span>`;
+    exLater(() => { ex.i++; nextExTask(); }, 900);
+    return;
+  }
+  // Falsch: Lösung und Rechenhilfe zeigen, dann das richtige Ergebnis abtippen
+  ex.phase = 'fix';
+  pad.value = '';
+  exLater(() => {
+    card.classList.remove('bad');
+    card.classList.add('fixing');
+    const s = $('#slot .slot-val'); if (s) s.textContent = '';
+    $('#slot')?.classList.remove('filled');
+  }, 600);
+  fb.innerHTML = `<div class="fb-wrong">
+      <p class="fb-sol"><span class="muted">Nicht ganz${v ? ` (${esc(v)})` : ''}.</span> Richtig ist <strong>${esc(taskText(t, true))}</strong></p>
+      <div class="help-box">${dotFieldSVG(t.op === 'gapB' ? t.a : t.a, t.b, { size: 13 })}<p>${esc(strategyText(t))}</p></div>
+      <p class="hint">Tippe das richtige Ergebnis ab – dann geht es weiter. Diese Rechnung kommt bald nochmals.</p>
+      <button class="btn small ghost" data-action="ex-skip">Weiter ${icon('right')}</button>
+    </div>`;
+}
+function showExHint() {
+  const t = ex.task, fb = $('#fb');
+  if (!t || !fb || ex.phase !== 'ask') return;
+  fb.innerHTML = `<div class="help-box">${dotFieldSVG(t.a, t.b, { size: 13 })}<p>${esc(t.op === 'mul' ? strategyText(t).replace(/ = \d+\.$/, ' = …').replace(/: also \d+\.$/, '.').replace(/→ \d+\.$/, '…') : `Welche Zahl mal ${t.op === 'gapB' ? t.a : t.b} gibt ${t.p}? Zähle in der ${t.op === 'gapB' ? t.a : t.b}er-Reihe.`)}</p></div>`;
+}
+
+/* ---------------- Auswählen ---------------- */
+function renderChoiceTask() {
+  const t = ex.task;
+  const opts = choicesFor(t, 4);
+  pad.active = false;
+  $('#stage').innerHTML = `<div class="task-card" id="tcard">
+      <div class="task" id="task">${taskHTML(t, '<span class="slot" id="slot"><span class="slot-val">?</span></span>')}</div>
+      <div class="feedback" id="fb" aria-live="polite"></div>
+    </div>
+    <div class="choices">${opts.map((o, i) => `<button class="choice" data-action="ex-choice" data-v="${o}"><small>${i + 1}</small>${o}</button>`).join('')}</div>`;
+}
+function exChoose(btn) {
+  if (ex.phase !== 'ask') return;
+  const t = ex.task;
+  const v = btn.dataset.v;
+  const ms = performance.now() - t.shownAt;
+  const ok = recordAnswer(t, v, ms);
+  ex.phase = 'done';
+  $$('.choice').forEach((b) => { b.disabled = true; if (Number(b.dataset.v) === t.answer) b.classList.add('right'); });
+  $('#slot .slot-val').textContent = t.answer;
+  if (ok) {
+    ex.right++; sfx.good(); $('#tcard').classList.add('good');
+    btn.classList.add('right');
+    updateExProgress();
+    exLater(() => { ex.i++; nextExTask(); }, 700);
+  } else {
+    ex.wrong++; sfx.bad(); btn.classList.add('wrong'); $('#tcard').classList.add('bad');
+    ex.mistakes.push({ t, given: v });
+    updateExProgress();
+    $('#fb').innerHTML = `<div class="fb-wrong"><div class="help-box">${dotFieldSVG(t.a, t.b, { size: 12 })}<p>${esc(strategyText(t))}</p></div>
+      <button class="btn primary" data-action="ex-skip" autofocus>Weiter ${icon('right')}</button></div>`;
+    $('#fb .btn')?.focus();
+  }
+}
+document.addEventListener('keydown', (e) => {
+  if (ui.view !== 'ex' || ui.modal) return;
+  if (ex.mode === 'choice' && /^[1-4]$/.test(e.key) && ex.phase === 'ask') { const b = $$('.choice')[+e.key - 1]; if (b) exChoose(b); }
+  else if (ex.mode === 'choice' && e.key === 'Enter' && ex.phase === 'done' && $('#fb [data-action="ex-skip"]')) { e.preventDefault(); ex.i++; nextExTask(); }
+});
+
+/* ---------------- Ergebnis ---------------- */
+function finishExercise() {
+  stopExercise();
+  updateExProgress();
+  const m = ex.mode, info = EXERCISE_BY_ID[m];
+  const ms = performance.now() - ex.t0;
+  const acc = ex.total ? ex.right / ex.total : 0;
+  let st = acc >= 0.95 ? 3 : acc >= 0.8 ? 2 : acc >= 0.5 ? 1 : 0;
+  let extra = '';
+  if (m === 'blitz') {
+    const per = ms / ex.total;
+    st = ex.wrong === 0 && per <= 3000 ? 3 : ex.wrong <= 1 && per <= 5000 ? 2 : ex.wrong <= 3 ? 1 : 0;
+    const key = 'ex:blitz';
+    const old = db.prog.best[key];
+    const rec = ex.wrong <= 1 && (old == null || ms < old);
+    if (rec) { db.prog.best[key] = Math.round(ms); saveDB(); }
+    extra = `<p class="result-big">${icon('clock')} ${(ms / 1000).toFixed(1).replace('.', ',')} Sekunden</p>${rec ? '<p class="pill good">Neue Bestzeit!</p>' : old != null ? `<p class="muted">Bestzeit: ${(old / 1000).toFixed(1).replace('.', ',')} s (mit höchstens 1 Fehler)</p>` : '<p class="muted small">Bestzeit zählt mit höchstens 1 Fehler.</p>'}`;
+  } else {
+    const key = `ex:${m}`;
+    db.prog.best[key] = Math.max(db.prog.best[key] || 0, st);
+    saveDB();
+  }
+  if (st >= 2) { sfx.win(); confetti(); }
+  const titles = ['Weiter üben!', 'Gut gemacht!', 'Sehr gut!', 'Hervorragend!'];
+  const host = m === 'reihen' ? $('.reihe-layout') : $('#stage');
+  host.innerHTML = `<div class="result">
+    ${stars(st)}
+    <h2>${titles[st]}</h2>
+    <p class="result-line">${ex.right} von ${ex.total} richtig.</p>
+    ${extra}
+    ${ex.mistakes.length ? `<div class="mistakes"><p class="label">Diese Rechnungen kommen bald wieder</p><ul>${[...new Map(ex.mistakes.map((x) => [x.t.key + x.t.op, x])).values()].map((x) => `<li><span class="m-task">${esc(taskText(x.t, true))}</span>${x.given ? `<span class="m-given">du: ${esc(x.given)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
+    <div class="row center">
+      <button class="btn primary big" data-action="ex-again">${icon('flip')} Nochmals</button>
+      <button class="btn ghost big" data-action="home">Andere Übung</button>
+    </div>
+  </div>`;
+  $('.mode-hint')?.remove();
+}
+
+/* ---------------- Reihen-Treppe ---------------- */
+function weakestReihe() {
+  const ps = practiceSettings();
+  let best = ps.reihen[0], worst = -1;
+  for (const b of ps.reihen) {
+    let d = 0;
+    for (let a = 1; a <= 10; a++) d += difficulty(db.prog.f[`${a}x${b}`]) + (db.prog.f[`${a}x${b}`] ? 0 : 0.15);
+    if (b === 1 || b === 10) d *= 0.5;
+    if (d > worst) { worst = d; best = b; }
+  }
+  return best;
+}
+function renderReihenStart() {
+  const ps = practiceSettings();
+  if (!ps.reihen.includes(ex.reihe)) ex.reihe = weakestReihe();
+  const info = EXERCISE_BY_ID.reihen;
+  $('#view').innerHTML = `<section class="mode ex-reihen c-${info.color}">
+    <div class="mode-bar"><h1 class="mode-title">${info.name}</h1></div>
+    <div class="panel reihen-start">
+      <h2>Welche Reihe?</h2>
+      <div class="reihen">${ps.reihen.map((r) => `<button type="button" class="reihe r${r}" data-action="reihe-pick" data-r="${r}" aria-pressed="${ex.reihe === r}"><b>${r}</b><small>er</small></button>`).join('')}</div>
+      <p class="hint">Vorgeschlagen ist die Reihe, die dir am meisten Mühe macht. Zuerst gehst du die Treppe hinauf (1 ${SIGN()} ${ex.reihe}, 2 ${SIGN()} ${ex.reihe} …), dann kommen dieselben Rechnungen gemischt.</p>
+      <button class="btn primary big" data-action="reihe-go">${icon('play')} Los</button>
+    </div>
+  </section>`;
+}
+function startReihe() {
+  stopExercise();
+  Object.assign(ex, { mode: 'reihen', step: 0, stage: 'up', right: 0, wrong: 0, mistakes: [], i: 0, total: 20, t0: performance.now() });
+  ex.order = shuffle(ALL_REIHEN);
+  const b = ex.reihe;
+  $('#view').innerHTML = `<section class="mode ex-reihen c-purple">
+    <div class="mode-bar"><h1 class="mode-title">${b}er-Reihe</h1>
+      <span class="stage-pill" id="rstage">Treppe hinauf</span></div>
+    <div class="progress" aria-hidden="true"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
+    <div class="progress-label"><span id="plabel"></span><span class="tally"><b class="ok">${icon('check')}<span id="t-ok">0</span></b><b class="bad">${icon('x')}<span id="t-bad">0</span></b></span></div>
+    <div class="reihe-layout">
+      <div class="stairs" id="stairs" aria-hidden="true">${ALL_REIHEN.map((a) => `<div class="stair" data-a="${a}" style="--a:${a}"><span class="st-q">${a}${SIGN()}${b}</span><b class="st-v"></b></div>`).join('')}<span class="climber" id="climber">🐿️</span></div>
+      <div class="reihe-input"><div id="stage" class="stage"></div></div>
+    </div>
+  </section>`;
+  nextReiheTask();
+}
+function nextReiheTask() {
+  const b = ex.reihe;
+  if (ex.i >= 20) { finishExercise(); return; }
+  const a = ex.stage === 'up' ? ex.i + 1 : ex.order[ex.i - 10];
+  ex.task = { ...makeTask(a, b, 'mul'), shownAt: performance.now() };
+  ex.phase = 'ask';
+  updateExProgress();
+  $('#rstage').textContent = ex.stage === 'up' ? 'Treppe hinauf' : 'Jetzt gemischt';
+  $$('.stair').forEach((s) => s.classList.toggle('cur', +s.dataset.a === a));
+  renderInputTask();
+  $('.under-pad')?.remove();
+}
+function reiheAnswer(v) {
+  const t = ex.task;
+  const ok = Number(v) === t.answer;
+  // Die Treppe hinauf ist leichter (immer + die Reihe): nur Fehler zählen fürs Gedächtnis. Gemischt zählt alles.
+  if (ex.stage === 'mix' || !ok) recordAnswer(t, v, performance.now() - t.shownAt);
+  const st = $(`.stair[data-a="${t.a}"]`);
+  if (ok) {
+    ex.right++; sfx.jump();
+    st?.classList.add('done'); if (st) st.querySelector('.st-v').textContent = t.answer;
+    $('#tcard')?.classList.add('good');
+    moveClimber(t.a);
+  } else {
+    ex.wrong++; sfx.bad();
+    ex.mistakes.push({ t, given: v });
+    $('#tcard')?.classList.add('bad');
+    $('#fb').innerHTML = `<span class="fb-bad">${esc(taskText(t, true))}</span>`;
+    if (st) { st.classList.add('done', 'was-bad'); st.querySelector('.st-v').textContent = t.answer; }
+  }
+  pad.active = false;
+  updateExProgress();
+  exLater(() => {
+    ex.i++;
+    if (ex.i === 10) { ex.stage = 'mix'; $$('.stair').forEach((s) => { s.classList.remove('done', 'was-bad'); s.querySelector('.st-v').textContent = ''; }); moveClimber(0); }
+    nextReiheTask();
+  }, ok ? 550 : 1500);
+}
+function moveClimber(a) {
+  const c = $('#climber');
+  if (c) c.style.setProperty('--a', a);
+}
