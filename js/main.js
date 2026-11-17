@@ -113,9 +113,12 @@ function init() {
   loadDB();
   renderShell();
   render();
-  cloudInit();
-  kidLoginFromHash().then((handled) => {
-    if (!handled && isKid()) kidRefresh().catch(() => { /* offline: mit dem Stand auf dem Gerät weiter */ });
+  cloudInit().finally(async () => {
+    const handled = await kidLoginFromHash();
+    if (handled) return;
+    const before = kid.token;
+    await kidSsoCheck(); // gemeinsames Anmelden mit Vokaboom
+    if (isKid() && kid.token === before) kidRefresh().catch(() => { /* offline: mit dem Stand auf dem Gerät weiter */ });
   });
 }
 init();

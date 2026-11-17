@@ -53,9 +53,13 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 2. **Kinder** eintragen: Vorname und erster Buchstabe des Nachnamens, einzeln oder als Liste (auch aus Excel).
 3. Jedes Kind bekommt wie bei Vokaboom einen **Benutzernamen** (z. B. `Baum34`) und ein **Bilder-Passwort** aus 3 Bildern.
 
-   **Oder eine ganze Klasse aus Vokaboom übernehmen** (Meine Klassen → „Aus Vokaboom übernehmen“): Die Kinder behalten ihren Vokaboom-Benutzernamen und ihre 3 Bilder und melden sich mit **demselben Kärtchen** in beiden Tools an. Vergibt die Lehrperson später neue Bilder (in Vokaboom oder Einmaleins), gelten sie in beiden. Kommen in Vokaboom neue Kinder dazu, holt „Mit Vokaboom abgleichen“ sie nach. Vokaboom selbst wird dabei nur gelesen.
+   **Mit Vokaboom verbinden – in beide Richtungen:**
+   - „Meine Klassen → Aus Vokaboom übernehmen“ macht aus einer Vokaboom-Klasse eine Einmaleins-Klasse.
+   - In einer Einmaleins-Klasse unter „Kinder → Mit Vokaboom verbinden“: mit einer bestehenden Vokaboom-Klasse verbinden oder die Klasse in Vokaboom neu anlegen.
+   - Danach hat jedes Kind in beiden Tools **denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen**. Neue Kinder, egal in welchem Tool angelegt, bekommen automatisch dasselbe Login im anderen. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen). Neue Bilder gelten in beiden Tools.
+   - Löschen: Bei verbundenen Kindern fragt Einmaleins „Nur in Einmaleins“ oder „Auch in Vokaboom“. Nur hier gelöschte Kinder holt der automatische Abgleich nicht zurück.
 4. **Reihen**: festlegen, welche Reihen und Aufgabenarten die Klasse übt, und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen.
-5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo**: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Einmaleins, bei Kindern mit Vokaboom-Login zusätzlich **ABC Vokabeln** für Vokaboom. QR-Code scannen = angemeldet.
+5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo** und sehen in Einmaleins und Vokaboom gleich aus: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Einmaleins, bei Kindern, die auch in Vokaboom sind, zusätzlich **ABC Vokabeln**. QR-Code scannen = angemeldet.
 6. **Übersicht**:
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
    - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen und die häufigsten Fehler mit den typischen falschen Antworten
@@ -71,6 +75,15 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 - Unten: Zeit, Anzahl richtig und drei Sterne zum Ausmalen.
 - Die PDFs sind echte Vektor-PDFs (gestochen scharf beim Drucken, klein).
 
+## Gemeinsam angemeldet mit Vokaboom
+
+Laufen beide Tools unter **fabulousteaching.ch** (`vokaboom.fabulousteaching.ch` und `einmaleins.fabulousteaching.ch`), gilt die Anmeldung für beide:
+
+- **Lehrperson:** In einem Tool angemeldet = im anderen auch angemeldet (auf demselben Gerät und Browser). Abmelden meldet in beiden ab.
+- **Kind:** Ein Kind, das in Vokaboom angemeldet ist, ist auch in Einmaleins angemeldet und umgekehrt – sofern es in beiden Tools ist (verbundene Klasse). Abmelden gilt in beiden; meldet sich auf einem geteilten iPad ein anderes Kind an, wechselt das andere Tool mit.
+- Auf der Startseite der Kinder gibt es den Knopf **„ABC Vokabeln üben“** (in Vokaboom **„1×1 Rechnen üben“**): Er wechselt mit derselben Anmeldung ins andere Tool – das funktioniert unter jeder Adresse.
+- Technisch: kleine Cookies der Domain fabulousteaching.ch (`js/sso.js`, in beiden Repositories gleich). Unter einer anderen Adresse (z. B. github.io) arbeitet jedes Tool wie bisher für sich.
+
 ## Speichern
 
 - Ohne Anmeldung wird alles nur im Browser gespeichert (localStorage).
@@ -82,6 +95,8 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 Die Anmeldung läuft über dasselbe [Supabase](https://supabase.com)-Projekt wie Vokaboom. Einmalig muss dort die Datei `supabase/einmaleins.sql` ausgeführt werden. Schritt für Schritt: [`supabase/ANLEITUNG.md`](supabase/ANLEITUNG.md).
 
 ## Online stellen (GitHub Pages)
+
+Für das gemeinsame Anmelden mit Vokaboom braucht Einmaleins die eigene Adresse **einmaleins.fabulousteaching.ch** (Schritt 3).
 
 1. Im Repository unter **Settings → Pages** „Deploy from a branch“ wählen: Branch `main`, Ordner **/ (root)**, Save.
 2. Nach ein bis zwei Minuten läuft Einmaleins unter **https://fabulousteaching.github.io/Einmaleins/**.
@@ -104,6 +119,7 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/modes.js` | Übungen: Trainer, Auswählen, Geteilt & Lücken, Reihen-Treppe, Blitztest |
 | `js/games.js` | Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen, Memory, Stimmt das?, Duell |
 | `js/sheets.js` | Übungsblätter: Auswahl der Rechnungen, Vektor-PDF und Vorschau |
+| `js/sso.js` | Gemeinsames Anmelden mit Vokaboom (Cookies auf fabulousteaching.ch, in beiden Repositories gleich) |
 | `js/cloud.js` | Anmeldung der Lehrperson |
 | `js/classes.js` | Klassen, Kinder-Login, Login-Kärtchen, Übersicht |
 | `js/main.js` | Aktionen und Start |

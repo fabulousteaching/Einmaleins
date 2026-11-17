@@ -20,8 +20,8 @@ Hast du die Datei schon einmal ausgeführt, bevor es die Übernahme aus Vokaboom
 
 **Authentication → URL Configuration → Redirect URLs**: die Adresse von Einmaleins hinzufügen, z. B.
 
-- `https://fabulousteaching.github.io/Einmaleins/**`
-- und, falls eingerichtet, `https://einmaleins.fabulousteaching.ch/**`
+- `https://einmaleins.fabulousteaching.ch/**`
+- und `https://fabulousteaching.github.io/Einmaleins/**`
 
 Die **Site URL** bleibt die von Vokaboom. Dorthin bzw. zu Einmaleins führen die Links in E-Mails (Konto bestätigen, Passwort vergessen). Ohne diesen Eintrag landen solche Links auf Vokaboom; das Anmelden mit E-Mail und Passwort funktioniert aber trotzdem.
 
@@ -30,19 +30,28 @@ Fertig. Oben rechts **Anmelden → Ich bin Lehrperson**.
 ## Klassen und Kinder-Logins
 
 - **Klasse anlegen**, dann **Kinder** eintragen (Vorname und erster Buchstabe des Nachnamens, einzeln oder als Liste). Gespeichert wird nur der Vorname und der erste Buchstabe des Nachnamens.
-- **Aus Vokaboom übernehmen** (auf der Seite „Meine Klassen“ oder im Bereich „Kinder“ einer Klasse): Die Kinder einer Vokaboom-Klasse kommen mit **ihrem Vokaboom-Benutzernamen und ihren 3 Bildern** nach Einmaleins – ein Kärtchen für beide Tools. Es gelten immer die aktuellen Bilder aus Vokaboom; „Neue Bilder“ in Einmaleins ändert sie auch in Vokaboom. Neue Kinder in der Vokaboom-Klasse holt „Mit Vokaboom abgleichen“ nach. Kinder, die schon übernommen sind, kommen nicht doppelt. Vokaboom selbst wird nur gelesen; Kinder, die in Einmaleins gelöscht werden, bleiben in Vokaboom.
-- Neue Kinder, die du direkt in Einmaleins anlegst, bekommen einen Benutzernamen, den es auch in Vokaboom nicht gibt.
+- **Mit Vokaboom verbinden (beide Richtungen):** auf der Seite „Meine Klassen“ eine Vokaboom-Klasse übernehmen, oder in einer Einmaleins-Klasse unter „Kinder“ mit einer Vokaboom-Klasse verbinden bzw. sie in Vokaboom neu anlegen. Danach hat jedes Kind in beiden Tools denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen.
+  - Neue Kinder in Einmaleins werden sofort auch in Vokaboom angelegt. Neue Kinder in Vokaboom kommen nach Einmaleins, sobald du die Klasse in Einmaleins öffnest oder sich das Kind in Einmaleins anmeldet.
+  - Gleichnamige Kinder (gleicher Vorname und Anfangsbuchstabe) werden nicht doppelt angelegt, sondern verbunden; dann gilt das Vokaboom-Kärtchen, der Übungsstand bleibt.
+  - Es gelten immer die aktuellen Bilder aus Vokaboom; „Neue Bilder“ in Einmaleins ändert sie auch dort.
+  - Löschen in Einmaleins: „Nur in Einmaleins“ (das Kind bleibt in Vokaboom und wird nicht automatisch wieder geholt; „… hier gelöschte wieder holen“ holt es zurück) oder „Auch in Vokaboom“.
+- Neue Kinder bekommen einen Benutzernamen, den es in keinem der beiden Tools gibt.
 - Jedes Kind bekommt einen **Benutzernamen** (z. B. `Baum34`, nie doppelt vergeben) und ein **Bilder-Passwort** aus 3 Bildern – genau wie bei Vokaboom.
 - **Reihen**: welche Reihen und Aufgabenarten die Klasse übt.
-- **Kärtchen**: als PDF herunterladen (10 pro A4-Seite), ausdrucken, ausschneiden. Die Kärtchen haben kein Logo. Kinder mit Vokaboom-Login bekommen zwei QR-Codes („ABC Vokabeln“ für Vokaboom, „1×1 Rechnen“ für Einmaleins). Ihre bisherigen Vokaboom-Kärtchen gelten weiterhin (Benutzername eintippen und Bilder antippen; der QR-Code darauf öffnet Vokaboom).
+- **Kärtchen**: als PDF herunterladen (10 pro A4-Seite), ausdrucken, ausschneiden. Die Kärtchen haben kein Logo und sind in Einmaleins und Vokaboom gleich. Kinder, die in beiden Tools sind, bekommen zwei QR-Codes („ABC Vokabeln“ für Vokaboom, „1×1 Rechnen“ für Einmaleins). Ältere Vokaboom-Kärtchen gelten weiterhin.
 - **Kind anmelden**: QR-Code auf dem Kärtchen scannen – oder **Anmelden → Ich bin ein Kind**, Benutzernamen eintippen und die 3 Bilder der Reihe nach antippen. Nach 8 falschen Versuchen ist 5 Minuten Pause. Auf einem Gerät, auf dem eine Lehrperson angemeldet ist, geht das Kinder-Login erst nach dem Abmelden.
 - **Kärtchen verloren?** Beim Kind auf das Symbol mit den gekreuzten Pfeilen tippen: Es bekommt neue Bilder, das alte Kärtchen gilt nicht mehr.
+
+## Gemeinsam angemeldet mit Vokaboom
+
+Laufen Vokaboom und Einmaleins beide unter fabulousteaching.ch (`vokaboom.fabulousteaching.ch` und `einmaleins.fabulousteaching.ch`), teilen sie sich die Anmeldung über Cookies dieser Domain: Wer in einem Tool angemeldet ist (Lehrperson oder Kind), ist es auf demselben Gerät auch im anderen; Abmelden gilt für beide. Dafür muss Einmaleins die eigene Adresse haben (siehe README, „Online stellen“). Kinder können ausserdem mit dem Knopf „ABC Vokabeln üben“ / „1×1 Rechnen üben“ direkt angemeldet ins andere Tool wechseln.
 
 ## Was gespeichert wird
 
 - Von Lehrpersonen: die E-Mail-Adresse (für die Anmeldung), die Klassen mit ihren Einstellungen.
 - Von Kindern: Vorname, erster Buchstabe des Nachnamens, Benutzername, Bilder-Passwort und der Übungsstand (pro Rechnung: wie oft geübt, wie oft falsch, Zeit, die letzten falschen Antworten; Übungstage; Bestleistungen in den Spielen). Keine E-Mail-Adressen.
 - Ohne Anmeldung bleibt alles im Browser des Geräts.
+- Gemeinsames Anmelden: Die Sitzung der Lehrperson und der Anmelde-Schlüssel eines Kindes liegen in Cookies der Domain fabulousteaching.ch (nur für Vokaboom und Einmaleins, keine Werbung oder Statistik).
 - Die Zugriffsregeln sorgen dafür, dass jede Lehrperson nur ihre eigenen Klassen und Kinder sieht. Kinder können nur ihren eigenen Übungsstand lesen und speichern.
 
 Kläre mit deiner Schule, ob das so erlaubt ist.

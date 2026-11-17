@@ -13,7 +13,7 @@
    ========================================================= */
 const KID_KEY = 'einmaleins.kid';
 const KID_DB_KEY = 'einmaleins.kiddb';
-const kid = { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', busy: false, again: false, status: 'ok' };
+const kid = { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', busy: false, again: false, status: 'ok', sso: false, vb: false };
 const isKid = () => !!kid.token;
 const kidClassSettings = () => (isKid() ? kid.settings || { reihen: ALL_REIHEN, ops: { mul: true, div: true, gap: true }, choose: true } : null);
 const kidName = (k = kid) => `${k.first || k.first_name || ''}${(k.initial ?? k.last_initial) ? ` ${k.initial ?? k.last_initial}.` : ''}`;
@@ -42,8 +42,8 @@ function kidLoadSession() {
   if (isKid()) STORE_KEY = KID_DB_KEY;
 }
 function kidSaveSession() {
-  const { token, first, initial, username, cls, settings, sent } = kid;
-  try { localStorage.setItem(KID_KEY, JSON.stringify({ token, first, initial, username, cls, settings, sent })); } catch { /* */ }
+  const { token, first, initial, username, cls, settings, sent, sso, vb } = kid;
+  try { localStorage.setItem(KID_KEY, JSON.stringify({ token, first, initial, username, cls, settings, sent, sso, vb })); } catch { /* */ }
 }
 function kidErrorText(e) {
   const msg = String(e?.message || e || '');
@@ -72,13 +72,18 @@ async function kidLogin(username, pics) {
   const { data, error } = await c.rpc('einmaleins_student_login', { p_username: user, p_pics: pics.join(',') });
   if (error) throw error;
   if (!data || !data.token) return false;
+  await kidStart(data.token, user);
+  return isKid();
+}
+/** Mit einem Anmelde-Schlüssel als Kind anmelden. fromCookie: kam über das gemeinsame Anmelden aus Vokaboom. */
+async function kidStart(token, user, { fromCookie = false } = {}) {
   if (isKid()) kidForget(false); else saveDB.flush();
-  Object.assign(kid, { token: data.token, username: user, first: '', initial: '', cls: '', settings: null, sent: '', status: 'ok' });
+  Object.assign(kid, { token, username: user, first: '', initial: '', cls: '', settings: null, sent: '', status: 'ok', sso: fromCookie, vb: false });
   STORE_KEY = KID_DB_KEY;
   db = { settings: { ...db.settings }, prog: emptyProg() };
   kidSaveSession();
   await kidRefresh();
-  return true;
+  if (isKid() && !fromCookie) { kid.sso = SSO.kid.set({ u: kid.username, tool: 'e', t: kid.token }); kidSaveSession(); }
 }
 async function kidRefresh() {
   if (!isKid()) return;
@@ -89,6 +94,7 @@ async function kidRefresh() {
     throw error;
   }
   kid.first = data.student?.first || ''; kid.initial = data.student?.initial || ''; kid.cls = data.class?.name || '';
+  kid.username = data.student?.username || kid.username; kid.vb = !!data.student?.vokaboom;
   kid.settings = cleanClassSettings(data.class?.settings);
   const local = db.prog;
   const localDirty = kid.sent !== progHash(local) && local.q > 0;
@@ -127,12 +133,13 @@ function onDbSaved() { if (isKid()) kidPushSoon(); }
 async function kidLogout() {
   try { await kidPushNow(); } catch { /* */ }
   try { const c = await cloudClient(); await c.rpc('einmaleins_student_logout', { p_token: kid.token }); } catch { /* */ }
+  if (SSO.kid.get()?.u === kid.username) SSO.kid.clear(); // gemeinsames Anmelden: auch in Vokaboom abmelden
   kidForget();
   toast('Abgemeldet. Tschüss!');
 }
 function kidForget(rerender = true) {
   try { localStorage.removeItem(KID_KEY); localStorage.removeItem(KID_DB_KEY); } catch { /* */ }
-  Object.assign(kid, { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', status: 'ok' });
+  Object.assign(kid, { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', status: 'ok', sso: false, vb: false });
   STORE_KEY = MAIN_STORE_KEY;
   db = { settings: structuredClone(DEFAULT_SETTINGS), prog: emptyProg() };
   loadDB();
@@ -143,17 +150,64 @@ function kidForget(rerender = true) {
   renderShell(); render();
 }
 
-/** Login über den QR-Code auf dem Kärtchen: …#k=maus67.11-0-2 */
+/** Gemeinsames Anmelden mit Vokaboom (Cookie auf fabulousteaching.ch): Kind übernehmen oder abmelden */
+const ssoTried = new Set();
+async function kidSsoCheck() {
+  if (!SSO.DOMAIN || !cloudConfigured() || cloud.uid || SSO.teacherSignedIn(AUTH_KEY)) return;
+  const c = SSO.kid.get();
+  if (!c) { if (isKid() && kid.sso) { kidForget(); toast('Abgemeldet.'); } return; }
+  if (isKid() && kid.username === c.u) { SSO.kid.set(c); if (!kid.sso) { kid.sso = true; kidSaveSession(); } return; } // Cookie erneuern
+  const key = c.tool + c.t;
+  if (ssoTried.has(key)) return;
+  ssoTried.add(key);
+  try {
+    let tok = c.tool === 'e' ? c.t : '', user = c.u;
+    if (c.tool === 'v') {
+      const cl = await cloudClient();
+      const { data } = await cl.rpc('einmaleins_kid_bridge', { p_from: 'vokaboom', p_token: c.t });
+      if (data?.token) { tok = data.token; user = data.username || c.u; }
+    }
+    if (!tok) { if (isKid() && kid.sso) { kidForget(); toast('Abgemeldet.'); } return; } // anderes Kind ohne Einmaleins
+    await kidStart(tok, user, { fromCookie: true });
+    if (isKid()) toast(`Hallo ${kid.first}! Du bist angemeldet.`);
+  } catch { /* offline: später nochmals */ ssoTried.delete(key); }
+}
+/** Knopf „Vokabeln üben“: mit derselben Anmeldung nach Vokaboom */
+function goVokaboom() {
+  const base = String(CLOUD_CFG.vokaboomUrl || '').trim();
+  if (!base) return;
+  saveDB.flush();
+  kidPushNow().finally(() => { location.href = isKid() ? `${base}#sso=e.${kid.token}` : base; });
+}
+
+/** Login über den QR-Code auf dem Kärtchen (…#k=maus67.11-0-2) oder über den Knopf in Vokaboom (…#sso=v.<Schlüssel>) */
 async function kidLoginFromHash() {
+  const sso = location.hash.match(/^#sso=([ve])\.([0-9a-f-]{36})$/i);
+  if (sso) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* */ }
+    render();
+    if (cloud.uid || SSO.teacherSignedIn(AUTH_KEY)) return true;
+    try {
+      let tok = sso[2], user = '';
+      if (sso[1] === 'v') {
+        const cl = await cloudClient();
+        const { data } = await cl.rpc('einmaleins_kid_bridge', { p_from: 'vokaboom', p_token: sso[2] });
+        tok = data?.token || ''; user = data?.username || '';
+      }
+      if (!tok) { toast('Für dich gibt es in Einmaleins noch keine Klasse. Frag deine Lehrperson.', 'bad'); return true; }
+      if (isKid() && kid.token === tok) return true;
+      await kidStart(tok, user);
+      if (isKid()) toast(`Hallo ${kid.first}! Du bist angemeldet.`);
+    } catch (e) { toast(kidErrorText(e), 'bad'); }
+    return true;
+  }
   const m = location.hash.match(/^#k=([a-z]+[0-9]{2,4})\.(\d{1,2})-(\d{1,2})-(\d{1,2})$/i);
   if (!m) return false;
   try { history.replaceState(null, '', location.pathname + location.search); } catch { /* */ }
   const user = m[1].toLowerCase(), pics = [m[2], m[3], m[4]].map(Number);
   if (isKid() && kid.username === user) { render(); return true; }
-  let teacher = false;
-  try { teacher = !!localStorage.getItem(AUTH_KEY); } catch { /* */ }
   render();
-  if (teacher || cloud.uid) { openTeacherBlocks(); return true; }
+  if (cloud.uid || SSO.teacherSignedIn(AUTH_KEY)) { openTeacherBlocks(); return true; }
   toast('Anmelden …');
   try {
     if (await kidLogin(user, pics)) toast(`Hallo ${kid.first}! Du bist angemeldet.`);
@@ -247,7 +301,8 @@ function openKidAccount() {
 function kidHelloHTML() {
   return `<div class="kid-hello">
     <span class="kid-hello-pic" aria-hidden="true">${kidWordImg(kid.username)}</span>
-    <div><p class="eyebrow">${esc(kid.cls)}</p><h1>Hallo ${esc(kid.first)}!</h1><p class="lead">Such dir eine Übung oder ein Spiel aus.</p></div>
+    <div><p class="eyebrow">${esc(kid.cls)}</p><h1>Hallo ${esc(kid.first)}!</h1><p class="lead">Such dir eine Übung oder ein Spiel aus.</p>
+      ${kid.vb && CLOUD_CFG.vokaboomUrl ? `<button class="btn small secondary other-tool" data-action="go-vokaboom"><span class="ot-tag">ABC</span> Vokabeln üben</button>` : ''}</div>
   </div>`;
 }
 
@@ -262,7 +317,9 @@ function cleanClassSettings(s) {
   const o = s && typeof s === 'object' ? s : {};
   const reihen = Array.isArray(o.reihen) ? o.reihen.map(Number).filter((r) => ALL_REIHEN.includes(r)) : [];
   const ops = o.ops && typeof o.ops === 'object' ? { mul: o.ops.mul !== false, div: !!o.ops.div, gap: !!o.ops.gap } : { mul: true, div: true, gap: true };
-  return { reihen: reihen.length ? reihen : [...ALL_REIHEN], ops, choose: o.choose !== false };
+  // vbSkip: Kinder aus der verbundenen Vokaboom-Klasse, die nur in Einmaleins gelöscht wurden (nicht wieder holen)
+  const vbSkip = Array.isArray(o.vbSkip) ? o.vbSkip.filter((x) => typeof x === 'string').slice(0, 200) : [];
+  return { reihen: reihen.length ? reihen : [...ALL_REIHEN], ops, choose: o.choose !== false, ...(vbSkip.length ? { vbSkip } : {}) };
 }
 
 async function loadClasses() {
@@ -292,6 +349,20 @@ async function loadClasses() {
   })();
   return klass.loading;
 }
+/** Verbundene Klassen: Kinder, die inzwischen in Vokaboom dazugekommen sind, automatisch holen */
+async function autoSyncVokaboom() {
+  if (klass.noLink || !klass.vb) return;
+  const todo = klass.list.filter((c) => c.vokaboom_class && vbPending(c).length);
+  if (!todo.length) return;
+  let added = 0;
+  for (const c of todo) {
+    const r = await syncVokaboom(c.id, c.vokaboom_class, false, { reload: false });
+    added += (r?.added || 0) + (r?.matched || 0);
+  }
+  await loadClasses();
+  if (added) toast(`${added} ${added === 1 ? 'neues Kind' : 'neue Kinder'} aus Vokaboom übernommen.`);
+  if (['classes', 'class'].includes(ui.view)) render();
+}
 /* ---------- Vokaboom: Klassen und Kinder desselben Kontos (nur lesen) ---------- */
 async function loadVokaboom() {
   klass.vb = null;
@@ -303,7 +374,7 @@ async function loadVokaboom() {
     ]);
     if (a.error || b.error) return;
     const students = b.data || [];
-    klass.vb = { classes: (a.data || []).filter((x) => students.some((s) => s.class_id === x.id)), students, byId: new Map(students.map((s) => [s.id, s])) };
+    klass.vb = { classes: a.data || [], students, byId: new Map(students.map((s) => [s.id, s])) };
     // Übernommene Kinder: immer die aktuellen Bilder und Namen aus Vokaboom anzeigen (dort gelten sie fürs Login)
     Object.values(klass.students).flat().forEach((s) => {
       const v = s.vokaboom_id && klass.vb.byId.get(s.vokaboom_id);
@@ -313,29 +384,38 @@ async function loadVokaboom() {
 }
 const vbClassById = (id) => klass.vb?.classes.find((x) => x.id === id);
 const linkedVbIds = () => new Set(Object.values(klass.students).flat().map((s) => s.vokaboom_id).filter(Boolean));
-/** Kinder einer Vokaboom-Klasse, die es in Einmaleins noch nicht gibt */
-const vbPending = (vid) => { const have = linkedVbIds(); return (klass.vb?.students || []).filter((s) => s.class_id === vid && !have.has(s.id)); };
-/** Kinder einer Vokaboom-Klasse übernehmen (gleicher Benutzername, gleiche Bilder) */
-async function importVokaboom(cid, vid) {
-  if (klass.busy) return null;
-  klass.busy = true;
+const vbHasKids = (vid) => (klass.vb?.students || []).some((s) => s.class_id === vid);
+/** Kinder einer Vokaboom-Klasse, die es in Einmaleins noch nicht gibt (ohne die, die hier gelöscht wurden) */
+const vbPending = (c) => {
+  const vid = typeof c === 'string' ? c : c.vokaboom_class;
+  const skip = new Set(typeof c === 'string' ? [] : c.settings?.vbSkip || []);
+  const have = linkedVbIds();
+  return (klass.vb?.students || []).filter((s) => s.class_id === vid && !have.has(s.id) && !skip.has(s.id));
+};
+/** Klasse mit Vokaboom verbinden und abgleichen (beide Richtungen, gleiche Logins) */
+async function syncVokaboom(cid, vid, force = false, { reload = true } = {}) {
   try {
     const c = await cloudClient();
-    const { data, error } = await c.rpc('einmaleins_import_vokaboom', { p_class: cid, p_vclass: vid });
+    let { data, error } = await c.rpc('einmaleins_sync_vokaboom', { p_class: cid, p_vclass: vid, p_force: force });
+    if (error && /einmaleins_sync_vokaboom|PGRST202/.test(error.message + error.code)) {
+      ({ data, error } = await c.rpc('einmaleins_import_vokaboom', { p_class: cid, p_vclass: vid })); // ältere Datenbank
+    }
     if (error) throw error;
-    await loadClasses();
+    if (reload) await loadClasses();
     return data || {};
-  } catch (e) { toast(classErrorText(e), 'bad'); return null; } finally { klass.busy = false; }
+  } catch (e) { toast(classErrorText(e), 'bad'); return null; }
 }
 function importSummary(r, vName) {
   if (!r) return '';
   const parts = [];
-  if (r.added) parts.push(`${r.added} ${r.added === 1 ? 'Kind' : 'Kinder'} aus „${vName}“ übernommen`);
-  if (r.same) parts.push(`${r.same === r.added ? 'alle' : r.same} mit demselben Kärtchen wie in Vokaboom`);
+  if (r.added) parts.push(`${r.added} ${r.added === 1 ? 'Kind' : 'Kinder'} aus „${vName}“ übernommen${r.same === r.added ? ', mit demselben Kärtchen' : ''}`);
+  if (r.pushed) parts.push(`${r.pushed} ${r.pushed === 1 ? 'Kind' : 'Kinder'} in Vokaboom angelegt`);
+  if (r.matched) parts.push(`${r.matched} gleichnamige ${r.matched === 1 ? 'Kind' : 'Kinder'} verbunden (es gilt das Vokaboom-Kärtchen)`);
   if (r.newlogin) parts.push(`${r.newlogin} mit neuem Benutzernamen (schon vergeben)`);
+  if (r.conflicts) parts.push(`${r.conflicts} nicht in Vokaboom angelegt (Benutzername dort vergeben)`);
   if (r.updated) parts.push(`${r.updated} Namen oder Bilder nachgeführt`);
-  if (r.skipped) parts.push(`${r.skipped} nicht übernommen (höchstens 60 Kinder pro Klasse)`);
-  return parts.length ? parts.join(', ') + '.' : `Alle Kinder aus „${vName}“ sind schon da.`;
+  if (r.skipped || r.full_v) parts.push(`${(r.skipped || 0) + (r.full_v || 0)} nicht übernommen (höchstens 60 Kinder pro Klasse)`);
+  return parts.length ? parts.join(', ') + '.' : 'Alles ist abgeglichen.';
 }
 async function importVokaboomClass(vid) {
   const v = vbClassById(vid);
@@ -347,22 +427,22 @@ async function importVokaboomClass(vid) {
     const settings = { reihen: [...ALL_REIHEN], ops: { mul: true, div: true, gap: true }, choose: true };
     const { data, error } = await c.from('einmaleins_classes').insert({ name: v.name.slice(0, 60), settings }).select('id').single();
     if (error) throw error;
-    const r = await importVokaboom(data.id, vid);
+    const r = await syncVokaboom(data.id, vid, true);
     openClass(data.id, 'kids');
     if (r) toast(importSummary(r, v.name));
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
 function vbClassesPanelHTML() {
-  if (!klass.vb?.classes.length) return '';
+  if (!klass.vb?.classes.some((v) => vbHasKids(v.id))) return '';
   if (klass.noLink) return `<div class="panel vb-panel"><h2>Aus Vokaboom übernehmen</h2><p class="hint">Damit Klassen mit denselben Kinder-Logins übernommen werden können, bitte <code>supabase/einmaleins.sql</code> in Supabase nochmals ganz ausführen.</p></div>`;
   return `<div class="panel vb-panel">
     <h2>Aus Vokaboom übernehmen</h2>
-    <p class="hint">Die Kinder behalten ihren Benutzernamen und ihre 3 Bilder: Ein Kärtchen für beide Tools.</p>
-    <ul class="class-list">${klass.vb.classes.map((v) => {
+    <p class="hint">Die Kinder behalten ihren Benutzernamen und ihre 3 Bilder: ein Kärtchen für beide Tools. Die Klassen bleiben verbunden – neue Kinder kommen automatisch auf beide Seiten.</p>
+    <ul class="class-list">${klass.vb.classes.filter((v) => vbHasKids(v.id) || klass.list.some((x) => x.vokaboom_class === v.id)).map((v) => {
       const n = klass.vb.students.filter((s) => s.class_id === v.id).length;
       const ex = klass.list.find((x) => x.vokaboom_class === v.id);
       return `<li class="lib-item"><span class="lib-open static"><span class="class-badge vb" aria-hidden="true">${esc(v.name.slice(0, 3))}</span>
-        <span class="lib-text"><strong>${esc(v.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'}${ex ? ` · übernommen als „${esc(ex.name)}“` : ''}</small></span></span>
+        <span class="lib-text"><strong>${esc(v.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'}${ex ? ` · verbunden mit „${esc(ex.name)}“` : ''}</small></span></span>
         ${ex ? `<button class="btn small ghost" data-action="class-open" data-id="${ex.id}">Öffnen</button>` : `<button class="btn small secondary" data-action="vb-class-import" data-id="${v.id}">${icon('plus')} Übernehmen</button>`}</li>`;
     }).join('')}</ul>
   </div>`;
@@ -392,7 +472,7 @@ function openClasses() {
   closeModal(true);
   klass.confirm = '';
   go('classes');
-  loadClasses().then(() => { if (ui.view === 'classes') render(); });
+  loadClasses().then(() => { if (ui.view === 'classes') render(); autoSyncVokaboom(); });
 }
 function openClass(id, tab) {
   const kids = studentsOf(id);
@@ -420,7 +500,7 @@ function renderClasses() {
         const r = c.settings.reihen.length === 10 ? 'alle Reihen' : `${c.settings.reihen.length === 1 ? 'Reihe' : 'Reihen'} ${c.settings.reihen.join(', ')}`;
         return `<li class="lib-item"><button class="lib-open" data-action="class-open" data-id="${c.id}">
             <span class="class-badge" aria-hidden="true">${esc(c.name.slice(0, 3))}</span>
-            <span class="lib-text"><strong>${esc(c.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'} · ${esc(r)}</small></span></button>
+            <span class="lib-text"><strong>${esc(c.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'} · ${esc(r)}${c.vokaboom_class && vbClassById(c.vokaboom_class) ? ' <span class="vb-tag">mit Vokaboom verbunden</span>' : ''}</small></span></button>
           <button class="icon-btn subtle" data-action="class-delete" data-id="${c.id}" aria-label="Klasse „${esc(c.name)}“ löschen" title="Löschen">${icon('trash')}</button></li>`;
       }).join('')}</ul>` : '<p class="empty">Noch keine Klasse. Lege links deine erste Klasse an.</p>';
   v.innerHTML = `<section class="classes-view">
@@ -469,7 +549,7 @@ const CLASS_TABS = [['overview', 'chart', 'Übersicht'], ['kids', 'users', 'Kind
 function renderClass() {
   const v = $('#view');
   const c = currentClass();
-  if (!klass.loaded) { v.innerHTML = '<p class="muted"><span class="spinner"></span> Wird geladen …</p>'; loadClasses().then(() => { if (ui.view === 'class') render(); }); return; }
+  if (!klass.loaded) { v.innerHTML = '<p class="muted"><span class="spinner"></span> Wird geladen …</p>'; loadClasses().then(() => { if (ui.view === 'class') render(); autoSyncVokaboom(); }); return; }
   if (!c) { ui.view = 'classes'; render(); return; }
   const kids = studentsOf(c.id);
   const body = klass.tab === 'kids' ? classKidsHTML(c, kids) : klass.tab === 'settings' ? classSettingsHTML(c) : klass.tab === 'cards' ? classCardsHTML(c, kids) : classOverviewHTML(c, kids);
@@ -492,12 +572,16 @@ function renderClass() {
 function classKidsHTML(c, kids) {
   const rows = kids.map((s) => {
     if (klass.confirm === s.id) {
-      return `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Login und der Übungsstand werden gelöscht.</small></span>
-        <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}">Löschen</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`;
+      const linked = s.vokaboom_id && klass.vb?.byId.get(s.vokaboom_id);
+      return linked
+        ? `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Kind ist auch in Vokaboom. Der Übungsstand in Einmaleins wird gelöscht.</small></span>
+          <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="here">Nur in Einmaleins</button><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="both">Auch in Vokaboom</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`
+        : `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Login und der Übungsstand werden gelöscht.</small></span>
+          <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}">Löschen</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`;
     }
     return `<li class="kid-row">
       <span class="kid-av-big" aria-hidden="true">${kidWordImg(s.username)}</span>
-      <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}${s.vokaboom_id ? ' <span class="vb-tag" title="Gleiches Kärtchen wie in Vokaboom">Vokaboom-Login</span>' : ''}</small></span>
+      <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}${s.vokaboom_id && klass.vb?.byId.get(s.vokaboom_id) ? ' <span class="vb-tag" title="Gleiches Kärtchen wie in Vokaboom">auch in Vokaboom</span>' : ''}</small></span>
       <span class="kid-pw" aria-label="Bilder-Passwort">${picsList(s.pics).map((i) => `<span>${kidPwImg(i)}</span>`).join('')}</span>
       <span class="kid-actions">
         <button class="icon-btn subtle" data-action="kid-newpics" data-id="${s.id}" title="Neue Bilder (neues Passwort)" aria-label="Neue Bilder für ${esc(kidName(s))}">${icon('shuffle')}</button>
@@ -569,45 +653,65 @@ async function addKids(c, list) {
     const arr = klass.students[c.id] = klass.students[c.id] || [];
     (data || []).forEach((s) => arr.push(s));
     arr.sort((a, b) => a.first_name.localeCompare(b.first_name, 'de'));
+    const inVb = c.vokaboom_class && (data || []).some((x) => x.vokaboom_id);
+    if (inVb) await loadVokaboom();
     render();
-    toast(list.length === 1 ? `${list[0].first} ist dabei.` : `${(data || []).length} Kinder hinzugefügt.`);
+    toast((list.length === 1 ? `${list[0].first} ist dabei.` : `${(data || []).length} Kinder hinzugefügt.`) + (inVb ? ' Auch in Vokaboom, mit demselben Kärtchen.' : ''));
   } catch (e) { toast(classErrorText(e), 'bad'); } finally { klass.busy = false; }
 }
 function vbKidsBoxHTML(c) {
-  if (!klass.vb?.classes.length) return '';
-  if (klass.noLink) return '<div class="vb-import"><p class="hint">Kinder aus Vokaboom mit demselben Login übernehmen: bitte zuerst <code>supabase/einmaleins.sql</code> in Supabase nochmals ganz ausführen.</p></div>';
+  if (!klass.vb) return '';
+  if (klass.noLink) return '<div class="vb-import"><p class="hint">Mit Vokaboom verbinden (gleiche Kärtchen): bitte zuerst <code>supabase/einmaleins.sql</code> in Supabase nochmals ganz ausführen.</p></div>';
   const v = c.vokaboom_class && vbClassById(c.vokaboom_class);
   if (v) {
-    const n = vbPending(v.id).length;
-    return `<div class="vb-import"><p class="small"><span class="vb-tag">Vokaboom</span> Verknüpft mit „${esc(v.name)}“. Die Kinder melden sich mit ihrem Vokaboom-Kärtchen an.</p>
-      <button class="btn ${n ? 'secondary' : 'ghost'} small" type="button" data-action="vb-sync">${icon('flip')} ${n ? `${n === 1 ? '1 neues Kind' : `${n} neue Kinder`} aus Vokaboom holen` : 'Mit Vokaboom abgleichen'}</button></div>`;
+    const n = vbPending(c).length, skipped = (c.settings.vbSkip || []).filter((id) => klass.vb.byId.has(id)).length;
+    return `<div class="vb-import"><p class="small"><span class="vb-tag">Vokaboom</span> Verbunden mit „${esc(v.name)}“: Jedes Kind hat in beiden Tools dasselbe Kärtchen. Neue Kinder kommen automatisch auf beide Seiten.</p>
+      <div class="row"><button class="btn ${n ? 'secondary' : 'ghost'} small" type="button" data-action="vb-sync">${icon('flip')} ${n ? `${n === 1 ? '1 neues Kind' : `${n} neue Kinder`} aus Vokaboom holen` : 'Jetzt abgleichen'}</button>
+      ${skipped ? `<button class="btn ghost small" type="button" data-action="vb-sync-force">${skipped} hier gelöschte wieder holen</button>` : ''}</div></div>`;
   }
-  return `<div class="vb-import"><button class="btn ghost small" type="button" data-action="vokaboom-import">${icon('users')} Kinder aus einer Vokaboom-Klasse übernehmen (gleiche Kärtchen)</button></div>`;
+  return `<div class="vb-import"><button class="btn ghost small" type="button" data-action="vokaboom-import">${icon('users')} Mit Vokaboom verbinden (gleiche Kärtchen)</button></div>`;
 }
-/** Kinder aus einer Vokaboom-Klasse in die aktuelle Klasse holen (gleiche Logins) */
+/** Diese Klasse mit einer Vokaboom-Klasse verbinden – bestehende wählen oder neu anlegen */
 function openVokaboomImport() {
   const c = currentClass();
   if (!c) return;
-  const list = klass.vb?.classes || [];
-  openModal(`${modalHead('Aus Vokaboom übernehmen')}
-    ${list.length ? `<p class="muted small">Die Kinder behalten ihren Benutzernamen und ihre 3 Bilder aus Vokaboom: Mit demselben Kärtchen melden sie sich in beiden Tools an. Kinder, die schon übernommen sind, kommen nicht doppelt.</p>
-      <ul class="class-list">${list.map((x) => {
-        const n = klass.vb.students.filter((s) => s.class_id === x.id).length, p = vbPending(x.id).length;
-        return `<li class="lib-item"><button class="lib-open" data-action="vokaboom-take" data-id="${x.id}" ${p ? '' : 'disabled'}><span class="class-badge vb" aria-hidden="true">${esc(x.name.slice(0, 3))}</span><span class="lib-text"><strong>${esc(x.name)}</strong><small>${n} Kinder${p < n ? ` · ${p ? `${p} noch nicht übernommen` : 'alle schon übernommen'}` : ''}</small></span></button></li>`;
-      }).join('')}</ul>` : '<p class="empty">In deinem Konto gibt es keine Vokaboom-Klasse mit Kindern.</p>'}`, { label: 'Aus Vokaboom übernehmen' });
+  const taken = new Set(klass.list.filter((x) => x.vokaboom_class && x.id !== c.id).map((x) => x.vokaboom_class));
+  const list = (klass.vb?.classes || []).filter((x) => !taken.has(x.id));
+  openModal(`${modalHead('Mit Vokaboom verbinden')}
+    <p class="muted small">Danach hat jedes Kind in beiden Tools denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen. Kinder aus Vokaboom kommen nach Einmaleins, Kinder aus Einmaleins nach Vokaboom. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen).</p>
+    ${list.length ? `<p class="label">Bestehende Vokaboom-Klasse</p><ul class="class-list">${list.map((x) => {
+      const n = klass.vb.students.filter((s) => s.class_id === x.id).length;
+      return `<li class="lib-item"><button class="lib-open" data-action="vokaboom-take" data-id="${x.id}"><span class="class-badge vb" aria-hidden="true">${esc(x.name.slice(0, 3))}</span><span class="lib-text"><strong>${esc(x.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'}</small></span></button></li>`;
+    }).join('')}</ul>` : ''}
+    <p class="label">Oder neu</p>
+    <button class="btn secondary" data-action="vokaboom-new">${icon('plus')} Klasse „${esc(c.name)}“ in Vokaboom anlegen</button>`, { label: 'Mit Vokaboom verbinden' });
 }
 async function vokaboomTake(vid) {
   const c = currentClass();
   closeModal(true);
   if (!c) return;
-  const r = await importVokaboom(c.id, vid);
+  const r = await syncVokaboom(c.id, vid, true);
   render();
   if (r) toast(importSummary(r, vbClassById(vid)?.name || 'Vokaboom'));
 }
-async function vokaboomSync() {
+/** Neue Vokaboom-Klasse mit demselben Namen anlegen und verbinden: Alle Kinder bekommen dort dasselbe Login */
+async function vokaboomNew() {
+  const c = currentClass();
+  closeModal(true);
+  if (!c) return;
+  try {
+    const cl = await cloudClient();
+    const { data, error } = await cl.from('vokaboom_classes').insert({ name: c.name.slice(0, 60) }).select('id').single();
+    if (error) throw error;
+    const r = await syncVokaboom(c.id, data.id, true);
+    render();
+    if (r) toast(`Klasse „${c.name}“ in Vokaboom angelegt. ${importSummary(r, c.name)}`);
+  } catch (e) { toast(classErrorText(e), 'bad'); }
+}
+async function vokaboomSync(force = false) {
   const c = currentClass();
   if (!c?.vokaboom_class) return;
-  const r = await importVokaboom(c.id, c.vokaboom_class);
+  const r = await syncVokaboom(c.id, c.vokaboom_class, force);
   render();
   if (r) toast(importSummary(r, vbClassById(c.vokaboom_class)?.name || 'Vokaboom'));
 }
@@ -639,14 +743,26 @@ async function kidNewPics(id) {
       : `${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
-async function kidDelete(id) {
+async function kidDelete(id, where = '') {
   const c = currentClass();
+  const s = studentsOf(c?.id).find((x) => x.id === id);
   try {
     const cl = await cloudClient();
+    if (s?.vokaboom_id && where === 'both') {
+      const r = await cl.from('vokaboom_students').delete().eq('id', s.vokaboom_id);
+      if (r.error) throw r.error;
+    } else if (s?.vokaboom_id && where === 'here') {
+      // merken, damit der automatische Abgleich das Kind nicht wieder aus Vokaboom holt
+      const settings = { ...c.settings, vbSkip: [...new Set([...(c.settings.vbSkip || []), s.vokaboom_id])] };
+      const r = await cl.from('einmaleins_classes').update({ settings }).eq('id', c.id);
+      if (r.error) throw r.error;
+      c.settings = settings;
+    }
     const { error } = await cl.from('einmaleins_students').delete().eq('id', id);
     if (error) throw error;
     klass.students[c.id] = studentsOf(c.id).filter((x) => x.id !== id);
     klass.confirm = '';
+    if (where === 'both') await loadVokaboom();
     render();
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
@@ -726,7 +842,8 @@ function classCardsHTML(c, kids) {
   </div>`;
 }
 const CARD_W = 85, CARD_H = 54;
-const CARD_COLORS = [['#0F766E', '#E1F5F1'], ['#E8553A', '#FFE9E2'], ['#C77700', '#FFF3D4'], ['#2563EB', '#E3ECFF'], ['#9333EA', '#F3E8FF'], ['#15803D', '#DDF7E5'], ['#DB2777', '#FDE7F1'], ['#0E7490', '#DFF5F9'], ['#B45309', '#FEF3C7'], ['#4D7C0F', '#ECFCCB']];
+// Gleiche Farben wie in Vokaboom: Ein Kind bekommt in beiden Tools genau dasselbe Kärtchen
+const CARD_COLORS = [['#4F46E5', '#EEF0FF'], ['#DB2777', '#FDE7F1'], ['#D97706', '#FFF2D9'], ['#0891B2', '#DDF6FB'], ['#059669', '#DCF7EC'], ['#7C3AED', '#F1EAFF'], ['#E8730C', '#FFEDD8'], ['#0E7490', '#DFF5F9'], ['#BE185D', '#FCE7F3'], ['#4D7C0F', '#ECFCCB']];
 function cardColor(username) {
   let h = 0;
   for (const ch of String(username)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -1112,12 +1229,15 @@ const classActions = {
   },
   'vokaboom-import': () => openVokaboomImport(),
   'vokaboom-take': (el) => vokaboomTake(el.dataset.id),
-  'vb-sync': () => vokaboomSync(),
+  'vb-sync': () => vokaboomSync(false),
+  'vb-sync-force': () => vokaboomSync(true),
+  'vokaboom-new': () => vokaboomNew(),
+  'go-vokaboom': () => goVokaboom(),
   'vb-class-import': (el) => importVokaboomClass(el.dataset.id),
   'kid-newpics': (el) => kidNewPics(el.dataset.id),
   'kid-delete': (el) => { klass.confirm = el.dataset.id; render(); },
   'kid-delete-no': () => { klass.confirm = ''; render(); },
-  'kid-delete-yes': (el) => kidDelete(el.dataset.id),
+  'kid-delete-yes': (el) => kidDelete(el.dataset.id, el.dataset.where || ''),
   'cards-pdf': () => downloadCardsPDF(),
   'stats-refresh': () => { klass.progress[ui.classId] = null; render(); refreshStats(); },
   'stats-kid': (el) => { klass.kidDetail = klass.kidDetail === el.dataset.id ? '' : el.dataset.id; render(); if (klass.kidDetail) $('#kid-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },

@@ -38,7 +38,8 @@ async function cloudClient() {
   if (cloud.client) return cloud.client;
   const sb = await loadSupabase();
   cloud.client = sb.createClient(cloudUrl(), String(CLOUD_CFG.supabaseKey).trim(), {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: AUTH_KEY },
+    // Gemeinsames Anmelden mit Vokaboom: Sitzung im Cookie von fabulousteaching.ch (siehe js/sso.js)
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: AUTH_KEY, storage: SSO.authStorage(AUTH_KEY) },
   });
   cloud.client.auth.onAuthStateChange((ev, session) => {
     if (ev === 'SIGNED_OUT' && cloud.uid) setTimeout(() => { forgetCloudUser(); toast('Du wurdest abgemeldet.'); }, 0);
@@ -67,9 +68,8 @@ async function cloudInit() {
       ? 'Dieser Link ist abgelaufen oder wurde schon benutzt. Fordere einfach einen neuen an.'
       : `Der Link aus der E-Mail hat nicht geklappt (${code}).`, 'bad');
   }
-  let stored = false;
-  try { stored = !!localStorage.getItem(AUTH_KEY); } catch { /* */ }
-  if (!stored && !fromMail) return; // nie angemeldet: Supabase gar nicht erst laden
+  const stored = SSO.teacherSignedIn(AUTH_KEY);
+  if (!stored && !fromMail) return; // nicht angemeldet (auch nicht in Vokaboom): Supabase gar nicht erst laden
   try {
     const c = await cloudClient();
     const { data } = await c.auth.getSession();
@@ -126,6 +126,25 @@ function cloudErrorText(e) {
   if (e instanceof TypeError || /failed to fetch|network|load failed/i.test(msg)) return 'Keine Verbindung zum Server. Bist du online? (Gratis-Projekte bei Supabase pausieren nach einer Woche ohne Nutzung.)';
   return msg || 'Unbekannter Fehler.';
 }
+
+/** Gemeinsames Anmelden: Hat sich im anderen Tool (Vokaboom) etwas geändert? */
+let ssoBusy = false;
+async function ssoCheck() {
+  if (ssoBusy || !SSO.DOMAIN || !cloudConfigured()) return;
+  ssoBusy = true;
+  try {
+    const signed = SSO.teacherSignedIn(AUTH_KEY);
+    if (cloud.uid && !signed) { forgetCloudUser(); toast('Abgemeldet.'); return; }
+    if (!cloud.uid && signed && !isKid()) {
+      await cloudInit();
+      if (cloud.uid) { toast(`Angemeldet als ${cloud.user}.`); render(); }
+      return;
+    }
+    await kidSsoCheck();
+  } finally { ssoBusy = false; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ssoCheck(); });
+window.addEventListener('focus', () => ssoCheck());
 
 /* ---------- Oberfläche ---------- */
 function accountButtonHTML() {
@@ -250,9 +269,10 @@ function openAccount() {
       <span class="account-avatar" aria-hidden="true">${esc(cloud.user.charAt(0).toUpperCase())}</span>
       <div><strong>${esc(cloud.user)}</strong><p class="small muted">Lehrperson</p></div>
     </div>
-    <p class="muted small">Dasselbe Konto wie bei Vokaboom. Deine eigenen Übungen auf diesem Gerät bleiben nur hier gespeichert.</p>
+    <p class="muted small">Dasselbe Konto wie bei Vokaboom${SSO.DOMAIN ? ' – du bist dort auf diesem Gerät auch angemeldet' : ''}. Deine eigenen Übungen auf diesem Gerät bleiben nur hier gespeichert.</p>
     <div class="row">
       <button type="button" class="btn primary" data-action="classes">${icon('users')} Klassen & Übersicht</button>
+      ${CLOUD_CFG.vokaboomUrl ? `<a class="btn ghost" href="${esc(CLOUD_CFG.vokaboomUrl)}"><span class="ot-tag">ABC</span> Zu Vokaboom</a>` : ''}
       <button type="button" class="btn ghost" data-action="logout">Abmelden</button>
     </div>
     <details class="pw-change"><summary>Passwort ändern</summary>
