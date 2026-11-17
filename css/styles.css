@@ -1255,7 +1255,7 @@ td.hard-chips { display: table-cell; }
 .tg-q.q-tl .fill, .tg-q.q-br .fill { fill: #F2C14E; }
 .tg-q.q-tr .fill, .tg-q.q-bl .fill { fill: #E98B3A; }
 .tg-q .badge { fill: rgba(255, 249, 235, .93); stroke: rgba(91, 58, 34, .35); stroke-width: 1.5; }
-.tg-num { font-family: var(--font-display); font-weight: 800; font-size: 27px; fill: #3B2415; dominant-baseline: middle; }
+.tg-num { font-family: var(--font-display); font-weight: 800; font-size: 27px; fill: #3B2415; dominant-baseline: central; }
 .tg-q.correct .fill { fill: #3FA34D !important; }
 .tg-q.wrong .fill { fill: #D9453B !important; }
 .tg-q.correct, .tg-q.wrong { transform-box: fill-box; transform-origin: center; animation: tg-q-pop .45s ease; }
@@ -1286,3 +1286,6 @@ td.hard-chips { display: table-cell; }
 .tg-bow.kick svg { animation: tg-kick .28s ease-out; }
 @keyframes tg-tense { from { transform: translate(-.6px, 0); } to { transform: translate(.6px, -.4px); } }
 @keyframes tg-kick { 0% { transform: translateY(14px) scale(1.02); } 60% { transform: translateY(-3px); } 100% { transform: none; } }
+/* Meteoriten: Lob und Serie oben im leeren Bereich der Frontscheibe, über den Meteoriten */
+.g3-word.sky { padding-top: 4.5%; gap: .2rem; font-size: clamp(1.6rem, 5vw, 2.6rem); flex-direction: row; }
+.g3-word.sky small { font-size: clamp(1rem, 2.8vw, 1.4rem); background: rgba(6, 40, 20, .78); border: 1.5px solid rgba(57, 255, 106, .6); color: #DFFFE6; }

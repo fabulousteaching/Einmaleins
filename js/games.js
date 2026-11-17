@@ -695,7 +695,8 @@ function frogJump(btn) {
    Finger aufs Bild legen, durch Ziehen zielen, loslassen = Schuss. Vier Felder mit Zahlen.
    ========================================================= */
 const TG_QUADS = ['tl', 'tr', 'bl', 'br'];
-const TG_POS = { tl: [56, 64], tr: [144, 64], bl: [56, 144], br: [144, 144] };
+// Mitte jedes Viertels (Schwerpunkt des Viertelkreises mit Radius 88: 4·88/(3π) ≈ 37,4 vom Mittelpunkt)
+const TG_POS = { tl: [62.6, 62.6], tr: [137.4, 62.6], bl: [62.6, 137.4], br: [137.4, 137.4] };
 const TG_TARGET_SVG = `<svg viewBox="0 0 200 200" aria-hidden="true">
   <defs>
     <radialGradient id="tgStraw" cx="45%" cy="40%" r="65%"><stop offset="0" stop-color="#F0C873"/><stop offset=".75" stop-color="#C98B3F"/><stop offset="1" stop-color="#9A6428"/></radialGradient>
@@ -707,7 +708,7 @@ const TG_TARGET_SVG = `<svg viewBox="0 0 200 200" aria-hidden="true">
   ${TG_QUADS.map((q) => {
     const d = { tl: 'M100,100 L12,100 A88,88 0 0 1 100,12 Z', tr: 'M100,100 L100,12 A88,88 0 0 1 188,100 Z', bl: 'M100,100 L100,188 A88,88 0 0 1 12,100 Z', br: 'M100,100 L188,100 A88,88 0 0 1 100,188 Z' }[q];
     const [x, y] = TG_POS[q];
-    return `<g class="tg-q q-${q}" data-q="${q}"><path class="fill" d="${d}"/><circle class="badge" cx="${x}" cy="${y - 7}" r="24"/><text class="tg-num" id="tgn-${q}" x="${x}" y="${y + 2}" text-anchor="middle">?</text></g>`;
+    return `<g class="tg-q q-${q}" data-q="${q}"><path class="fill" d="${d}"/><circle class="badge" cx="${x}" cy="${y}" r="26"/><text class="tg-num" id="tgn-${q}" x="${x}" y="${y + 1}" text-anchor="middle">?</text></g>`;
   }).join('')}
   <line x1="100" y1="12" x2="100" y2="188" stroke="#4A2E17" stroke-width="3"/>
   <line x1="12" y1="100" x2="188" y2="100" stroke="#4A2E17" stroke-width="3"/>

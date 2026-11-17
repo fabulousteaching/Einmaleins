@@ -902,7 +902,7 @@ async function startMeteor3D() {
       game.wave.forEach((x) => { if (!x.dead) { x.dead = true; x.label.material.opacity = 0.3; st.tween(350, (u) => { x.mesh.scale.setScalar(Math.max(0.01, 1 - u)); }).then(() => removeMeteor(x)); } });
       if (runRight()) return;
       speed = 18 + Math.min(60, game.run.ok * 3);
-      bigWord(host, `+1${game.run.streak >= 3 ? `<small>${game.run.streak}er-Serie!</small>` : ''}`, 'good small');
+      bigWord(host, `+1${game.run.streak >= 3 ? `<small>${game.run.streak}er-Serie!</small>` : ''}`, 'good small sky');
       gLater(spawnWave, 800);
     } else {
       // Falsch: kostet einen Schutzschild, der richtige Meteorit leuchtet grün auf, dann kommt die nächste Welle
@@ -1017,7 +1017,7 @@ async function startMeteor3D() {
     clearTimeout(game.alienT);
     sfx.win();
     tone([660, 880, 1175, 1568], 0.09, 'triangle', 0.08);
-    bigWord(host, '+1 Schild!<small>Extraleben</small>', 'good small');
+    bigWord(host, '+1 Schild!<small>Extraleben</small>', 'good small sky');
   }
   // Antippen: zuerst das Ufo (genau treffen!), sonst der Meteorit, der dem Finger am nächsten ist (grosszügig)
   stageTap(st, (x, y) => {
@@ -1427,8 +1427,12 @@ async function startFrog3D() {
     scene.add(s);
     return s;
   }
-  let home = makeStone(0, shoreZ(1), 0.55);
-  frog.position.set(0, home.userData.top, home.position.z);
+  // Auf jeder Uferseite liegen immer genau drei Steine (links, Mitte, rechts) – es kommen keine neuen dazu
+  const STONE_GAP = 1.85 - 0.35 * clamp((1.25 - camera.aspect) / 0.65, 0, 1);
+  const shoreStones = { [1]: [], [-1]: [] };
+  [1, -1].forEach((side) => { for (let i = 0; i < 3; i++) shoreStones[side].push(makeStone((i - 1) * STONE_GAP, shoreZ(side) + side * (Math.random() * 0.15), i === 1 && side === 1 ? 0.55 : 0.5)); });
+  let home = shoreStones[1][1]; // Start: mittlerer Stein am vorderen Ufer
+  frog.position.set(home.position.x, home.userData.top, home.position.z);
 
   // ---------- Richtung, Kamera ----------
   let heading = 0; // 0: Blick nach −z (hinüber), π: zurück
@@ -1510,11 +1514,9 @@ async function startFrog3D() {
       const x = cx + (i - 1) * gap + (Math.random() - 0.5) * 0.2;
       const label = padNumber(v);
       label.material.opacity = 0;
-      if (last) { // letztes Ziel: Steine an Land
-        const s = makeStone(x, zEnd + dirZ * (Math.random() * 0.25), 0.5);
-        const y1 = s.position.y;
-        s.position.y = y1 - 0.4;
-        st.tween(520, (u, e) => { s.position.y = y1 - 0.4 * (1 - e); label.material.opacity = clamp(u * 1.6 - 0.3, 0, 1); }, ease.out);
+      if (last) { // letztes Ziel: die drei Steine am Ufer (immer dieselben), die Zahlen erscheinen darauf
+        const s = shoreStones[dirZ][i];
+        st.tween(520, (u) => { label.material.opacity = clamp(u * 1.6 - 0.3, 0, 1); });
         return { obj: s, stone: true, label, val: v };
       }
       const z = zBase + dirZ * (Math.random() * 0.3 + (i === 1 ? 0.2 : 0)) * 0.5;
