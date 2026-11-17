@@ -1222,7 +1222,7 @@ td.hard-chips { display: table-cell; }
 
 /* ---------- 🎯 Zielscheibe ---------- */
 .c-wood { --c: #8B5A2B; --cw: #F6EBDD; }
-.tg-stage { position: relative; container-type: size; height: min(72vh, 640px); min-height: 440px; border-radius: 28px; overflow: hidden; box-shadow: var(--shadow-card); user-select: none; -webkit-user-select: none; touch-action: none; cursor: crosshair; background: #6FAF4F; }
+.tg-stage { position: relative; container-type: size; overflow: clip; height: min(72vh, 640px); min-height: 440px; border-radius: 28px; overflow: hidden; box-shadow: var(--shadow-card); user-select: none; -webkit-user-select: none; touch-action: none; cursor: crosshair; background: #6FAF4F; }
 .tg-sky { position: absolute; inset: 0 0 30% 0; background: linear-gradient(#7CC4EC, #CFEFFC 85%); }
 .tg-sun { position: absolute; right: 9%; top: 8%; width: 11cqmin; height: 11cqmin; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #FFF6D8, #FFD873 70%); box-shadow: 0 0 8cqmin 1cqmin rgba(255, 216, 115, .45); }
 .tg-cloud { position: absolute; height: auto; opacity: .9; animation: tg-drift var(--d, 90s) linear infinite alternate; }
