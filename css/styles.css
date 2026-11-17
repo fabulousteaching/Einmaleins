@@ -1223,12 +1223,12 @@ td.hard-chips { display: table-cell; }
 /* ---------- 🎯 Zielscheibe ---------- */
 .c-wood { --c: #8B5A2B; --cw: #F6EBDD; }
 .tg-stage { position: relative; container-type: size; height: min(72vh, 640px); min-height: 440px; border-radius: 28px; overflow: hidden; box-shadow: var(--shadow-card); user-select: none; -webkit-user-select: none; touch-action: none; cursor: crosshair; background: #6FAF4F; }
-.tg-sky { position: absolute; inset: 0 0 42% 0; background: linear-gradient(#7CC4EC, #CFEFFC 85%); }
+.tg-sky { position: absolute; inset: 0 0 30% 0; background: linear-gradient(#7CC4EC, #CFEFFC 85%); }
 .tg-sun { position: absolute; right: 9%; top: 8%; width: 11cqmin; height: 11cqmin; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #FFF6D8, #FFD873 70%); box-shadow: 0 0 8cqmin 1cqmin rgba(255, 216, 115, .45); }
 .tg-cloud { position: absolute; height: auto; opacity: .9; animation: tg-drift var(--d, 90s) linear infinite alternate; }
 @keyframes tg-drift { to { transform: translateX(18cqw); } }
-.tg-hills { position: absolute; left: 0; width: 100%; top: 46%; height: 14%; }
-.tg-meadow { position: absolute; left: 0; right: 0; top: 58%; bottom: 0; background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .06) 0 6cqh, transparent 6cqh 12cqh), linear-gradient(#6FAF4F, #3E7A2E); }
+.tg-hills { position: absolute; left: 0; width: 100%; top: 58%; height: 13%; }
+.tg-meadow { position: absolute; left: 0; right: 0; top: 70%; bottom: 0; background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .06) 0 6cqh, transparent 6cqh 12cqh), linear-gradient(#6FAF4F, #3E7A2E); }
 .tg-fence { position: absolute; left: 0; right: 0; top: -3.4cqh; height: 4.6cqh; background: linear-gradient(transparent 22%, #A8773F 22% 36%, transparent 36% 62%, #A8773F 62% 76%, transparent 76%), repeating-linear-gradient(90deg, #8B5A2B 0 1.1cqw, transparent 1.1cqw 9cqw); opacity: .85; }
 .tg-hud { position: absolute; left: 12px; top: 12px; z-index: 6; }
 .run-hud.wood { padding: .4rem .8rem; border-radius: 14px; background: linear-gradient(#A86F3A, #8B5A2B); border: 3px solid #5B3A22; box-shadow: 0 4px 0 rgba(0, 0, 0, .25); color: #F3E4C2; }
@@ -1247,9 +1247,9 @@ td.hard-chips { display: table-cell; }
 .tg-sign .task .slot { min-width: 1.2em; height: 1em; border: 3px dashed #A86F3A; background: rgba(255, 255, 255, .5); color: #C77700; border-radius: 10px; }
 .tg-clock { position: absolute; left: 50%; top: calc(3cqh + 12cqmin); z-index: 5; width: min(40cqw, 320px); height: 9px; transform: translateX(-50%); border-radius: 99px; background: rgba(59, 36, 21, .3); overflow: hidden; }
 .tg-clock i { display: block; height: 100%; background: linear-gradient(90deg, #F2C14E, #E8553A); transform-origin: left; }
-.tg-target { position: absolute; left: 50%; top: 52%; z-index: 3; width: min(46cqh, 62cqw); aspect-ratio: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 1.6cqh 1.2cqh rgba(0, 0, 0, .3)); }
+.tg-target { position: absolute; left: 50%; top: 46%; z-index: 3; width: min(56cqh, 74cqw); aspect-ratio: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 1.6cqh 1.2cqh rgba(0, 0, 0, .3)); }
 .tg-target svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.tg-stand { position: absolute; left: 50%; top: calc(52% + min(46cqh, 62cqw) * .38); z-index: 2; width: min(30cqh, 40cqw); transform: translateX(-50%); }
+.tg-stand { position: absolute; left: 50%; top: calc(46% + min(56cqh, 74cqw) * .4); z-index: 2; width: min(24cqh, 32cqw); transform: translateX(-50%); }
 .tg-stand svg { display: block; width: 100%; }
 .tg-q .fill { transition: fill .2s; }
 .tg-q.q-tl .fill, .tg-q.q-br .fill { fill: #F2C14E; }
@@ -1280,3 +1280,9 @@ td.hard-chips { display: table-cell; }
 .tg-help { position: absolute; left: 50%; bottom: 3cqh; z-index: 7; transform: translateX(-50%); margin: 0; padding: .35rem .9rem; border-radius: 99px; background: rgba(36, 22, 10, .55); color: #fff; font-weight: 600; font-size: .9rem; white-space: nowrap; pointer-events: none; transition: opacity .4s; }
 .tg-help.hide { opacity: 0; }
 @media (max-width: 560px) { .tg-stage { height: min(70vh, 560px); } .tg-hud { left: 8px; top: auto; bottom: 8px; z-index: 9; } .tg-hud .run-bar { display: none; } .tg-hud .run-hud { gap: .45rem; padding: .3rem .55rem; } .tg-sign { top: 2cqh; } .tg-help { display: none; } }
+/* Zielscheibe: gespannte Armbrust zittert leicht, beim Abdrücken ruckt sie */
+.tg-bow svg { transform-origin: 50% 80%; }
+.tg-bow.drawn svg { animation: tg-tense .14s ease-in-out infinite alternate; }
+.tg-bow.kick svg { animation: tg-kick .28s ease-out; }
+@keyframes tg-tense { from { transform: translate(-.6px, 0); } to { transform: translate(.6px, -.4px); } }
+@keyframes tg-kick { 0% { transform: translateY(14px) scale(1.02); } 60% { transform: translateY(-3px); } 100% { transform: none; } }

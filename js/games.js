@@ -16,7 +16,7 @@ const GAMES = [
   { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf über den Teich – hin und zurück.', color: 'lime', art: '<span class="emo">🐸</span>', three: true, modes: ['countdown', 'survive', 'speed'],
     howto: 'Der Frosch hüpft über den Teich. Tippe auf die Seerose mit dem richtigen Ergebnis – und hopp! Am Ufer springt er auf einen Stein und kehrt um. Falsche Seerosen versinken.' },
   { id: 'target', name: 'Zielscheibe', desc: 'Spann die Armbrust und triff das richtige Feld.', color: 'wood', art: '<span class="emo">🎯</span>', modes: ['countdown', 'survive', 'speed'],
-    howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger irgendwo aufs Bild, ziele durch Ziehen und lass los – der Pfeil fliegt. Triff das Feld mit dem richtigen Ergebnis!' },
+    howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger irgendwo aufs Bild – die Armbrust wird gespannt. Dann ziele durch Ziehen und lass los – der Pfeil fliegt. Triff das Feld mit dem richtigen Ergebnis!' },
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
@@ -709,8 +709,6 @@ const TG_TARGET_SVG = `<svg viewBox="0 0 200 200" aria-hidden="true">
     const [x, y] = TG_POS[q];
     return `<g class="tg-q q-${q}" data-q="${q}"><path class="fill" d="${d}"/><circle class="badge" cx="${x}" cy="${y - 7}" r="24"/><text class="tg-num" id="tgn-${q}" x="${x}" y="${y + 2}" text-anchor="middle">?</text></g>`;
   }).join('')}
-  <circle cx="100" cy="100" r="66" fill="none" stroke="#3B2415" stroke-opacity=".18" stroke-width="2"/>
-  <circle cx="100" cy="100" r="44" fill="none" stroke="#3B2415" stroke-opacity=".18" stroke-width="2"/>
   <line x1="100" y1="12" x2="100" y2="188" stroke="#4A2E17" stroke-width="3"/>
   <line x1="12" y1="100" x2="188" y2="100" stroke="#4A2E17" stroke-width="3"/>
   <circle cx="100" cy="100" r="88" fill="none" stroke="#4A2E17" stroke-width="3"/>
@@ -723,8 +721,8 @@ const TG_BOW_SVG = `<svg viewBox="0 0 400 300" aria-hidden="true">
   <path d="M168 118 182 300h36l14-182Z" fill="url(#tgWood)" stroke="#4A2E17" stroke-width="5"/>
   <path d="M186 222q14 26 28 0" fill="none" stroke="#4A2E17" stroke-width="7" stroke-linecap="round"/>
   <rect x="196" y="202" width="8" height="18" rx="2" fill="#4A2E17"/>
-  <path d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="#3E4A57" stroke-width="16" stroke-linecap="round"/>
-  <path d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="url(#tgSteel)" stroke-width="8" stroke-linecap="round"/>
+  <path class="tg-limb" d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="#3E4A57" stroke-width="16" stroke-linecap="round"/>
+  <path class="tg-limb" d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="url(#tgSteel)" stroke-width="8" stroke-linecap="round"/>
   <rect x="148" y="50" width="104" height="16" rx="5" fill="#4A2E17"/><rect x="148" y="50" width="104" height="6" rx="3" fill="#C99A5B"/>
   <polyline id="tgString" points="40,82 200,82 360,82" fill="none" stroke="#F3E9D6" stroke-width="3.4"/>
   <g id="tgBolt"><line x1="200" y1="82" x2="200" y2="-30" stroke="#4A3117" stroke-width="5" stroke-linecap="round"/><path d="M200-40l-10 24h20Z" fill="#9AA3AD"/><path d="M200 78l-11 15 11-4 11 4z" fill="#E8553A"/></g>
@@ -751,9 +749,9 @@ function startTarget() {
       <div class="tg-bow" id="tgbow">${TG_BOW_SVG}</div>
       <div class="tg-flight" id="tgflight">${TG_ARROW_SVG}</div>
       <div class="tg-toast" id="tgtoast"></div>
-      <p class="tg-help" id="tghelp">Finger aufs Bild · ziehen = zielen · loslassen = schiessen</p>
+      <p class="tg-help" id="tghelp">Finger aufs Bild = spannen · ziehen = zielen · loslassen = schiessen</p>
     </div>
-    <p class="mode-hint">Lege den Finger irgendwo auf das Bild, ziele durch Ziehen und lass los, um zu schiessen. Tasten 1–4 gehen auch.</p>`);
+    <p class="mode-hint">Lege den Finger irgendwo auf das Bild – die Armbrust wird gespannt. Dann ziele durch Ziehen und lass los, um zu schiessen. Tasten 1–4 gehen auch.</p>`);
   tgBind();
   setGameKeys((e) => { if (/^[1-4]$/.test(e.key)) tgShootQuad(['tl', 'tr', 'bl', 'br'][+e.key - 1]); });
   game.pickVal = (v) => { const q = TG_QUADS.find((k) => game.tg.vals[k] === Number(v)); if (q) tgShootQuad(q); };
@@ -797,20 +795,32 @@ function tgToast(text, cls) {
   clearTimeout(game.tgToastT);
   game.tgToastT = gLater(() => el.classList.remove('show'), 1000);
 }
-/** Ziehen zum Zielen (wie beim Original): Die Bewegung des Fingers verschiebt das Fadenkreuz doppelt so weit */
+/* Ablauf eines Schusses (wie beim Original):
+   1. Finger aufs Bild → die Armbrust wird gespannt: Sehne und Pfeil gleiten sichtbar nach hinten.
+   2. Erst wenn sie gespannt ist, erscheint das Fadenkreuz – jetzt durch Ziehen zielen
+      (die Bewegung des Fingers verschiebt das Fadenkreuz doppelt so weit).
+   3. Loslassen → die Sehne schnellt nach vorn, der Pfeil fliegt.
+   Wer loslässt, bevor die Armbrust gespannt ist, schiesst nicht: Die Sehne gleitet einfach zurück. */
+const TG_DRAW_MS = 380;
 function tgBind() {
   const stage = $('#tgstage');
   const SENS = 2;
   const g = game.tg;
   const center = () => { const r = $('#tgtarget').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; };
   stage.addEventListener('pointerdown', (e) => {
-    if (game.locked || !runOn() || e.button > 0) return;
+    if (game.locked || !runOn() || e.button > 0 || g.aim) return;
     if (e.target.closest('button')) return;
     const c = center();
-    g.aim = { id: e.pointerId, x0: e.clientX, y0: e.clientY, cx: c.x, cy: c.y, maxR: c.w * 0.62, dx: 0, dy: 0 };
+    g.aim = { id: e.pointerId, x0: e.clientX, y0: e.clientY, cx: c.x, cy: c.y, maxR: c.w * 0.62, dx: 0, dy: 0, ready: false };
     try { stage.setPointerCapture(e.pointerId); } catch { /* */ }
     $('#tghelp')?.classList.add('hide');
-    tgReticle(c.x, c.y, true);
+    const a = g.aim;
+    tgDraw(1, TG_DRAW_MS).then((done) => {
+      if (!done || g.aim !== a) return;
+      a.ready = true;
+      $('#tgbow')?.classList.add('drawn');
+      tgReticle(a.cx + a.dx, a.cy + a.dy, true);
+    });
     e.preventDefault();
   });
   stage.addEventListener('pointermove', (e) => {
@@ -820,20 +830,57 @@ function tgBind() {
     const d = Math.hypot(dx, dy);
     if (d > a.maxR) { dx *= a.maxR / d; dy *= a.maxR / d; }
     a.dx = dx; a.dy = dy;
-    tgReticle(a.cx + dx, a.cy + dy, true);
-    tgBow(dx / a.maxR, dy / a.maxR, Math.max(0, (e.clientY - a.y0) / (stage.clientHeight * 0.35)));
+    g.nx = dx / a.maxR; g.ny = dy / a.maxR;
+    tgBow();
+    if (a.ready) tgReticle(a.cx + dx, a.cy + dy, true);
   });
   const up = (e) => {
     const a = g.aim;
     if (!a || e.pointerId !== a.id) return;
     g.aim = null;
     tgReticle(0, 0, false);
-    tgBow(0, 0, 0);
-    if (game.locked || !runOn()) return;
+    $('#tgbow')?.classList.remove('drawn');
+    if (!a.ready || game.locked || !runOn()) { // zu früh losgelassen: entspannen, kein Schuss
+      g.nx = 0; g.ny = 0;
+      tgDraw(0, 220);
+      return;
+    }
+    tgRelease();
     tgFire(a.cx + a.dx, a.cy + a.dy);
   };
   stage.addEventListener('pointerup', up);
-  stage.addEventListener('pointercancel', (e) => { if (g.aim && e.pointerId === g.aim.id) { g.aim = null; tgReticle(0, 0, false); tgBow(0, 0, 0); } });
+  stage.addEventListener('pointercancel', (e) => { if (g.aim && e.pointerId === g.aim.id) { g.aim = null; tgReticle(0, 0, false); $('#tgbow')?.classList.remove('drawn'); g.nx = 0; g.ny = 0; tgDraw(0, 220); } });
+}
+/** Sehne spannen (to = 1) oder entspannen (to = 0). Liefert true, wenn die Bewegung ganz durchgelaufen ist. */
+function tgDraw(to, ms) {
+  const g = game.tg;
+  cancelAnimationFrame(g.drawRaf);
+  const from = g.pull || 0;
+  if (to > from) { // Spann-Geräusch: Holz knarrt, Sehne knirscht
+    noise(ms / 1000, { freq: 380, q: 2, gain: 0.05, sweep: 260 });
+    tone([140, 170], ms / 2000, 'sawtooth', 0.015);
+  }
+  const t0 = performance.now(), dur = reduceMotion() ? 1 : ms * Math.abs(to - from);
+  return new Promise((resolve) => {
+    const step = (now) => {
+      if (!$('#tgbow')) { resolve(false); return; }
+      const u = dur ? Math.min(1, (now - t0) / dur) : 1;
+      const e = to > from ? 1 - (1 - u) ** 3 : u * u; // spannen: zuerst schnell, dann zäh
+      g.pull = from + (to - from) * e;
+      tgBow();
+      if (u < 1) g.drawRaf = requestAnimationFrame(step); else resolve(true);
+    };
+    g.drawRaf = requestAnimationFrame(step);
+  });
+}
+/** Abdrücken: Die Sehne schnellt nach vorn, die Armbrust ruckt kurz */
+function tgRelease() {
+  const g = game.tg;
+  cancelAnimationFrame(g.drawRaf);
+  g.pull = 0; g.nx = 0; g.ny = 0;
+  tgBow();
+  const rig = $('#tgbow');
+  rig?.classList.remove('kick'); void rig?.offsetWidth; rig?.classList.add('kick');
 }
 function tgLocal(x, y) { const r = $('#tgstage').getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; }
 function tgReticle(x, y, on) {
@@ -842,20 +889,30 @@ function tgReticle(x, y, on) {
   el.classList.toggle('on', on);
   if (on) { const p = tgLocal(x, y); el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; }
 }
-function tgBow(nx, ny, pull) {
+function tgBow() {
   const rig = $('#tgbow');
   if (!rig) return;
-  nx = clamp(nx, -1, 1); ny = clamp(ny, -1, 1); pull = clamp(pull, 0, 1);
+  const g = game.tg;
+  const nx = clamp(g.nx || 0, -1, 1), ny = clamp(g.ny || 0, -1, 1), pull = clamp(g.pull || 0, 0, 1);
   rig.style.transform = `translateX(-50%) perspective(900px) translate(${nx * 14}px, ${ny * 12}px) rotateZ(${nx * 8}deg) rotateX(${-ny * 7}deg)`;
-  $('#tgString')?.setAttribute('points', `40,82 200,${82 + pull * 120} 360,82`);
-  $('#tgBolt')?.setAttribute('transform', `translate(0,${pull * 120})`);
+  // Beim Spannen biegen sich die Bogenarme nach hinten, die Sehne zieht den Pfeil mit
+  const tx = 40 + pull * 16, ty = 82 + pull * 16;
+  const limb = `M${tx} ${ty}C${90 + pull * 6} ${20 + pull * 14} 150 55 200 60c50-5 ${110 - pull * 6} ${-40 + pull * 14} ${160 - pull * 16} ${22 + pull * 16}`;
+  $$('#tgbow .tg-limb').forEach((el) => el.setAttribute('d', limb));
+  $('#tgString')?.setAttribute('points', `${tx},${ty} 200,${82 + pull * 110} ${400 - tx},${ty}`);
+  $('#tgBolt')?.setAttribute('transform', `translate(0,${pull * 110})`);
 }
-/** Schuss per Taste oder Test: genau in die Mitte eines Feldes */
+/** Schuss per Taste: spannen, dann genau in die Mitte des Feldes */
 function tgShootQuad(q) {
-  if (game.locked || !runOn()) return;
-  const r = $('#tgtarget').getBoundingClientRect();
-  const [x, y] = TG_POS[q];
-  tgFire(r.left + (x / 200) * r.width, r.top + (y / 200) * r.height);
+  if (game.locked || !runOn() || game.tg.aim) return;
+  game.locked = true;
+  tgDraw(1, TG_DRAW_MS * 0.7).then((done) => {
+    if (!done || !runOn()) return;
+    const r = $('#tgtarget').getBoundingClientRect();
+    const [x, y] = TG_POS[q];
+    tgRelease();
+    tgFire(r.left + (x / 200) * r.width, r.top + (y / 200) * r.height);
+  });
 }
 function tgFire(x, y) {
   game.locked = true;
