@@ -383,8 +383,8 @@ async function startElfmeter3D() {
   // Tor (etwas grösser als ein echtes, damit die Zahlen gut Platz haben)
   const GW = 8.4, GH = 2.8, GD = 2.2;
   const postMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
-  const post = (x) => { const m = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, GH, 16), postMat); m.position.set(x, GH / 2, 0); m.castShadow = true; scene.add(m); };
-  post(-GW / 2); post(GW / 2);
+  const post = (x) => { const m = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, GH, 16), postMat); m.position.set(x, GH / 2, 0); m.castShadow = true; scene.add(m); return m; };
+  const posts = { [-1]: post(-GW / 2), 1: post(GW / 2) };
   const bar = new T.Mesh(new T.CylinderGeometry(0.065, 0.065, GW + 0.13, 16), postMat);
   bar.rotation.z = Math.PI / 2; bar.position.set(0, GH, 0); bar.castShadow = true; scene.add(bar);
   const netTex = canvasTex(256, 256, (g, w, h) => {
@@ -472,9 +472,14 @@ async function startElfmeter3D() {
     targets.forEach((m) => { if (!m.userData.gone) { scene.remove(m); m.material.map.dispose(); m.material.dispose(); } });
     targets = [];
   }
-  /** Zahl zerbricht in Scherben (gleiche Bildtextur, Stücke fliegen auseinander) */
+  /** Zahl zerbricht in Scherben (gleiche Bildtextur, Stücke fliegen auseinander) und leuchtet grün (richtig) oder rot (falsch) auf */
+  const flashTex = glowTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
   function shatter(m, { wrong = false, dir = new T.Vector3(0, 0, -1) } = {}) {
     m.userData.gone = true;
+    const glow = new T.Sprite(new T.SpriteMaterial({ map: flashTex, color: wrong ? 0xff3b3b : 0x3dff6e, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+    glow.position.copy(m.position); glow.scale.setScalar(TR * 3); glow.renderOrder = 6;
+    scene.add(glow);
+    st.tween(650, (u) => { glow.scale.setScalar(TR * (3 + u * 3)); glow.material.opacity = 1 - u; }).then(() => { scene.remove(glow); glow.material.dispose(); });
     const tex = m.material.map, n = 14, pts = [];
     for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.3; pts.push([Math.cos(a) * TR, Math.sin(a) * TR]); }
     const c0 = [(Math.random() - 0.5) * TR * 0.35, (Math.random() - 0.5) * TR * 0.35];
@@ -485,7 +490,7 @@ async function startElfmeter3D() {
       const geo = new T.BufferGeometry();
       geo.setAttribute('position', new T.Float32BufferAttribute(P.flatMap(([x, y]) => [x - cx, y - cy, 0]), 3));
       geo.setAttribute('uv', new T.Float32BufferAttribute(P.flatMap(([x, y]) => [x / (2 * TR) + 0.5, y / (2 * TR) + 0.5]), 2));
-      const s = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tex, transparent: true, side: T.DoubleSide, color: wrong ? 0xff8f8f : 0xffffff, depthWrite: false }));
+      const s = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tex, transparent: true, side: T.DoubleSide, color: wrong ? 0xff5c5c : 0x5cff86, depthWrite: false }));
       s.quaternion.copy(m.quaternion);
       s.position.copy(new T.Vector3(cx, cy, 0).applyQuaternion(m.quaternion).add(m.position));
       const out = new T.Vector3(cx, cy, 0).normalize().applyQuaternion(m.quaternion);
@@ -500,7 +505,7 @@ async function startElfmeter3D() {
       shards.forEach((s) => { const u = s.userData; u.v.y -= 9 * dt; s.position.addScaledVector(u.v, dt); s.rotation.x += u.spin.x * dt; s.rotation.y += u.spin.y * dt; s.rotation.z += u.spin.z * dt; s.material.opacity = Math.max(0, 1 - age / 1.1); });
       if (age > 1.15) { off(); shards.forEach((s) => { scene.remove(s); s.geometry.dispose(); s.material.dispose(); }); tex.dispose(); }
     });
-    burst(st, m.position.clone(), { n: 46, colors: wrong ? [0xff8a8a, 0xffffff] : [0xffffff, 0xffe8a3, 0x9be7ff], speed: 3, life: 0.6, size: 0.1, gravity: -4 });
+    burst(st, m.position.clone(), { n: 50, colors: wrong ? [0xff4d4d, 0xff9a9a, 0xffffff] : [0x3dff6e, 0xb6ffc8, 0xffffff], speed: 3, life: 0.6, size: 0.11, gravity: -4 });
     tone([1900, 1400, 2400], 0.04, 'square', 0.035);
     noise(0.22, { freq: 4200, gain: 0.07 });
   }
@@ -534,12 +539,13 @@ async function startElfmeter3D() {
     }
     const [tx, ty] = SPOTS[m.userData.i];
     const T0 = m.position.clone();
-    // Richtig: durch die Zahl ins Netz. Falsch: durch die Zahl, dann an den Pfosten oder über die Latte.
+    // Richtig: durch die Zahl ins Netz. Falsch: durch die Zahl, dann an die Latte (Mitte) bzw. an den Pfosten (links/rechts).
     const sgn = Math.sign(tx) || (Math.random() < 0.5 ? -1 : 1);
-    const miss = ok ? null : (Math.abs(tx) > 1 && Math.random() < 0.5 ? 'post' : 'over');
+    const miss = ok ? null : (Math.abs(tx) > 1 ? 'post' : 'bar');
+    const BALL_R = 0.11, POST_R = 0.065;
     const F = ok ? new T.Vector3(tx * 1.04, ty * 0.95, -0.95)
-      : miss === 'post' ? new T.Vector3(sgn * (GW / 2 - 0.12), clamp(ty * 0.9, 0.5, GH - 0.3), 0.08)
-        : new T.Vector3(tx * 1.08 + sgn * 0.3, GH + 0.5 + Math.random() * 0.25, -1.1);
+      : miss === 'post' ? new T.Vector3(sgn * (GW / 2 - 0.04), clamp(ty * 0.95, 0.5, GH - 0.35), POST_R + BALL_R - 0.02)
+        : new T.Vector3(tx + (Math.random() - 0.5) * 0.6, GH - 0.03, POST_R + BALL_R - 0.02);
     sfx.kick();
     noise(0.25, { freq: 500, gain: 0.08 });
     const p0 = START.ball.clone();
@@ -568,17 +574,25 @@ async function startElfmeter3D() {
       ended = runRight();
     } else {
       sfx.bad();
-      if (miss === 'post') {
-        tone([1568, 2093, 1760], 0.09, 'triangle', 0.09); // Klong am Pfosten
-        st.shake(0.06);
-        const b0 = F.clone(), b1 = new T.Vector3(sgn * (GW / 2 + 2.4), 0.11, 2.6);
-        st.tween(650, (u, e) => { ball.position.lerpVectors(b0, b1, e); ball.position.y = Math.max(0.11, b0.y * (1 - e) + Math.sin(u * Math.PI) * 0.5); ball.rotation.z += 0.3; }, ease.out);
-      } else {
-        const b0 = F.clone();
-        st.tween(650, (u, e) => { ball.position.z = b0.z - 4 * e; ball.position.y = Math.max(0.11, b0.y * (1 - e * e)); ball.rotation.x -= 0.3; });
-      }
+      tone([1568, 2093, 1760], 0.09, 'triangle', 0.09); // Klong!
+      noise(0.18, { freq: 2600, gain: 0.06 });
+      st.shake(0.07);
+      burst(st, F.clone(), { n: 26, colors: [0xffffff, 0xdfe6ee], speed: 2.2, life: 0.45, size: 0.06, gravity: -4 });
+      // Pfosten bzw. Latte zittern kurz
+      const hitObj = miss === 'post' ? posts[sgn] : bar, base = hitObj.position.clone();
+      st.tween(450, (u) => { const w = Math.sin(u * 46) * 0.025 * (1 - u); hitObj.position.set(base.x + (miss === 'post' ? w : 0), base.y + (miss === 'bar' ? w : 0), base.z - Math.abs(w)); })
+        .then(() => hitObj.position.copy(base));
+      // Abpraller zurück ins Feld
+      const b0 = F.clone();
+      const b1 = miss === 'post' ? new T.Vector3(sgn * (GW / 2 + 1.6), 0.11, 3.6) : new T.Vector3(b0.x * 0.6 + (Math.random() - 0.5), 0.11, 4.2);
+      const up = miss === 'post' ? 0.55 : 1.4;
+      st.tween(750, (u, e) => {
+        ball.position.lerpVectors(b0, b1, e);
+        ball.position.y = Math.max(0.11, b0.y * (1 - e) + 0.11 * e + Math.sin(u * Math.PI) * up);
+        ball.rotation.x += 0.25; ball.rotation.z += 0.2;
+      }, ease.out);
       if (right) { right.material.color.set(0xb9ffb0); right.userData.hint = true; }
-      bigWord(host, `${miss === 'post' ? 'Pfosten!' : 'Drüber!'}<small>${esc(taskText(t, true))}</small>`, 'bad');
+      bigWord(host, `${miss === 'post' ? 'Pfosten!' : 'Latte!'}<small>${esc(taskText(t, true))}</small>`, 'bad');
       ended = runWrong(t);
     }
     if (ended) return;

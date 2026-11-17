@@ -402,14 +402,18 @@ function elfShoot(btn) {
   const aim = btn || targets[rand(targets.length)];
   const br = ball.getBoundingClientRect(), ar = aim.getBoundingClientRect(), gr = goal.getBoundingClientRect();
   let dx = ar.left + ar.width / 2 - (br.left + br.width / 2), dy = ar.top + ar.height / 2 - (br.top + br.height / 2);
-  if (!ok) { // über die Latte
-    const side = Math.sign(dx) || (Math.random() < 0.5 ? -1 : 1);
-    dy = gr.top - (br.top + br.height / 2) - 34;
-    dx += side * Math.min(60, gr.width * 0.08);
-  }
+  // Falsch: Mitte → an die Latte, links/rechts → an den Pfosten
+  const zone = +(aim.dataset.z ?? 1);
+  const miss = ok ? null : zone === 1 ? 'bar' : 'post';
+  if (miss === 'bar') dy = gr.top - (br.top + br.height / 2) + 4;
+  if (miss === 'post') dx = (zone === 0 ? gr.left + 4 : gr.right - 4) - (br.left + br.width / 2);
   sfx.kick();
   const anim = !reduceMotion();
-  ball.animate([{ transform: 'translate(-50%, 0) scale(1) rotate(0)' }, { transform: `translate(calc(-50% + ${dx}px), ${dy}px) scale(${ok ? 0.5 : 0.42}) rotate(540deg)` }], { duration: anim ? 560 : 1, easing: 'cubic-bezier(.2,.75,.35,1)', fill: 'forwards' });
+  const fly = ball.animate([{ transform: 'translate(-50%, 0) scale(1) rotate(0)' }, { transform: `translate(calc(-50% + ${dx}px), ${dy}px) scale(.5) rotate(540deg)` }], { duration: anim ? 560 : 1, easing: 'cubic-bezier(.2,.75,.35,1)', fill: 'forwards' });
+  if (miss && anim) fly.finished.then(() => { // Abpraller zurück ins Feld
+    ball.animate([{ transform: `translate(calc(-50% + ${dx}px), ${dy}px) scale(.5) rotate(540deg)` }, { transform: `translate(calc(-50% + ${dx * (miss === 'post' ? 1.35 : 0.6)}px), ${dy * 0.35}px) scale(.8) rotate(760deg)` }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
+    tone([1568, 2093, 1760], 0.09, 'triangle', 0.09);
+  }).catch(() => {});
   gLater(() => {
     const msg = $('#pmsg');
     let ended;
@@ -421,7 +425,7 @@ function elfShoot(btn) {
       ended = runRight();
     } else {
       sfx.bad();
-      msg.innerHTML = `${btn ? 'Daneben!' : 'Zu spät!'}<small>${esc(taskText(t, true))}</small>`;
+      msg.innerHTML = `${!btn ? 'Zu spät!' : miss === 'bar' ? 'Latte!' : 'Pfosten!'}<small>${esc(taskText(t, true))}</small>`;
       msg.className = 'pitch-msg show bad';
       right?.classList.add('right');
       ended = runWrong(t);
