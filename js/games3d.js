@@ -1234,15 +1234,7 @@ async function startFrog3D() {
     scene.add(g);
     return g;
   }
-  // Schmuck-Seerosen am Rand (ohne Zahlen, nicht auf dem Weg)
-  for (let i = 0; i < 26; i++) {
-    const z = P.cz + (Math.random() * 2 - 1) * P.rz * 0.9;
-    const side = Math.random() < 0.5 ? -1 : 1;
-    const ex = edgeX(z, 0.9);
-    if (ex < 4) continue;
-    const x = side * (3.9 + Math.random() * (ex - 3.9));
-    makePad(0.4 + Math.random() * 0.35, Math.random() < 0.3).position.set(x, 0, z);
-  }
+  // Auf dem Teich liegen nur die Seerosen mit Zahlen (keine Schmuck-Seerosen, die würden verwirren)
   st.onFrame((dt, t) => scene.children.forEach((o) => { const u = o.userData; if (u?.bob) { u.dip *= Math.pow(0.03, dt); o.position.y = u.baseY + Math.sin(t * 0.8 + u.ph) * 0.004 - u.dip; } }));
   // Wellenringe
   function ripple(p, n = 2, r0 = 0.5) {
