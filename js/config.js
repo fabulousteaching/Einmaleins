@@ -10,4 +10,5 @@
 window.EINMALEINS_CONFIG = {
   supabaseUrl: 'https://cppgdrwpwcshtbavesrm.supabase.co',
   supabaseKey: 'sb_publishable_66QwDLf_H_O1aNdn2mP1LA_A40he3mM',   // «Publishable key», darf öffentlich sein
+  vokaboomUrl: 'https://vokaboom.fabulousteaching.ch/',   // für den zweiten QR-Code auf den Login-Kärtchen
 };

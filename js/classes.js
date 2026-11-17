@@ -183,7 +183,7 @@ function openKidLogin() {
       <p class="form-error" id="kid-error" role="alert"></p>
       <button class="btn primary big" type="submit" id="kid-submit">Los geht's ${icon('right')}</button>
     </form>
-    <p class="muted small">Oder scanne den QR-Code auf deinem Kärtchen mit der Kamera.</p>
+    <p class="muted small">Oder scanne den QR-Code auf deinem Kärtchen mit der Kamera. Hast du ein Vokaboom-Kärtchen? Das geht hier auch, wenn deine Lehrperson deine Klasse übernommen hat.</p>
     <p class="small"><button type="button" class="link-btn" data-action="login-choose">Zurück</button></p>`, { label: 'Kinder-Login', cls: 'auth-modal kid-modal' });
   renderKidSlots();
   setTimeout(() => $('#kid-user')?.focus(), 60);
@@ -270,20 +270,104 @@ async function loadClasses() {
   klass.loading = (async () => {
     try {
       const c = await cloudClient();
-      const [cl, st] = await Promise.all([
-        c.from('einmaleins_classes').select('id,name,settings,created_at').order('created_at'),
-        c.from('einmaleins_students').select('id,class_id,first_name,last_initial,username,pics,created_at').order('first_name'),
+      const get = (link) => Promise.all([
+        c.from('einmaleins_classes').select(`id,name,settings,created_at${link ? ',vokaboom_class' : ''}`).order('created_at'),
+        c.from('einmaleins_students').select(`id,class_id,first_name,last_initial,username,pics,created_at${link ? ',vokaboom_id' : ''}`).order('first_name'),
       ]);
+      let [cl, st] = await get(true);
+      klass.noLink = false;
+      if ([cl.error, st.error].some((e) => e && /vokaboom_(class|id)/.test(e.message || ''))) {
+        // Datenbank noch ohne Verknüpfung zu Vokaboom (SQL-Skript nicht neu ausgeführt)
+        klass.noLink = true;
+        [cl, st] = await get(false);
+      }
       if (cl.error) throw cl.error;
       if (st.error) throw st.error;
       klass.list = (cl.data || []).map((x) => ({ ...x, settings: cleanClassSettings(x.settings) }));
       klass.students = {};
       (st.data || []).forEach((s) => { (klass.students[s.class_id] = klass.students[s.class_id] || []).push(s); });
+      await loadVokaboom();
       klass.loaded = true; klass.error = '';
     } catch (e) { klass.error = cloudErrorText(e); } finally { klass.loading = null; }
   })();
   return klass.loading;
 }
+/* ---------- Vokaboom: Klassen und Kinder desselben Kontos (nur lesen) ---------- */
+async function loadVokaboom() {
+  klass.vb = null;
+  try {
+    const c = await cloudClient();
+    const [a, b] = await Promise.all([
+      c.from('vokaboom_classes').select('id,name').order('created_at'),
+      c.from('vokaboom_students').select('id,class_id,first_name,last_initial,username,pics').order('first_name'),
+    ]);
+    if (a.error || b.error) return;
+    const students = b.data || [];
+    klass.vb = { classes: (a.data || []).filter((x) => students.some((s) => s.class_id === x.id)), students, byId: new Map(students.map((s) => [s.id, s])) };
+    // Übernommene Kinder: immer die aktuellen Bilder und Namen aus Vokaboom anzeigen (dort gelten sie fürs Login)
+    Object.values(klass.students).flat().forEach((s) => {
+      const v = s.vokaboom_id && klass.vb.byId.get(s.vokaboom_id);
+      if (v) Object.assign(s, { pics: v.pics, first_name: v.first_name, last_initial: v.last_initial });
+    });
+  } catch { /* kein Vokaboom in diesem Projekt */ }
+}
+const vbClassById = (id) => klass.vb?.classes.find((x) => x.id === id);
+const linkedVbIds = () => new Set(Object.values(klass.students).flat().map((s) => s.vokaboom_id).filter(Boolean));
+/** Kinder einer Vokaboom-Klasse, die es in Einmaleins noch nicht gibt */
+const vbPending = (vid) => { const have = linkedVbIds(); return (klass.vb?.students || []).filter((s) => s.class_id === vid && !have.has(s.id)); };
+/** Kinder einer Vokaboom-Klasse übernehmen (gleicher Benutzername, gleiche Bilder) */
+async function importVokaboom(cid, vid) {
+  if (klass.busy) return null;
+  klass.busy = true;
+  try {
+    const c = await cloudClient();
+    const { data, error } = await c.rpc('einmaleins_import_vokaboom', { p_class: cid, p_vclass: vid });
+    if (error) throw error;
+    await loadClasses();
+    return data || {};
+  } catch (e) { toast(classErrorText(e), 'bad'); return null; } finally { klass.busy = false; }
+}
+function importSummary(r, vName) {
+  if (!r) return '';
+  const parts = [];
+  if (r.added) parts.push(`${r.added} ${r.added === 1 ? 'Kind' : 'Kinder'} aus „${vName}“ übernommen`);
+  if (r.same) parts.push(`${r.same === r.added ? 'alle' : r.same} mit demselben Kärtchen wie in Vokaboom`);
+  if (r.newlogin) parts.push(`${r.newlogin} mit neuem Benutzernamen (schon vergeben)`);
+  if (r.updated) parts.push(`${r.updated} Namen oder Bilder nachgeführt`);
+  if (r.skipped) parts.push(`${r.skipped} nicht übernommen (höchstens 60 Kinder pro Klasse)`);
+  return parts.length ? parts.join(', ') + '.' : `Alle Kinder aus „${vName}“ sind schon da.`;
+}
+async function importVokaboomClass(vid) {
+  const v = vbClassById(vid);
+  if (!v) return;
+  const existing = klass.list.find((x) => x.vokaboom_class === vid);
+  if (existing) { openClass(existing.id, 'kids'); return; }
+  try {
+    const c = await cloudClient();
+    const settings = { reihen: [...ALL_REIHEN], ops: { mul: true, div: true, gap: true }, choose: true };
+    const { data, error } = await c.from('einmaleins_classes').insert({ name: v.name.slice(0, 60), settings }).select('id').single();
+    if (error) throw error;
+    const r = await importVokaboom(data.id, vid);
+    openClass(data.id, 'kids');
+    if (r) toast(importSummary(r, v.name));
+  } catch (e) { toast(classErrorText(e), 'bad'); }
+}
+function vbClassesPanelHTML() {
+  if (!klass.vb?.classes.length) return '';
+  if (klass.noLink) return `<div class="panel vb-panel"><h2>Aus Vokaboom übernehmen</h2><p class="hint">Damit Klassen mit denselben Kinder-Logins übernommen werden können, bitte <code>supabase/einmaleins.sql</code> in Supabase nochmals ganz ausführen.</p></div>`;
+  return `<div class="panel vb-panel">
+    <h2>Aus Vokaboom übernehmen</h2>
+    <p class="hint">Die Kinder behalten ihren Benutzernamen und ihre 3 Bilder: Ein Kärtchen für beide Tools.</p>
+    <ul class="class-list">${klass.vb.classes.map((v) => {
+      const n = klass.vb.students.filter((s) => s.class_id === v.id).length;
+      const ex = klass.list.find((x) => x.vokaboom_class === v.id);
+      return `<li class="lib-item"><span class="lib-open static"><span class="class-badge vb" aria-hidden="true">${esc(v.name.slice(0, 3))}</span>
+        <span class="lib-text"><strong>${esc(v.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'}${ex ? ` · übernommen als „${esc(ex.name)}“` : ''}</small></span></span>
+        ${ex ? `<button class="btn small ghost" data-action="class-open" data-id="${ex.id}">Öffnen</button>` : `<button class="btn small secondary" data-action="vb-class-import" data-id="${v.id}">${icon('plus')} Übernehmen</button>`}</li>`;
+    }).join('')}</ul>
+  </div>`;
+}
+
 async function loadClassProgress(cid) {
   const ids = studentsOf(cid).map((s) => s.id);
   const map = {};
@@ -298,6 +382,8 @@ async function loadClassProgress(cid) {
 function classErrorText(e) {
   const msg = String(e?.message || e || '');
   if (/class_full/.test(msg)) return 'In einer Klasse haben höchstens 60 Kinder Platz.';
+  if (/no_vokaboom/.test(msg)) return 'In diesem Supabase-Projekt gibt es keine Vokaboom-Klassen.';
+  if (/einmaleins_import_vokaboom/.test(msg)) return 'Für die Übernahme aus Vokaboom bitte supabase/einmaleins.sql in Supabase nochmals ganz ausführen.';
   return cloudErrorText(e);
 }
 
@@ -340,12 +426,12 @@ function renderClasses() {
   v.innerHTML = `<section class="classes-view">
     <div class="mode-bar"><h1 class="mode-title">Meine Klassen</h1></div>
     <div class="classes-grid">
-      <form class="panel" id="new-class-form" autocomplete="off">
+      <div class="side-col"><form class="panel" id="new-class-form" autocomplete="off">
         <h2>Neue Klasse</h2>
         <label class="field" for="new-class"><span class="label">Name der Klasse</span><input id="new-class" type="text" maxlength="60" placeholder="z. B. 3a Mathe"></label>
         <button class="btn primary" type="submit">${icon('plus')} Klasse anlegen</button>
         <p class="hint">Danach trägst du die Kinder ein, wählst die Reihen aus und druckst die Login-Kärtchen.</p>
-      </form>
+      </form>${klass.loaded ? vbClassesPanelHTML() : ''}</div>
       <div class="panel"><h2>Klassen</h2>${body}</div>
     </div>
     <p class="muted small privacy-note">${icon('check')} Gespeichert werden nur der Vorname und der erste Buchstabe des Nachnamens – keine E-Mail-Adressen der Kinder.</p>
@@ -411,7 +497,7 @@ function classKidsHTML(c, kids) {
     }
     return `<li class="kid-row">
       <span class="kid-av-big" aria-hidden="true">${kidWordImg(s.username)}</span>
-      <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}</small></span>
+      <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}${s.vokaboom_id ? ' <span class="vb-tag" title="Gleiches Kärtchen wie in Vokaboom">Vokaboom-Login</span>' : ''}</small></span>
       <span class="kid-pw" aria-label="Bilder-Passwort">${picsList(s.pics).map((i) => `<span>${kidPwImg(i)}</span>`).join('')}</span>
       <span class="kid-actions">
         <button class="icon-btn subtle" data-action="kid-newpics" data-id="${s.id}" title="Neue Bilder (neues Passwort)" aria-label="Neue Bilder für ${esc(kidName(s))}">${icon('shuffle')}</button>
@@ -435,7 +521,7 @@ function classKidsHTML(c, kids) {
         <div id="kid-import-preview" class="muted small"></div>
         <button class="btn secondary" type="button" data-action="kid-import">${icon('plus')} Alle hinzufügen</button>
       </details>
-      <div class="vb-import"><button class="btn ghost small" type="button" data-action="vokaboom-import">${icon('users')} Kinder aus einer Vokaboom-Klasse übernehmen</button></div>
+      ${vbKidsBoxHTML(c)}
     </div>
     <div class="panel">
       <h2>${kids.length} ${kids.length === 1 ? 'Kind' : 'Kinder'}</h2>
@@ -487,40 +573,43 @@ async function addKids(c, list) {
     toast(list.length === 1 ? `${list[0].first} ist dabei.` : `${(data || []).length} Kinder hinzugefügt.`);
   } catch (e) { toast(classErrorText(e), 'bad'); } finally { klass.busy = false; }
 }
-/** Namen aus einer Klasse in Vokaboom übernehmen (gleiches Konto). Die Kinder bekommen neue Einmaleins-Logins. */
-async function openVokaboomImport() {
+function vbKidsBoxHTML(c) {
+  if (!klass.vb?.classes.length) return '';
+  if (klass.noLink) return '<div class="vb-import"><p class="hint">Kinder aus Vokaboom mit demselben Login übernehmen: bitte zuerst <code>supabase/einmaleins.sql</code> in Supabase nochmals ganz ausführen.</p></div>';
+  const v = c.vokaboom_class && vbClassById(c.vokaboom_class);
+  if (v) {
+    const n = vbPending(v.id).length;
+    return `<div class="vb-import"><p class="small"><span class="vb-tag">Vokaboom</span> Verknüpft mit „${esc(v.name)}“. Die Kinder melden sich mit ihrem Vokaboom-Kärtchen an.</p>
+      <button class="btn ${n ? 'secondary' : 'ghost'} small" type="button" data-action="vb-sync">${icon('flip')} ${n ? `${n === 1 ? '1 neues Kind' : `${n} neue Kinder`} aus Vokaboom holen` : 'Mit Vokaboom abgleichen'}</button></div>`;
+  }
+  return `<div class="vb-import"><button class="btn ghost small" type="button" data-action="vokaboom-import">${icon('users')} Kinder aus einer Vokaboom-Klasse übernehmen (gleiche Kärtchen)</button></div>`;
+}
+/** Kinder aus einer Vokaboom-Klasse in die aktuelle Klasse holen (gleiche Logins) */
+function openVokaboomImport() {
   const c = currentClass();
   if (!c) return;
-  openModal(`${modalHead('Aus Vokaboom übernehmen')}<div id="vb-list"><p class="muted"><span class="spinner"></span> Klassen werden gesucht …</p></div>`, { label: 'Aus Vokaboom übernehmen' });
-  try {
-    const cl = await cloudClient();
-    const [a, b] = await Promise.all([
-      cl.from('vokaboom_classes').select('id,name').order('created_at'),
-      cl.from('vokaboom_students').select('class_id,first_name,last_initial').order('first_name'),
-    ]);
-    if (a.error || b.error) throw a.error || b.error;
-    const by = {};
-    (b.data || []).forEach((s) => { (by[s.class_id] = by[s.class_id] || []).push(s); });
-    const list = (a.data || []).filter((x) => by[x.id]?.length);
-    klass.vb = { list, by };
-    const box = $('#vb-list');
-    if (!box) return;
-    box.innerHTML = list.length ? `<p class="muted small">Die Namen werden übernommen. Die Kinder bekommen neue Einmaleins-Logins (neue Kärtchen). Kinder, die es in „${esc(c.name)}“ schon gibt, werden übersprungen.</p>
-      <ul class="class-list">${list.map((x) => `<li class="lib-item"><button class="lib-open" data-action="vokaboom-take" data-id="${x.id}"><span class="class-badge" aria-hidden="true">${esc(x.name.slice(0, 3))}</span><span class="lib-text"><strong>${esc(x.name)}</strong><small>${by[x.id].length} Kinder</small></span></button></li>`).join('')}</ul>`
-      : '<p class="empty">In deinem Konto gibt es keine Vokaboom-Klasse mit Kindern.</p>';
-  } catch {
-    const box = $('#vb-list');
-    if (box) box.innerHTML = '<p class="empty">Keine Vokaboom-Klassen gefunden.</p>';
-  }
+  const list = klass.vb?.classes || [];
+  openModal(`${modalHead('Aus Vokaboom übernehmen')}
+    ${list.length ? `<p class="muted small">Die Kinder behalten ihren Benutzernamen und ihre 3 Bilder aus Vokaboom: Mit demselben Kärtchen melden sie sich in beiden Tools an. Kinder, die schon übernommen sind, kommen nicht doppelt.</p>
+      <ul class="class-list">${list.map((x) => {
+        const n = klass.vb.students.filter((s) => s.class_id === x.id).length, p = vbPending(x.id).length;
+        return `<li class="lib-item"><button class="lib-open" data-action="vokaboom-take" data-id="${x.id}" ${p ? '' : 'disabled'}><span class="class-badge vb" aria-hidden="true">${esc(x.name.slice(0, 3))}</span><span class="lib-text"><strong>${esc(x.name)}</strong><small>${n} Kinder${p < n ? ` · ${p ? `${p} noch nicht übernommen` : 'alle schon übernommen'}` : ''}</small></span></button></li>`;
+      }).join('')}</ul>` : '<p class="empty">In deinem Konto gibt es keine Vokaboom-Klasse mit Kindern.</p>'}`, { label: 'Aus Vokaboom übernehmen' });
 }
-async function vokaboomTake(id) {
+async function vokaboomTake(vid) {
   const c = currentClass();
-  const kids = klass.vb?.by?.[id] || [];
-  const have = new Set(studentsOf(c.id).map((s) => `${s.first_name.toLowerCase()}|${s.last_initial}`));
-  const list = kids.map((s) => ({ first: s.first_name, initial: s.last_initial || '' })).filter((k) => !have.has(`${k.first.toLowerCase()}|${k.initial}`));
   closeModal(true);
-  if (!list.length) { toast('Alle diese Kinder sind schon in der Klasse.'); return; }
-  await addKids(c, list);
+  if (!c) return;
+  const r = await importVokaboom(c.id, vid);
+  render();
+  if (r) toast(importSummary(r, vbClassById(vid)?.name || 'Vokaboom'));
+}
+async function vokaboomSync() {
+  const c = currentClass();
+  if (!c?.vokaboom_class) return;
+  const r = await importVokaboom(c.id, c.vokaboom_class);
+  render();
+  if (r) toast(importSummary(r, vbClassById(c.vokaboom_class)?.name || 'Vokaboom'));
 }
 function randomPics() {
   const all = [...Array(12).keys()];
@@ -535,11 +624,19 @@ async function kidNewPics(id) {
   while (pics === s.pics) pics = randomPics();
   try {
     const cl = await cloudClient();
+    if (s.vokaboom_id) {
+      const r = await cl.from('vokaboom_students').update({ pics }).eq('id', s.vokaboom_id);
+      if (r.error) throw r.error;
+      const v = klass.vb?.byId.get(s.vokaboom_id);
+      if (v) v.pics = pics;
+    }
     const { error } = await cl.from('einmaleins_students').update({ pics }).eq('id', id);
     if (error) throw error;
     s.pics = pics;
     render();
-    toast(`${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
+    toast(s.vokaboom_id
+      ? `${kidName(s)} hat neue Bilder – in Einmaleins und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
+      : `${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
 async function kidDelete(id) {
@@ -621,7 +718,8 @@ function classCardsHTML(c, kids) {
   return `<div class="panel">
     <div class="cards-head">
       <div><h2>Login-Kärtchen</h2>
-        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen.</p></div>
+        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen.</p>
+        <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Einmaleins – ein Kärtchen für beide Tools. Ihre alten Vokaboom-Kärtchen gelten weiterhin.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Einmaleins.'}</p></div>
       <button class="btn primary" data-action="cards-pdf" id="cards-pdf">${icon('down')} PDF herunterladen</button>
     </div>
     <div class="card-previews">${kids.map((s) => `<figure class="card-prev" data-sid="${s.id}"><span class="spinner"></span></figure>`).join('')}</div>
@@ -660,66 +758,95 @@ function fitText(ctx, text, maxW, font, size) {
   while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
   return t + '…';
 }
-async function drawKidCard(ctx, x, y, s, st, className) {
-  const [accent, wash] = cardColor(st.username);
-  const X = (mm) => (x + mm) * s, Y = (mm) => (y + mm) * s, L = (mm) => mm * s;
-  const disp = "'Bricolage Grotesque', Lexend, system-ui, sans-serif", body = 'Lexend, system-ui, sans-serif';
-  ctx.save();
-  rrect(ctx, X(0), Y(0), L(CARD_W), L(CARD_H), L(3.5));
-  ctx.fillStyle = '#fff'; ctx.fill();
-  ctx.save(); ctx.clip();
-  const g = ctx.createLinearGradient(X(0), Y(0), X(CARD_W), Y(11));
-  g.addColorStop(0, '#0F766E'); g.addColorStop(1, '#0E7490');
-  ctx.fillStyle = g; ctx.fillRect(X(0), Y(0), L(CARD_W), L(11));
-  ctx.fillStyle = accent; ctx.fillRect(X(0), Y(CARD_H - 1.6), L(CARD_W), L(1.6));
-  ctx.restore();
-  rrect(ctx, X(0), Y(0), L(CARD_W), L(CARD_H), L(3.5));
-  ctx.lineWidth = L(0.25); ctx.strokeStyle = '#C3D4D3'; ctx.stroke();
-  const mark = await svgImage(BRAND_SVG('cg').replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
-  if (mark) ctx.drawImage(mark, X(2.4), Y(0.9), L(9.6), L(9.2));
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `800 ${L(4.6)}px ${disp}`;
-  ctx.fillStyle = '#fff'; ctx.fillText('Einmal', X(12.8), Y(7.3));
-  const vw = ctx.measureText('Einmal').width;
-  ctx.fillStyle = '#FFC233'; ctx.fillText('eins', X(12.8) + vw, Y(7.3));
-  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.92)';
-  ctx.fillText(fitText(ctx, className, L(30), (z) => `500 ${z}px ${body}`, L(3)), X(CARD_W - 3.5), Y(7));
-  ctx.textAlign = 'left';
-  rrect(ctx, X(4), Y(14), L(19), L(19), L(4)); ctx.fillStyle = wash; ctx.fill();
-  const wimg = await svgImage(KID_WORDS[kidWordOf(st.username)] || '');
-  if (wimg) ctx.drawImage(wimg, X(5.5), Y(15.5), L(16), L(16));
-  ctx.fillStyle = '#12262A';
-  ctx.fillText(fitText(ctx, kidName(st), L(28), (z) => `600 ${z}px ${body}`, L(3.6)), X(26), Y(18.6));
-  ctx.fillStyle = '#74898F'; ctx.font = `500 ${L(2.3)}px ${body}`; ctx.fillText('Benutzername', X(26), Y(24));
-  ctx.fillStyle = accent;
-  ctx.fillText(fitText(ctx, displayUser(st.username), L(28), (z) => `800 ${z}px ${disp}`, L(6.4)), X(26), Y(31));
-  ctx.fillStyle = '#74898F'; ctx.font = `500 ${L(2.3)}px ${body}`;
-  ctx.fillText('Passwort: diese 3 Bilder antippen', X(4), Y(38.4));
-  const pics = picsList(st.pics);
-  for (let k = 0; k < 3; k++) {
-    const bx = 4 + k * 12.6, by = 40.3;
-    rrect(ctx, X(bx), Y(by), L(10.6), L(10.6), L(2.2));
-    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = L(0.45); ctx.strokeStyle = accent; ctx.stroke();
-    const im = pics[k] != null ? await svgImage(KID_PW[pics[k]].svg) : null;
-    if (im) ctx.drawImage(im, X(bx + 1.6), Y(by + 1.6), L(7.4), L(7.4));
-    ctx.beginPath(); ctx.arc(X(bx + 0.4), Y(by + 0.4), L(1.9), 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = `700 ${L(2.5)}px ${body}`; ctx.textAlign = 'center';
-    ctx.fillText(String(k + 1), X(bx + 0.4), Y(by + 1.3)); ctx.textAlign = 'left';
-  }
-  const qx = 56, qy = 13.3, qs = 26;
+/** Für den zweiten QR-Code: Ist das Kind mit Vokaboom verknüpft und hat dort dasselbe Login? */
+function vbLoginOf(st) {
+  const v = st.vokaboom_id && klass.vb?.byId.get(st.vokaboom_id);
+  const base = String(CLOUD_CFG.vokaboomUrl || '').trim();
+  if (!v || !base || v.username !== st.username) return '';
+  return `${base}#k=${v.username}.${picsList(v.pics).join('-')}`;
+}
+function drawQR(ctx, url, qx, qy, qs, X, Y, L) {
   ctx.fillStyle = '#fff'; ctx.fillRect(X(qx), Y(qy), L(qs), L(qs));
   try {
-    const q = qrcode(0, 'M'); q.addData(kidLoginUrl(st), 'Byte'); q.make();
-    const n = q.getModuleCount(), m = 1.5, cell = qs / (n + m * 2);
-    ctx.fillStyle = '#12262A';
+    const q = qrcode(0, 'M'); q.addData(url, 'Byte'); q.make();
+    const n = q.getModuleCount(), m = 1, cell = qs / (n + m * 2);
+    ctx.fillStyle = '#1E293B';
     for (let r = 0; r < n; r++) for (let cc = 0; cc < n; cc++) {
       if (q.isDark(r, cc)) ctx.fillRect(Math.floor(X(qx + (cc + m) * cell)), Math.floor(Y(qy + (r + m) * cell)), Math.ceil(L(cell)), Math.ceil(L(cell)));
     }
   } catch { /* */ }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#44606A'; ctx.font = `600 ${L(2.3)}px ${body}`;
-  ctx.fillText('Scannen = anmelden', X(qx + qs / 2), Y(43.4));
-  ctx.fillStyle = '#74898F'; ctx.font = `400 ${L(1.9)}px ${body}`;
-  ctx.fillText(location.host || 'einmaleins', X(qx + qs / 2), Y(47.4));
+}
+/** Beschriftung unter einem QR-Code: farbiges Kästchen („ABC“ / „1×1“) und Fach */
+function drawQRLabel(ctx, cx, y, tag, text, accent, X, Y, L, body) {
+  ctx.font = `700 ${L(2.3)}px ${body}`;
+  const tw = ctx.measureText(tag).width + L(2);
+  ctx.font = `600 ${L(2.3)}px ${body}`;
+  const xw = ctx.measureText(text).width;
+  const total = tw + L(1) + xw;
+  const x0 = X(cx) - total / 2;
+  rrect(ctx, x0, Y(y - 2.4), tw, L(3.3), L(1.1)); ctx.fillStyle = accent; ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `700 ${L(2.3)}px ${body}`; ctx.textAlign = 'left';
+  ctx.fillText(tag, x0 + L(1), Y(y));
+  ctx.fillStyle = '#475569'; ctx.font = `600 ${L(2.3)}px ${body}`;
+  ctx.fillText(text, x0 + tw + L(1), Y(y));
+}
+/**
+ * Login-Kärtchen ohne Logo und ohne Namen eines Tools: Es gilt für alle Tools, in denen das Kind dasselbe Login hat.
+ * Ein QR-Code pro Fach: „1×1 Rechnen“ (Einmaleins) und bei Kindern mit Vokaboom-Login zusätzlich „ABC Vokabeln“.
+ */
+async function drawKidCard(ctx, x, y, s, st, className) {
+  const [accent, wash] = cardColor(st.username);
+  const X = (mm) => (x + mm) * s, Y = (mm) => (y + mm) * s, L = (mm) => mm * s;
+  const disp = "'Bricolage Grotesque', Lexend, system-ui, sans-serif", body = 'Lexend, system-ui, sans-serif';
+  const vbUrl = vbLoginOf(st);
+  ctx.save();
+  rrect(ctx, X(0), Y(0), L(CARD_W), L(CARD_H), L(3.5));
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = accent; ctx.fillRect(X(0), Y(0), L(CARD_W), L(9));
+  ctx.restore();
+  rrect(ctx, X(0), Y(0), L(CARD_W), L(CARD_H), L(3.5));
+  ctx.lineWidth = L(0.25); ctx.strokeStyle = '#CBD5E1'; ctx.stroke();
+  // Kopf: „Mein Login“ und Klasse
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff'; ctx.font = `800 ${L(3.4)}px ${disp}`;
+  ctx.fillText('Mein Login', X(4), Y(6.2));
+  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.fillText(fitText(ctx, className, L(44), (z) => `500 ${z}px ${body}`, L(2.8)), X(CARD_W - 4), Y(6));
+  ctx.textAlign = 'left';
+  // Bild, Name, Benutzername
+  rrect(ctx, X(4), Y(12), L(16), L(16), L(3.5)); ctx.fillStyle = wash; ctx.fill();
+  const wimg = await svgImage(KID_WORDS[kidWordOf(st.username)] || '');
+  if (wimg) ctx.drawImage(wimg, X(5.5), Y(13.5), L(13), L(13));
+  ctx.fillStyle = '#1E293B';
+  ctx.fillText(fitText(ctx, kidName(st), L(56), (z) => `600 ${z}px ${body}`, L(3.4)), X(23.5), Y(16.6));
+  ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`; ctx.fillText('Benutzername', X(23.5), Y(21));
+  ctx.fillStyle = accent;
+  ctx.fillText(fitText(ctx, displayUser(st.username), L(56), (z) => `800 ${z}px ${disp}`, L(6.2)), X(23.5), Y(27.8));
+  // Bilder-Passwort
+  ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`;
+  ctx.fillText('Passwort: diese 3 Bilder antippen', X(4), Y(34.6));
+  const pics = picsList(st.pics);
+  for (let k = 0; k < 3; k++) {
+    const bx = 4 + k * 13, by = 37;
+    rrect(ctx, X(bx), Y(by), L(11), L(11), L(2.2));
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = L(0.45); ctx.strokeStyle = accent; ctx.stroke();
+    const im = pics[k] != null ? await svgImage(KID_PW[pics[k]].svg) : null;
+    if (im) ctx.drawImage(im, X(bx + 1.7), Y(by + 1.7), L(7.6), L(7.6));
+    ctx.beginPath(); ctx.arc(X(bx + 0.4), Y(by + 0.4), L(1.9), 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = `700 ${L(2.5)}px ${body}`; ctx.textAlign = 'center';
+    ctx.fillText(String(k + 1), X(bx + 0.4), Y(by + 1.3)); ctx.textAlign = 'left';
+  }
+  // QR-Codes: einer pro Fach
+  if (vbUrl) {
+    drawQR(ctx, vbUrl, 46.5, 30.5, 17.5, X, Y, L);
+    drawQR(ctx, kidLoginUrl(st), 65, 30.5, 17.5, X, Y, L);
+    drawQRLabel(ctx, 55.25, 51.2, 'ABC', 'Vokabeln', accent, X, Y, L, body);
+    drawQRLabel(ctx, 73.75, 51.2, '1×1', 'Rechnen', accent, X, Y, L, body);
+  } else {
+    drawQR(ctx, kidLoginUrl(st), 61, 29.5, 20, X, Y, L);
+    drawQRLabel(ctx, 71, 51.6, '1×1', 'Rechnen', accent, X, Y, L, body);
+  }
   ctx.restore();
 }
 async function cardFontsReady() {
@@ -764,7 +891,7 @@ async function downloadCardsPDF() {
       for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
       pages.push({ jpeg: bytes, w: cv.width, h: cv.height });
     }
-    downloadBlob(imagePagesPDF(pages), `Einmaleins-Logins-${fileSafe(c.name)}.pdf`);
+    downloadBlob(imagePagesPDF(pages), `Logins-${fileSafe(c.name)}.pdf`);
     toast('PDF heruntergeladen.');
   } catch { toast('Das PDF konnte nicht erstellt werden.', 'bad'); } finally {
     const b = $('#cards-pdf');
@@ -985,6 +1112,8 @@ const classActions = {
   },
   'vokaboom-import': () => openVokaboomImport(),
   'vokaboom-take': (el) => vokaboomTake(el.dataset.id),
+  'vb-sync': () => vokaboomSync(),
+  'vb-class-import': (el) => importVokaboomClass(el.dataset.id),
   'kid-newpics': (el) => kidNewPics(el.dataset.id),
   'kid-delete': (el) => { klass.confirm = el.dataset.id; render(); },
   'kid-delete-no': () => { klass.confirm = ''; render(); },

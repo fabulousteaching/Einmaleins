@@ -50,10 +50,12 @@ Oben auf der Startseite wählt man die **Reihen** (1er bis 10er, „Kernaufgaben
 Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie bei Vokaboom** (gleiche E-Mail-Adresse, gleiches Passwort).
 
 1. **Klasse anlegen**, z. B. „3a Mathe“.
-2. **Kinder** eintragen: Vorname und erster Buchstabe des Nachnamens, einzeln oder als Liste (auch aus Excel). Oder mit einem Klick **aus einer Vokaboom-Klasse übernehmen** (die Kinder bekommen dabei eigene Einmaleins-Logins).
+2. **Kinder** eintragen: Vorname und erster Buchstabe des Nachnamens, einzeln oder als Liste (auch aus Excel).
 3. Jedes Kind bekommt wie bei Vokaboom einen **Benutzernamen** (z. B. `Baum34`) und ein **Bilder-Passwort** aus 3 Bildern.
+
+   **Oder eine ganze Klasse aus Vokaboom übernehmen** (Meine Klassen → „Aus Vokaboom übernehmen“): Die Kinder behalten ihren Vokaboom-Benutzernamen und ihre 3 Bilder und melden sich mit **demselben Kärtchen** in beiden Tools an. Vergibt die Lehrperson später neue Bilder (in Vokaboom oder Einmaleins), gelten sie in beiden. Kommen in Vokaboom neue Kinder dazu, holt „Mit Vokaboom abgleichen“ sie nach. Vokaboom selbst wird dabei nur gelesen.
 4. **Reihen**: festlegen, welche Reihen und Aufgabenarten die Klasse übt, und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen.
-5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite) mit QR-Code. QR-Code scannen = angemeldet.
+5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo**: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Einmaleins, bei Kindern mit Vokaboom-Login zusätzlich **ABC Vokabeln** für Vokaboom. QR-Code scannen = angemeldet.
 6. **Übersicht**:
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
    - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen und die häufigsten Fehler mit den typischen falschen Antworten

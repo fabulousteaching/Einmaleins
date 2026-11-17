@@ -708,7 +708,13 @@ button.tf:hover { transform: scale(1.12); z-index: 1; box-shadow: var(--shadow-s
 .initial-box { text-align: center; font-weight: 700; text-transform: uppercase; }
 .kid-import summary { cursor: pointer; font-weight: 600; color: var(--brand-ink); }
 .kid-import[open] { display: grid; gap: .6rem; }
-.vb-import { border-top: 1px solid var(--line); padding-top: .9rem; }
+.vb-import { border-top: 1px solid var(--line); padding-top: .9rem; display: grid; gap: .6rem; justify-items: start; }
+.vb-tag { display: inline-block; padding: 0 .45rem; border-radius: 99px; background: #EEF0FF; color: #3730A3; font-size: .72rem; font-weight: 600; vertical-align: 1px; }
+:root[data-theme="dark"] .vb-tag { background: #2A2A5C; color: #C4C0FF; }
+.class-badge.vb { background: linear-gradient(135deg, #4F46E5, #7C3AED); }
+.vb-panel .lib-item { padding-right: 8px; }
+.lib-open.static { cursor: default; }
+.lib-open:disabled { opacity: .55; cursor: default; }
 .kid-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .kid-row { display: flex; align-items: center; gap: .7rem; padding: .45rem .6rem; border-radius: 16px; background: var(--paper-2); border: 1px solid var(--line); }
 .kid-row.confirm { background: var(--red-wash); border-color: transparent; flex-wrap: wrap; justify-content: space-between; }
