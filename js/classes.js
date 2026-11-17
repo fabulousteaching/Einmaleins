@@ -62,7 +62,8 @@ function mergeProg(a, b) {
   out.at = Math.max(A.at, B.at);
   Object.entries(A.f).forEach(([k, s]) => { const r = B.f[k]; if (!r || s.n > r.n || (s.n === r.n && s.t > r.t)) out.f[k] = s; });
   Object.entries(A.days).forEach(([d, n]) => { out.days[d] = Math.max(n, B.days[d] || 0); });
-  Object.entries(A.best).forEach(([k, v]) => { const o = B.best[k]; out.best[k] = o == null ? v : LOWER_BETTER.has(k) ? Math.min(v, o) : Math.max(v, o); });
+  const lower = (k) => LOWER_BETTER.has(k) || /^b:[a-z]+:speed:/.test(k); // Speed-Zeiten: weniger ist besser
+  Object.entries(A.best).forEach(([k, v]) => { const o = B.best[k]; out.best[k] = o == null ? v : lower(k) ? Math.min(v, o) : Math.max(v, o); });
   // Münzen: es gilt der Stand mit mehr Aktivität (verdient + ausgegeben), damit nichts verloren geht
   const act = (c) => (c ? c.earned + c.spent + c.p / 100 : -1);
   if (act(A.coins) > act(B.coins)) out.coins = { ...A.coins };
@@ -1177,6 +1178,7 @@ function classOverviewHTML(c, kids) {
         }).join('')}</ol>` : '<p class="empty">Noch keine Übungsdaten.</p>'}
       </div>
     </div>
+    ${classBoardPanelHTML()}
     <div class="panel sheets-panel">
       <div class="stats-head"><h2>${icon('sheet')} Übungsblätter</h2></div>
       <p class="hint">Jedes Kind bekommt ein eigenes Blatt: Seine schwierigsten Rechnungen kommen mehrmals und in verschiedenen Formen vor (auch als Tauschaufgabe, Lücke und Geteilt), dazu Rechnungen, die noch wackeln, und die Reihe, die am meisten Mühe macht. Jedes Mal neu gemischt.</p>
@@ -1189,7 +1191,46 @@ function classOverviewHTML(c, kids) {
       </div>
     </div>`;
 }
+/* ---------- Bestenlisten der Spiele (Top 10 der Klasse) ---------- */
+function classBoardPanelHTML() {
+  const b = klass.board || (klass.board = { game: 'elfmeter', mode: 'countdown', op: 'mul' });
+  const games = GAMES.filter((g) => g.modes.length);
+  const modes = GAME_BY_ID[b.game].modes;
+  if (!modes.includes(b.mode)) b.mode = modes[0];
+  const sel = (id, label, cur, list) => `<label class="cb-field"><span>${label}</span><select id="${id}">${list.map(([v, t]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+  return `<div class="panel class-board" id="class-board">
+    <div class="stats-head"><h2>${icon('trophy')} Bestenlisten der Spiele</h2></div>
+    <p class="hint">Top 10 der Klasse – jedes Kind erscheint nur mit seinem besten Ergebnis. Die Kinder sehen diese Liste nach jedem Spiel, dazu ihren eigenen Rang.</p>
+    <div class="cb-pick">${sel('cb-game', 'Spiel', b.game, games.map((g) => [g.id, g.name]))}${sel('cb-mode', 'Modus', b.mode, modes.map((m) => [m, GAME_MODES[m].name]))}${sel('cb-op', 'Aufgabenart', b.op, ['mul', 'div', 'gap', 'mix'].map((o) => [o, OP_INFO[o][0]]))}</div>
+    <div id="cboard" class="cboard"><p class="muted">wird geladen …</p></div>
+  </div>`;
+}
+function bindClassBoard(c) {
+  const panel = $('#class-board');
+  if (!panel) return;
+  ['cb-game', 'cb-mode', 'cb-op'].forEach((id) => $(`#${id}`)?.addEventListener('change', (e) => {
+    klass.board[{ 'cb-game': 'game', 'cb-mode': 'mode', 'cb-op': 'op' }[id]] = e.target.value;
+    $('#class-board').outerHTML = classBoardPanelHTML();
+    bindClassBoard(c);
+  }));
+  loadClassBoard(c);
+}
+async function loadClassBoard(c) {
+  const el = $('#cboard');
+  if (!el) return;
+  const b = klass.board;
+  try {
+    const cl = await cloudClient();
+    const { data, error } = await cl.rpc('einmaleins_class_board', { p_class: c.id, p_board: `${b.game}:${b.mode}:${b.op}` });
+    if (error) throw error;
+    if ($('#cboard') === el) el.innerHTML = boardListHTML(data);
+  } catch (e) {
+    const old = /PGRST202|Could not find the function/.test(`${e.code || ''} ${e.message || ''}`);
+    if ($('#cboard') === el) el.innerHTML = `<p class="muted">${old ? 'Für die Bestenlisten muss das SQL-Skript (supabase/einmaleins.sql) in Supabase noch einmal ausgeführt werden.' : 'Die Bestenliste ist gerade nicht erreichbar.'}</p>`;
+  }
+}
 function bindOverview(c) {
+  bindClassBoard(c);
   bindSheetOpts(() => { if (klass.sheetKid) previewKidSheet(klass.sheetKid, false); });
   const sel = klass.kidDetail;
   if (sel) bindTafel(klass.progress[c.id]?.[sel]?.prog || emptyProg());

@@ -446,6 +446,101 @@ language sql security definer set search_path = '' as $$
   delete from public.einmaleins_sessions where token = p_token;
 $$;
 
+-- Bestenliste der Klasse in den Spielen (Countdown, Survive, Speed).
+-- board: Spiel, Modus und Aufgabenart, z. B. 'meteor:speed:mix'. Speed zählt die Zeit in Millisekunden (weniger ist besser),
+-- Countdown und Survive die richtigen Antworten (mehr ist besser). Jedes Kind erscheint nur mit seinem besten Ergebnis.
+create table if not exists public.einmaleins_scores (
+  id bigint generated always as identity primary key,
+  class_id uuid not null references public.einmaleins_classes (id) on delete cascade,
+  student_id uuid not null references public.einmaleins_students (id) on delete cascade,
+  board text not null check (board ~ '^(elfmeter|meteor|frog|truefalse|memory):(countdown|survive|speed):(mul|div|gap|mix)$'),
+  score integer not null check (score between 0 and 3600000),
+  created_at timestamptz not null default now()
+);
+create index if not exists einmaleins_scores_board on public.einmaleins_scores (class_id, board);
+alter table public.einmaleins_scores enable row level security;
+revoke all on public.einmaleins_scores from anon, authenticated;
+
+-- Top 10 (bestes Ergebnis pro Kind) und Rang eines Kindes; nur intern verwendet
+create or replace function public.einmaleins_board_json(p_class uuid, p_board text, p_student uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  lower_better boolean := split_part(p_board, ':', 2) = 'speed';
+  res jsonb;
+begin
+  with best as (
+    select distinct on (sc.student_id) sc.student_id, sc.score, sc.created_at
+    from public.einmaleins_scores sc
+    where sc.class_id = p_class and sc.board = p_board
+    order by sc.student_id,
+      case when lower_better then sc.score end asc,
+      case when not lower_better then sc.score end desc,
+      sc.created_at asc
+  ), ranked as (
+    select b.*, (row_number() over (order by
+      case when lower_better then b.score end asc,
+      case when not lower_better then b.score end desc,
+      b.created_at asc))::int as rk
+    from best b
+  )
+  select jsonb_build_object(
+    'top', coalesce((select jsonb_agg(jsonb_build_object('rank', r.rk, 'name', s.first_name || case when s.last_initial <> '' then ' ' || s.last_initial || '.' else '' end,
+        'score', r.score, 'me', r.student_id = p_student) order by r.rk)
+      from ranked r join public.einmaleins_students s on s.id = r.student_id where r.rk <= 10), '[]'::jsonb),
+    'me', (select jsonb_build_object('rank', r.rk, 'score', r.score) from ranked r where r.student_id = p_student),
+    'total', (select count(*) from ranked),
+    'class', (select c.name from public.einmaleins_classes c where c.id = p_class),
+    'lower', lower_better
+  ) into res;
+  return res;
+end;
+$$;
+
+-- Kind: Ergebnis eintragen (p_score null = nur ansehen) und die Bestenliste der eigenen Klasse holen
+create or replace function public.einmaleins_score(p_token uuid, p_board text, p_score integer default null)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  st public.einmaleins_students;
+begin
+  select s.* into st from public.einmaleins_sessions x join public.einmaleins_students s on s.id = x.student_id where x.token = p_token;
+  if not found then raise exception 'session_invalid' using errcode = 'P0001'; end if;
+  if p_board !~ '^(elfmeter|meteor|frog|truefalse|memory):(countdown|survive|speed):(mul|div|gap|mix)$' then
+    raise exception 'board_invalid' using errcode = 'P0001';
+  end if;
+  if p_score is not null then
+    -- grobe Plausibilität: Speed mindestens 5 Sekunden, Countdown/Survive höchstens 500 richtige
+    if (split_part(p_board, ':', 2) = 'speed' and p_score between 5000 and 3600000)
+      or (split_part(p_board, ':', 2) <> 'speed' and p_score between 1 and 500) then
+      -- höchstens 30 Einträge pro Minute und Kind (Schutz vor Unsinn)
+      if (select count(*) from public.einmaleins_scores where student_id = st.id and created_at > now() - interval '1 minute') < 30 then
+        insert into public.einmaleins_scores (class_id, student_id, board, score) values (st.class_id, st.id, p_board, p_score);
+      end if;
+    end if;
+  end if;
+  update public.einmaleins_sessions set last_seen = now() where token = p_token;
+  return public.einmaleins_board_json(st.class_id, p_board, st.id);
+end;
+$$;
+
+-- Lehrperson: Bestenliste einer eigenen Klasse ansehen
+create or replace function public.einmaleins_class_board(p_class uuid, p_board text)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not exists (select 1 from public.einmaleins_classes c where c.id = p_class and c.teacher_id = (select auth.uid())) then
+    raise exception 'not_allowed' using errcode = 'P0001';
+  end if;
+  return public.einmaleins_board_json(p_class, p_board, null);
+end;
+$$;
+
+revoke execute on function public.einmaleins_board_json(uuid, text, uuid) from public, anon, authenticated;
+revoke execute on function public.einmaleins_score(uuid, text, integer), public.einmaleins_class_board(uuid, text) from public;
+grant execute on function public.einmaleins_score(uuid, text, integer) to anon, authenticated;
+grant execute on function public.einmaleins_class_board(uuid, text) to authenticated;
+
 revoke execute on function public.einmaleins_new_username(), public.einmaleins_linked_class(uuid, uuid),
   public.einmaleins_take_vokaboom_kid(uuid, uuid), public.einmaleins_push_kid(uuid, uuid) from public, anon, authenticated;
 revoke execute on function public.einmaleins_add_students(uuid, jsonb), public.einmaleins_import_vokaboom(uuid, uuid),

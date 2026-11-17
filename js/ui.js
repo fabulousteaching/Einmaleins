@@ -249,13 +249,13 @@ function opPickHTML(action, cls = '') {
 }
 
 function tileHTML(item, kind) {
-  const best = db.prog.best[`${kind}:${item.id}`];
   const game = kind === 'game';
+  const best = game ? (typeof gameBestText === 'function' ? gameBestText(item.id) : null) : db.prog.best[`${kind}:${item.id}`];
   const locked = game && !canPlay();
   return `<button class="tile c-${item.color} ${locked ? 'locked' : ''}" data-action="${game ? 'open-game' : 'open-ex'}" data-id="${item.id}">
     <span class="tile-art" aria-hidden="true">${item.art}</span>
     <span class="tile-text"><strong>${esc(item.name)}</strong><small>${esc(item.desc)}</small></span>
-    ${best != null || game ? `<span class="tile-foot">${best != null ? `<span class="tile-best" title="Bestleistung">${icon('trophy')} ${esc(item.bestText ? item.bestText(best) : best)}</span>` : '<span></span>'}
+    ${best != null || game ? `<span class="tile-foot">${best != null ? `<span class="tile-best" title="Bestleistung">${icon('trophy')} ${esc(!game && item.bestText ? item.bestText(best) : best)}</span>` : '<span></span>'}
       ${game && !gamesFree() ? `<span class="tile-cost" title="Kostet ${GAME_COST} Münze">${COIN_SVG}${GAME_COST}</span>` : ''}</span>` : ''}
   </button>`;
 }

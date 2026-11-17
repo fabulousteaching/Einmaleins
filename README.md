@@ -49,18 +49,36 @@ Die Spiele kosten **1 Münze**. Münzen verdient man nur in den Übungen:
 
 ## Spielen
 
-Vor jedem Spiel erscheint eine kurze Startkarte mit der Anleitung, den Einstellungen und dem Knopf „Spielen · 1 Münze“. Dort wählt man auch, was gerechnet wird: **Mal**, **Geteilt**, **Lücken** oder **Gemischt** – das gilt für alle Spiele (gleiche Einstellung wie auf der Startseite).
+Vor jedem Spiel erscheint eine kurze Startkarte mit der Anleitung, dem **Spielmodus**, der **Aufgabenart** (Mal, Geteilt, Lücken oder Gemischt – gleiche Einstellung wie auf der Startseite) und dem Knopf „Spielen · 1 Münze“.
+
+### Spielmodi
+
+Bei **Elfmeter, Meteoriten, Frosch-Hüpfen und Stimmt das?** wählt man zwischen:
+
+| Modus | Ziel |
+| --- | --- |
+| **Countdown** ⏱ | Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht. |
+| **Survive** ❤️ | 3 Leben – so lange wie möglich durchhalten. Jede falsche Antwort kostet ein Leben, und es wird immer schneller (beim Elfmeter, Frosch und Stimmt das? mit einer Zeit pro Aufgabe, die immer kürzer wird). Die Leben sind immer zu sehen. Bei den Meteoriten fliegt beim letzten Leben ab und zu ein Ufo vorbei: Treffer = Extraleben. |
+| **Speed** ⚡ | 20 richtige Antworten so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr. |
+
+**Memory** gibt es nur als Speed: alle Paare so schnell wie möglich finden, ein falsches Paar kostet 3 Sekunden.
+
+### Bestenliste der Klasse
+
+Am Ende jedes Spiels sehen Kinder mit Klassen-Login die **Top 10 ihrer Klasse** – getrennt nach Spiel, Modus und Aufgabenart (z. B. „Meteoriten · Speed · Gemischt“). Jedes Kind erscheint nur einmal, mit seinem besten Ergebnis. Den **eigenen Rang** sieht man immer, auch wenn man nicht unter den ersten 10 ist. Lehrpersonen finden alle Bestenlisten in der Klassenübersicht. Ohne Login gibt es den persönlichen Rekord auf dem Gerät.
+
+### Die Spiele
 
 | Spiel | Was passiert |
 | --- | --- |
-| **Elfmeter** ⚽ (3D) | Man steht im Stadion vor dem Tor (ohne Torhüter), im Tor stehen die Ergebnisse. Das richtige antippen – der Ball fliegt ins Netz, die Kamera geht ein paar Schritte mit. Bei einer falschen Antwort geht der Schuss an den Pfosten oder über die Latte, und die richtige Lösung wird gezeigt. 10 Schüsse. Stufe „Profi“: 4 Ecken und 6 Sekunden pro Schuss. |
-| **Meteoriten** ☄️ (3D) | Man sitzt im Cockpit einer Rakete (Frontscheibe, Armaturenbrett mit Zielrechnung, Schilden, Tempoanzeige und Laserkanonen). Meteoriten rasen heran, die Zahl steckt glühend im Stein. Den richtigen antippen, die grünen Laser zerschiessen ihn. 3 Schutzschilde: Ein Schild geht verloren, wenn ein Meteorit die Rakete trifft oder wenn man einen falschen antippt (dann kommt gleich die nächste Rechnung). Beim letzten Schild fliegt ab und zu ein kleines Ufo mit einem Alien vorbei – klein und schnell, also schwer zu treffen; ein Treffer gibt ein Extraleben. Es wird immer schneller. |
-| **Frosch-Hüpfen** 🐸 (3D) | Ein Frosch (von hinten zu sehen) will über einen Teich mit Ufer, Bäumen, Schilf, Fischen, Fliegen und einer Libelle. Vor ihm tauchen drei Seerosen auf, die Zahlen stehen darauf. Die richtige antippen – der Frosch springt, die Kamera rutscht nach, und vor ihm tauchen neue Seerosen auf. Falsche Seerosen versinken. Rechnungen aus allen gewählten Reihen, 10 Sprünge bis ans andere Ufer. |
-| **Memory** 🃏 | Rechnung und Ergebnis finden (auch 56 : 8 → 7 oder ▢ · 8 = 56 → 7). „Offen“ (alle Karten sichtbar, zählt fürs Gedächtnis) oder „Verdeckt“. Mit Kombo-Zähler. |
-| **Stimmt das?** ✅ | 60 Sekunden: Ist 7 · 8 = 54 richtig oder falsch? Karte antippen oder nach rechts (stimmt) / links (stimmt nicht) wischen. Bei einer falschen Rechnung erscheint **immer die richtige**. 5 richtige hintereinander geben 3 Sekunden dazu. |
+| **Elfmeter** ⚽ (3D) | Man steht im Stadion vor einem grossen Tor (ohne Torhüter). Vor dem Tor schweben drei Zahlenscheiben. Das richtige Ergebnis antippen – der Ball (weiss mit Sternen) fliegt durch die Zahl, die dabei zerbricht, und ins Netz. Bei einer falschen Zahl zerbricht sie rot, und der Schuss geht an den Pfosten oder über die Latte; die richtige Lösung wird gezeigt. Danach geht es rasch zurück zum nächsten Schuss. |
+| **Meteoriten** ☄️ (3D) | Man sitzt im Cockpit einer Rakete (Frontscheibe, Armaturenbrett mit Zielrechnung, Zeit bzw. Schilden, Tempoanzeige und Laserkanonen). Meteoriten rasen heran, die Zahl steckt glühend im Stein. Den richtigen antippen, die grünen Laser zerschiessen ihn. Ein falscher oder ein Treffer auf die Rakete zählt als Fehler. |
+| **Frosch-Hüpfen** 🐸 (3D) | Ein Frosch (von hinten zu sehen) hüpft über einen stillen Teich mit Ufer, Bäumen und Schilf; ab und zu schwimmt gemächlich ein Fisch vorbei, summt eine Fliege oder schaut eine Libelle vorbei. Vor ihm tauchen drei Seerosen mit Zahlen auf, die Kamera rutscht nach jedem Sprung nach. Das letzte Ziel jeder Überquerung sind Steine am Ufer; dort dreht der Frosch um und hüpft zurück. Falsche Seerosen versinken. |
+| **Memory** 🃏 | Alle Karten offen: Rechnung und Ergebnis finden (auch 56 : 8 → 7 oder ▢ · 8 = 56 → 7). Mit Kombo-Zähler. |
+| **Stimmt das?** ✅ | Ist 7 · 8 = 54 richtig oder falsch? Karte antippen oder nach rechts (stimmt) / links (stimmt nicht) wischen. Bei einer falschen Rechnung erscheint **immer die richtige** (die Uhr hält solange an). |
 | **Duell zu zweit** ⚔️ | Zwei Kinder, ein Tablet (das obere Feld steht auf dem Kopf). Countdown, dann gilt: Wer zuerst richtig tippt, bekommt den Punkt und zieht am Seil. |
 
-Die 3D-Spiele brauchen WebGL (alle aktuellen Tablets und Browser). Fehlt es, startet automatisch eine 2D-Version des Spiels. Auf dem Handy im Hochformat wird die Ansicht angepasst (weiterer Blickwinkel).
+Die 3D-Spiele brauchen WebGL (alle aktuellen Tablets und Browser). Fehlt es, startet automatisch eine 2D-Version des Spiels mit denselben Modi. Auf dem Handy im Hochformat wird die Ansicht angepasst (weiterer Blickwinkel).
 
 ## Mein Stand und Übungsblatt
 
@@ -88,6 +106,7 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
    - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen, die häufigsten Fehler mit den typischen falschen Antworten und seine Münzen
    - die Klasse auf einen Blick (Tafel mit der Zahl der Kinder, die mit einer Rechnung Mühe haben) und die schwierigsten Rechnungen der Klasse
+   - **Bestenlisten der Spiele**: Top 10 der Klasse pro Spiel, Modus und Aufgabenart
    - **Übungsblätter**: pro Kind ein persönliches PDF aus seinen häufigsten Fehlern – oder alle Blätter der Klasse in einem PDF. Wahlweise mit Lückenaufgaben, Geteilt-Aufgaben, Reihe und Lösungsblatt. Jedes Mal neu gemischt.
 
 ### Wie das Übungsblatt entsteht
@@ -142,7 +161,7 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/ui.js` | Rahmen, Startseite (Auswahl kleines/grosses Einmaleins, Reihen, Aufgabenart), Einmaleins-Tafel, Mein Stand, Einstellungen |
 | `js/coins.js` | Münzen: Punkte pro Antwort, faire Schwelle, Anzeige |
 | `js/modes.js` | Übungen: Trainer, Auswählen, Reihen-Treppe (hinauf und hinunter, 3 Versuche, mit Eichhörnchen), Blitztest |
-| `js/games.js` | Spiele: Startkarte, Memory, Stimmt das?, Duell und die 2D-Versionen von Elfmeter, Meteoriten, Frosch-Hüpfen |
+| `js/games.js` | Spiele: Startkarte, Spielmodi (Countdown, Survive, Speed), Ergebnis mit Bestenliste, Memory, Stimmt das?, Duell und die 2D-Versionen von Elfmeter, Meteoriten, Frosch-Hüpfen |
 | `js/games3d.js` | 3D-Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen (mit three.js) |
 | `js/sheets.js` | Übungsblätter: Auswahl der Rechnungen, Vektor-PDF und Vorschau |
 | `js/sso.js` | Gemeinsames Anmelden mit Vokaboom (Cookies auf fabulousteaching.ch, in beiden Repositories gleich) |

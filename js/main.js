@@ -49,6 +49,7 @@ const actions = {
   },
   'set-op': (el) => { db.settings.op = el.dataset.op; saveDB(); refreshReihenPanel(); },
   'game-op': (el) => { db.settings.op = el.dataset.op; saveDB(); renderGame(); },
+  'game-mode': (el) => { db.settings.gm = { ...(db.settings.gm || {}), [ui.game]: el.dataset.mode }; saveDB(); renderGame(); },
   'coins-info': () => openCoinsInfo(),
   /* Übungen */
   'open-ex': (el) => { closeModal(true); openExercise(el.dataset.id); },
@@ -69,14 +70,12 @@ const actions = {
   /* Spiele */
   'game-again': () => renderGame(),
   'elf-shoot': (el) => elfShoot(el),
-  'elf-level': (el) => { db.settings.elfLevel = +el.dataset.v; saveDB(); renderGame(); },
   'meteor-hit': (el) => meteorHit(el),
   'meteor-alien': (el) => meteorAlienHit(el),
   'frog-jump': (el) => frogJump(el),
   'game-start': () => startGameNow(),
   'g3-pick': (el) => game.pick?.(el),
   'mem-flip': (el) => memFlip(el),
-  'mem-mode': (el) => { db.settings.memOpen = el.dataset.v === 'true'; saveDB(); renderGame(); },
   'tf-answer': (el) => tfAnswer(el.dataset.v === '1'),
   'duel-tap': (el) => duelTap(el),
   'duel-goal': (el) => { db.settings.duelGoal = +el.dataset.v; saveDB(); renderGame(); },
@@ -90,7 +89,7 @@ const actions = {
 };
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
-const FAST = new Set(['meteor-hit', 'meteor-alien','elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
+const FAST = new Set(['meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
 let lastFast = { el: null, t: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;

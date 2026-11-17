@@ -16,6 +16,8 @@ Alle Übungen und Spiele funktionieren auch ohne diese Einrichtung. Es braucht s
 
 Hast du die Datei schon einmal ausgeführt, bevor es die Übernahme aus Vokaboom gab? Dann einfach nochmals ganz ausführen. Bis dahin zeigt Einmaleins bei „Aus Vokaboom übernehmen“ einen Hinweis.
 
+**Neu: Bestenlisten der Spiele.** Dafür braucht es eine zusätzliche Tabelle (`einmaleins_scores`). Hast du die Datei vor dieser Neuerung ausgeführt, führe sie einfach **nochmals ganz** aus. Bis dahin funktionieren alle Spiele, nur die Bestenliste wird nicht angezeigt (die Klassenübersicht zeigt dann einen Hinweis).
+
 ## 2. Adresse von Einmaleins erlauben
 
 **Authentication → URL Configuration → Redirect URLs**: die Adresse von Einmaleins hinzufügen, z. B.
@@ -50,6 +52,7 @@ Laufen Vokaboom und Einmaleins beide unter fabulousteaching.ch (`vokaboom.fabulo
 
 - Von Lehrpersonen: die E-Mail-Adresse (für die Anmeldung), die Klassen mit ihren Einstellungen.
 - Von Kindern: Vorname, erster Buchstabe des Nachnamens, Benutzername, Bilder-Passwort und der Übungsstand (pro Rechnung: wie oft geübt, wie oft falsch, Zeit, die letzten falschen Antworten; Übungstage; Bestleistungen in den Spielen; Münzen). Keine E-Mail-Adressen.
+- Spielergebnisse für die Bestenliste (Spiel, Modus, Aufgabenart, Punktzahl bzw. Zeit, Datum). In der Bestenliste sehen die Kinder einer Klasse Vorname und Anfangsbuchstabe der anderen Kinder derselben Klasse – nur für die Top 10 und nur innerhalb der Klasse.
 - Ohne Anmeldung bleibt alles im Browser des Geräts.
 - Gemeinsames Anmelden: Die Sitzung der Lehrperson und der Anmelde-Schlüssel eines Kindes liegen in Cookies der Domain fabulousteaching.ch (nur für Vokaboom und Einmaleins, keine Werbung oder Statistik).
 - Die Zugriffsregeln sorgen dafür, dass jede Lehrperson nur ihre eigenen Klassen und Kinder sieht. Kinder können nur ihren eigenen Übungsstand lesen und speichern.
