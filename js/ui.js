@@ -233,10 +233,19 @@ function reihenPanelHTML() {
         return `<button type="button" class="reihe r${((r - 1) % 10) + 1} ${r > 10 ? 'gross' : ''}" data-action="toggle-reihe" data-r="${r}" aria-pressed="${ps.reihen.includes(r)}" ${!ok || locked ? 'disabled' : ''} aria-label="${r}er-Reihe"><b>${r}</b><small>er</small></button>`;
       }).join('')}
     </div>
-    ${modes.length > 1 ? `<div class="op-pick" role="radiogroup" aria-label="Was rechnest du?">
-      ${modes.map((k) => `<button type="button" class="op-btn op-${k}" data-action="set-op" data-op="${k}" role="radio" aria-checked="${ps.op === k}" ${locked ? 'disabled' : ''}><span class="op-sym" aria-hidden="true">${k === 'mix' ? icon('shuffle') : OP_INFO[k][1]()}</span><span>${OP_INFO[k][0]}</span></button>`).join('')}
-    </div>` : ''}
+    ${modes.length > 1 ? opPickHTML('set-op') : ''}
   </div>`;
+}
+/** Knöpfe Mal · Geteilt · Lücken · Gemischt (nur die erlaubten). action: set-op (Startseite) oder game-op (Spiel) */
+function opPickHTML(action, cls = '') {
+  const ps = practiceSettings();
+  const kc = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
+  const locked = kc && kc.choose === false;
+  const modes = ps.avail.length > 1 ? [...ps.avail, 'mix'] : ps.avail;
+  if (modes.length < 2) return '';
+  return `<div class="op-pick ${cls}" role="radiogroup" aria-label="Was rechnest du?">
+      ${modes.map((k) => `<button type="button" class="op-btn op-${k}" data-action="${action}" data-op="${k}" role="radio" aria-checked="${ps.op === k}" ${locked ? 'disabled' : ''}><span class="op-sym" aria-hidden="true">${k === 'mix' ? icon('shuffle') : OP_INFO[k][1]()}</span><span>${OP_INFO[k][0]}</span></button>`).join('')}
+    </div>`;
 }
 
 function tileHTML(item, kind) {

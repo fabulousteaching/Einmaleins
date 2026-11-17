@@ -1,8 +1,9 @@
 /* Einmaleins – 3D-Spiele (three.js, MIT-Lizenz, liegt in js/vendor)
  *
- * Elfmeter aus der Sicht des Balls, Meteoriten aus dem Cockpit der Rakete, Frosch-Hüpfen aus den Augen des Froschs.
- * Die Zahlen sind HTML-Schilder, die jedes Bild an die richtige Stelle im Raum gesetzt werden: gut lesbar und
- * gut antippbar. Gibt es kein WebGL (sehr alte Geräte), laufen die bisherigen 2D-Versionen.
+ * Elfmeter vor dem Tor im Stadion, Meteoriten aus dem Cockpit der Rakete, Frosch-Hüpfen über einen Teich.
+ * Beim Elfmeter sind die Zahlen HTML-Schilder im Tor; bei Meteoriten und Frosch stecken sie als Bild direkt im Stein
+ * bzw. stehen auf der Seerose (Antippen: das nächste Ziel auf dem Bildschirm zählt).
+ * Gibt es kein WebGL (sehr alte Geräte), laufen die 2D-Versionen.
  */
 'use strict';
 
@@ -194,6 +195,38 @@ function g3Label(html, cls, data = {}) {
   Object.entries(data).forEach(([k, v]) => { b.dataset[k] = v; });
   return b;
 }
+/** Zahl als Bild (für Sprites und Flächen im 3D-Raum): kräftige Schrift mit dunklem Rand, gut lesbar */
+const NUM_FONT = (px) => `800 ${px}px "Bricolage Grotesque", Lexend, system-ui, sans-serif`;
+function numCanvasTex(text, { fill = '#ffffff', stroke = '#1d130b', glow = null, w = 320, h = 180, size = 128, line = 0.17 } = {}) {
+  return canvasTex(w, h, (g) => {
+    let fs = size;
+    g.font = NUM_FONT(fs);
+    const tw = g.measureText(text).width;
+    if (tw > w - 44) { fs = Math.floor((fs * (w - 44)) / tw); g.font = NUM_FONT(fs); }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    const y = h / 2 + fs * 0.05;
+    if (glow) { g.shadowColor = glow; g.shadowBlur = 30; g.fillStyle = glow; g.fillText(text, w / 2, y); g.shadowBlur = 0; }
+    g.lineWidth = Math.max(10, fs * line); g.strokeStyle = stroke; g.strokeText(text, w / 2, y);
+    g.fillStyle = fill; g.fillText(text, w / 2, y);
+  });
+}
+/** Schrift für die Zahlen im 3D-Raum laden (sonst zeichnet die Leinwand mit einer Ersatzschrift) */
+const loadNumFont = () => (document.fonts?.load ? document.fonts.load(NUM_FONT(64)).catch(() => {}) : Promise.resolve());
+/** Antippen im 3D-Bild: fn(x, y) mit Koordinaten relativ zur Bühne. Knöpfe und Karten darüber sind ausgenommen. */
+function stageTap(st, fn) {
+  const h = (e) => {
+    if (e.button > 0 || e.target.closest('button, .g3-card, a')) return;
+    const r = st.host.getBoundingClientRect();
+    fn(e.clientX - r.left, e.clientY - r.top, e);
+  };
+  st.host.addEventListener('pointerdown', h);
+}
+/** Wie gross erscheint etwas mit Radius r (Welt) an der Stelle p auf dem Bildschirm (Pixel)? */
+function screenRadius(st, p, r) {
+  const d = Math.max(0.1, st.camera.position.distanceTo(p));
+  return (r / (d * Math.tan((st.camera.fov * Math.PI) / 360))) * (st.h / 2);
+}
+
 /** Kurzes Rauschen (Jubel, Wind, Platschen) */
 function noise(dur = 0.8, { freq = 1200, q = 0.6, gain = 0.12, sweep = 0 } = {}) {
   if (!db.settings.sound) return;
@@ -330,34 +363,6 @@ async function startElfmeter3D() {
     pos.needsUpdate = true;
     if (netHit.t > 2) { netHit = null; pos.array.set(backBase); pos.needsUpdate = true; }
   });
-  // Torhüter aus einfachen Formen
-  const keeper = new T.Group();
-  const kMat = (c) => new T.MeshStandardMaterial({ color: c, roughness: 0.7 });
-  const jersey = kMat(0xffb020), skin = kMat(0xf2c9a0), shorts = kMat(0x1f2937), glove = kMat(0x22c55e), sock = kMat(0xffb020);
-  const torso = new T.Mesh(new T.CapsuleGeometry(0.24, 0.42, 6, 16), jersey); torso.position.y = 1.18; keeper.add(torso);
-  const num = new T.Mesh(new T.PlaneGeometry(0.22, 0.22), new T.MeshBasicMaterial({ map: canvasTex(64, 64, (g) => { g.fillStyle = '#7c4a00'; g.font = 'bold 54px system-ui'; g.textAlign = 'center'; g.fillText('1', 32, 52); }), transparent: true }));
-  num.position.set(0, 1.25, 0.245); keeper.add(num);
-  const hips = new T.Mesh(new T.CylinderGeometry(0.25, 0.23, 0.22, 16), shorts); hips.position.y = 0.82; keeper.add(hips);
-  const head = new T.Mesh(new T.SphereGeometry(0.16, 20, 16), skin); head.position.y = 1.66; keeper.add(head);
-  const hair = new T.Mesh(new T.SphereGeometry(0.165, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), kMat(0x5b3a1e)); hair.position.y = 1.68; keeper.add(hair);
-  const limb = (mat, r, len) => { const g = new T.Group(); const m = new T.Mesh(new T.CapsuleGeometry(r, len, 4, 10), mat); m.position.y = -len / 2 - r; m.castShadow = true; g.add(m); return g; };
-  const armL = limb(jersey, 0.07, 0.5), armR = limb(jersey, 0.07, 0.5);
-  armL.position.set(-0.32, 1.42, 0); armR.position.set(0.32, 1.42, 0);
-  [armL, armR].forEach((a) => { const gl = new T.Mesh(new T.SphereGeometry(0.1, 12, 10), glove); gl.position.y = -0.72; a.add(gl); keeper.add(a); });
-  const legL = limb(sock, 0.09, 0.55), legR = limb(sock, 0.09, 0.55);
-  legL.position.set(-0.13, 0.78, 0); legR.position.set(0.13, 0.78, 0); keeper.add(legL, legR);
-  keeper.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  keeper.scale.setScalar(1.12);
-  keeper.position.set(0, 0, 0.35);
-  scene.add(keeper);
-  let keeperDive = null;
-  st.onFrame((dt, t) => {
-    if (keeperDive) return;
-    keeper.position.x = Math.sin(t * 1.7) * 0.45;
-    keeper.position.y = Math.abs(Math.sin(t * 3.4)) * 0.05;
-    armL.rotation.z = -0.9 + Math.sin(t * 3.4) * 0.12; armR.rotation.z = 0.9 - Math.sin(t * 3.4) * 0.12;
-    keeper.rotation.z = 0;
-  });
   // Ball
   const ballTex = canvasTex(512, 256, (g, w, h) => {
     g.fillStyle = '#fafafa'; g.fillRect(0, 0, w, h);
@@ -375,10 +380,15 @@ async function startElfmeter3D() {
   function resetScene() {
     camera.position.copy(START.cam); look.copy(START.look); camera.lookAt(look);
     ball.position.copy(START.ball); ball.rotation.set(0, 0, 0); ball.visible = true;
-    keeperDive = null; keeper.rotation.set(0, 0, 0);
   }
   resetScene();
-  st.onFrame(() => camera.lookAt(look));
+  // Hochformat (Handy): weitwinkliger, damit das ganze Tor zu sehen ist
+  let lastFov = 0;
+  st.onFrame(() => {
+    const fov = 40 + 26 * clamp((1.2 - camera.aspect) / 0.6, 0, 1);
+    if (Math.abs(fov - lastFov) > 0.2) { lastFov = fov; camera.fov = fov; camera.updateProjectionMatrix(); }
+    camera.lookAt(look);
+  });
   // Ziele im Tor
   const SPOTS = lvl === 2
     ? [[-2.65, 1.85], [2.65, 1.85], [-2.65, 0.55], [2.65, 0.55]]
@@ -423,33 +433,26 @@ async function startElfmeter3D() {
     labels.forEach((L) => L.el.classList.add('fade'));
     el?.classList.remove('fade');
     const [tx, ty] = SPOTS[i];
-    const target = new T.Vector3(tx, ty, ok ? -0.9 : 0.25);
-    // Torhüter: hält bei falscher Antwort, springt sonst in eine andere Ecke
-    const diveI = ok ? (SPOTS.length > 1 ? (i + 1 + rand(SPOTS.length - 1)) % SPOTS.length : i) : i;
-    const [dx, dy] = SPOTS[diveI];
-    keeperDive = true;
-    const k0 = keeper.position.clone();
-    const side = Math.abs(dx) < 1 ? 0 : Math.sign(dx); // Mitte: gerade hochspringen
-    st.tween(520, (u, e) => {
-      keeper.position.x = k0.x + (dx * 0.82 - k0.x) * e;
-      keeper.position.y = side ? Math.max(0, Math.sin(u * Math.PI) * (dy > 1.2 ? 0.9 : 0.35)) + (dy - 1.2) * 0.2 * e : Math.sin(Math.min(1, u * 1.3) * Math.PI * 0.5) * 0.7;
-      keeper.rotation.z = -side * 1.25 * e;
-      armL.rotation.z = -0.9 - 1.6 * e * (side > 0 ? 0.2 : 1.1); armR.rotation.z = 0.9 + 1.6 * e * (side < 0 ? 0.2 : 1.1);
-    }, ease.out);
+    // Richtig: ins Netz. Falsch: an den Pfosten (seitliche Ecken) oder über die Latte.
+    const sgn = Math.sign(tx) || (Math.random() < 0.5 ? -1 : 1);
+    const miss = ok ? null : (Math.abs(tx) > 1 && Math.random() < 0.5 ? 'post' : 'over');
+    const target = ok ? new T.Vector3(tx, ty, -0.9)
+      : miss === 'post' ? new T.Vector3(sgn * (GW / 2 - 0.12), clamp(ty, 0.5, GH - 0.3), 0.08)
+        : new T.Vector3(tx * 1.08 + sgn * 0.3, GH + 0.55 + Math.random() * 0.3, -1.2);
     sfx.kick();
     noise(0.25, { freq: 500, gain: 0.08 });
     const p0 = START.ball.clone();
-    const ctrl = new T.Vector3(tx * 0.35 + (Math.random() - 0.5) * 1.5, Math.max(ty, 1.0) + 0.9, 5.5);
+    const ctrl = new T.Vector3(tx * 0.35 + (Math.random() - 0.5) * 1.2, Math.max(ty, 1.0) + (miss === 'over' ? 1.4 : 0.9), 5.5);
     const bez = (u) => p0.clone().multiplyScalar((1 - u) ** 2).add(ctrl.clone().multiplyScalar(2 * u * (1 - u))).add(target.clone().multiplyScalar(u * u));
+    // Die Kamera geht nur ein paar Schritte mit und schaut dem Ball nach (kein starker Zoom)
     const cam0 = camera.position.clone(), look0 = look.clone();
+    const camTo = new T.Vector3(tx * 0.12, 0.95, 11.2);
     await st.tween(760, (u, e) => {
       const bp = bez(e);
       ball.position.copy(bp);
       ball.rotation.x -= 0.5; ball.rotation.y += 0.2;
-      // Kamera fliegt hinter dem Ball her
-      const behind = bp.clone().add(new T.Vector3(0, 0.38, 1.9));
-      camera.position.lerpVectors(cam0, behind, Math.min(1, e * 0.92));
-      look.lerpVectors(look0, new T.Vector3(tx * 0.6, ty * 0.8 + 0.3, -1), e);
+      camera.position.lerpVectors(cam0, camTo, ease.inOut(u));
+      look.lerpVectors(look0, new T.Vector3(bp.x * 0.45, Math.max(0.9, bp.y * 0.6 + 0.45), 0), e);
     }, (x) => 1 - Math.pow(1 - x, 1.6));
     game.shots++;
     game.hist.push(ok);
@@ -463,10 +466,19 @@ async function startElfmeter3D() {
       host.classList.remove('flash'); void host.offsetWidth; host.classList.add('flash');
       st.tween(500, (u, e) => { ball.position.z = target.z - 0.5 * e; ball.position.y = ty * (1 - e) + 0.11 * e; });
     } else {
-      sfx.bad(); noise(0.4, { freq: 300, gain: 0.08 });
-      st.shake(0.05);
-      bigWord(host, `${el ? 'Gehalten!' : 'Zu spät!'}<small>${esc(taskText(t, true))}</small>`, 'bad');
-      st.tween(400, (u, e) => { ball.position.z = target.z + 0.6 * e; ball.position.y = Math.max(0.11, ty - ty * e); });
+      sfx.bad();
+      if (miss === 'post') {
+        tone([1568, 2093, 1760], 0.09, 'triangle', 0.09); // Klong am Pfosten
+        st.shake(0.06);
+        burst(st, target.clone(), { n: 30, colors: [0xffffff, 0xdfe6ee], speed: 2.5, life: 0.5, size: 0.06, gravity: -4 });
+        const b0 = target.clone(), b1 = new T.Vector3(sgn * (GW / 2 + 2.4), 0.11, 2.6);
+        st.tween(700, (u, e) => { ball.position.lerpVectors(b0, b1, e); ball.position.y = Math.max(0.11, b0.y * (1 - e) + Math.sin(u * Math.PI) * 0.5); ball.rotation.z += 0.3; }, ease.out);
+      } else {
+        noise(0.4, { freq: 300, gain: 0.08 });
+        const b0 = target.clone();
+        st.tween(700, (u, e) => { ball.position.z = b0.z - 4 * e; ball.position.y = Math.max(0.11, b0.y * (1 - e * e)); ball.rotation.x -= 0.3; });
+      }
+      bigWord(host, `${el ? (miss === 'post' ? 'Pfosten!' : 'Drüber!') : 'Zu spät!'}<small>${esc(taskText(t, true))}</small>`, 'bad');
       if (rightI >= 0) { labels[rightI].el.classList.remove('fade'); labels[rightI].el.classList.add('right'); rings[rightI].material.color.set(0x22c55e); }
     }
     el?.classList.add(ok ? 'right' : 'wrong');
@@ -475,7 +487,6 @@ async function startElfmeter3D() {
     await sleep(ok ? 1300 : 2100);
     if (st.disposed) return;
     const camA = camera.position.clone(), lookA = look.clone();
-    keeperDive = null;
     await st.tween(650, (u, e) => { camera.position.lerpVectors(camA, START.cam, e); look.lerpVectors(lookA, START.look, e); });
     if (!st.disposed) nextShot();
   }
@@ -485,22 +496,51 @@ async function startElfmeter3D() {
 }
 
 /* =========================================================
-   ☄️ Meteoriten 3D – aus dem Cockpit
+   ☄️ Meteoriten 3D – aus dem Cockpit der Rakete
    ========================================================= */
+const COCKPIT_HTML = `
+  <div class="cockpit" aria-hidden="true">
+    <svg class="ck-frame" viewBox="0 0 1000 600" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="ckHull" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34405f"/><stop offset=".55" stop-color="#1c2540"/><stop offset="1" stop-color="#121a2e"/></linearGradient>
+        <linearGradient id="ckStrut" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1b2440"/><stop offset=".45" stop-color="#55678f"/><stop offset="1" stop-color="#1b2440"/></linearGradient>
+        <linearGradient id="ckGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bfe6ff" stop-opacity=".13"/><stop offset=".35" stop-color="#bfe6ff" stop-opacity="0"/><stop offset=".8" stop-color="#bfe6ff" stop-opacity="0"/><stop offset="1" stop-color="#bfe6ff" stop-opacity=".08"/></linearGradient>
+      </defs>
+      <path fill="url(#ckHull)" fill-rule="evenodd" d="M0 0H1000V600H0Z M80 46 Q500 -4 920 46 L985 452 Q500 420 15 452 Z"/>
+      <path d="M80 46 Q500 -4 920 46 L985 452 Q500 420 15 452 Z" fill="url(#ckGlass)"/>
+      <path d="M80 46 Q500 -4 920 46" fill="none" stroke="#56688f" stroke-width="5" vector-effect="non-scaling-stroke"/>
+      <path d="M80 46 L15 452 M920 46 L985 452" stroke="#56688f" stroke-width="6" vector-effect="non-scaling-stroke"/>
+      <path class="ck-strut" d="M262 22 L246 22 L196 446 L226 444 Z" fill="url(#ckStrut)"/>
+      <path class="ck-strut" d="M738 22 L754 22 L804 446 L774 444 Z" fill="url(#ckStrut)"/>
+      <path d="M80 46 Q500 -4 920 46 L985 452 Q500 420 15 452 Z" fill="none" stroke="#7dd3fc" stroke-opacity=".45" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      <path d="M150 92 L104 300" stroke="#fff" stroke-opacity=".07" stroke-width="26"/>
+      <path d="M196 84 L168 208" stroke="#fff" stroke-opacity=".05" stroke-width="10"/>
+      <path d="M470 34 h60" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <path d="M500 24 v18" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <span class="ck-gun l"><i></i></span><span class="ck-gun r"><i></i></span>
+  </div>
+  <div class="ck-dash">
+    <div class="ck-panel ck-left">
+      <span class="ck-col"><span class="ck-label">Schilde</span><span class="lives" id="lives">${'<i class="on"></i>'.repeat(3)}</span></span>
+      <span class="ck-leds"><i></i><i></i><i></i><i></i></span>
+    </div>
+    <div class="ck-screen"><span class="ck-label">Zielrechnung</span><span class="dash-task" id="mtask"></span></div>
+    <div class="ck-panel ck-right">
+      <span class="ck-gauge" id="ckspeed"><svg viewBox="0 0 64 38"><path d="M7 34 A25 25 0 0 1 57 34" fill="none" stroke="#24304f" stroke-width="7" stroke-linecap="round"/><path d="M7 34 A25 25 0 0 1 57 34" fill="none" stroke="url(#ckSpd)" stroke-width="3" stroke-linecap="round"/><defs><linearGradient id="ckSpd"><stop offset="0" stop-color="#22c55e"/><stop offset=".6" stop-color="#facc15"/><stop offset="1" stop-color="#ef4444"/></linearGradient></defs><line class="needle" x1="32" y1="34" x2="32" y2="12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="32" cy="34" r="3.5" fill="#cbd5e1"/></svg><span class="ck-label">Tempo</span></span>
+      <span class="ck-col m-score"><span class="ck-label">Treffer</span><b id="mscore">0</b></span>
+    </div>
+  </div>`;
 async function startMeteor3D() {
   const T = await loadThree();
+  await loadNumFont();
   Object.assign(game, { picker: gamePicker(), lives: 3, score: 0, wave: [], task: null, over: false, streak: 0, recorded: false });
   $('#view').innerHTML = gameShell('meteor', `
     <div class="g3 g3-space" id="g3">
-      <div class="cockpit" aria-hidden="true"><svg viewBox="0 0 1000 600" preserveAspectRatio="none"><path d="M0 0h1000v600H0z M60 40 Q500 -10 940 40 L990 470 Q500 420 10 470 Z" fill="#0b1226" fill-rule="evenodd" opacity=".92"/><path d="M60 40 Q500 -10 940 40 L990 470 Q500 420 10 470 Z" fill="none" stroke="#38bdf8" stroke-width="3" opacity=".6"/><path d="M500 6v26M0 470h1000" stroke="#38bdf8" stroke-width="2" opacity=".35"/></svg></div>
-      <div class="g3-hud dash">
-        <span class="lives" id="lives">${'<i class="on"></i>'.repeat(3)}</span>
-        <span class="dash-task" id="mtask"></span>
-        <span class="m-score">Treffer <b id="mscore">0</b></span>
-      </div>
+      ${COCKPIT_HTML}
       <div class="crack" id="crack" aria-hidden="true"><svg viewBox="0 0 400 300"><path d="M200 150 L120 60 M200 150 L300 40 M200 150 L360 190 M200 150 L90 230 M200 150 L230 290 M120 60 L80 20 M300 40 L340 10 M360 190 L400 200 M90 230 L30 260 M150 105 L110 120 M260 95 L290 110 M280 170 L300 150" stroke="#fff" stroke-width="2.5" fill="none" opacity=".85"/></svg></div>
     </div>
-    <p class="mode-hint">Tippe den Meteoriten mit dem richtigen Ergebnis an, bevor er die Rakete trifft.</p>`);
+    <p class="mode-hint">Tippe den Meteoriten mit der richtigen Zahl an, bevor er die Rakete trifft. Tasten 1–4 gehen auch.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 68, clear: 0x03040c });
   game.stage3d = st;
@@ -541,7 +581,8 @@ async function startMeteor3D() {
   const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex('rgba(255,170,110,.5)', 'rgba(255,120,60,0)'), blending: T.AdditiveBlending, depthWrite: false, fog: false }));
   glow.position.copy(planet.position); glow.scale.set(120, 120, 1); scene.add(glow);
   let speed = 18;
-  st.onFrame((dt) => {
+  const gauge = $('#ckspeed');
+  st.onFrame((dt, t) => {
     const a = sGeo.attributes.position.array;
     for (let i = 0; i < N; i++) { a[i * 3 + 2] += speed * dt; if (a[i * 3 + 2] > 2) a[i * 3 + 2] -= 300; }
     sGeo.attributes.position.needsUpdate = true;
@@ -553,10 +594,14 @@ async function startMeteor3D() {
     }
     lGeo.attributes.position.needsUpdate = true;
     planet.rotation.y += dt * 0.02;
+    // die Rakete schaukelt ganz leicht
+    camera.rotation.z = Math.sin(t * 0.7) * 0.012;
+    camera.position.y = Math.sin(t * 1.1) * 0.04;
   });
-  // Meteoriten: unregelmässige Felsbrocken
+  // Meteoriten: unregelmässige Felsbrocken, die Zahl steckt mitten im Stein
+  const R = 2.2;
   function rockGeo() {
-    const g = new T.IcosahedronGeometry(1.6, 2);
+    const g = new T.IcosahedronGeometry(R, 2);
     const pos = g.attributes.position;
     const seed = Math.random() * 10;
     const tmp = new T.Vector3();
@@ -565,7 +610,7 @@ async function startMeteor3D() {
       tmp.fromBufferAttribute(pos, i);
       const k = `${tmp.x.toFixed(3)},${tmp.y.toFixed(3)},${tmp.z.toFixed(3)}`;
       let f = cache.get(k);
-      if (f == null) { f = 1 + 0.18 * Math.sin(tmp.x * 3 + seed) * Math.cos(tmp.y * 2.6 + seed) + 0.1 * Math.sin(tmp.z * 5 + seed * 2); cache.set(k, f); }
+      if (f == null) { f = 1 + 0.16 * Math.sin(tmp.x * 2.2 + seed) * Math.cos(tmp.y * 1.9 + seed) + 0.08 * Math.sin(tmp.z * 3.6 + seed * 2); cache.set(k, f); }
       tmp.multiplyScalar(f);
       pos.setXYZ(i, tmp.x, tmp.y, tmp.z);
     }
@@ -573,6 +618,7 @@ async function startMeteor3D() {
     return g;
   }
   const fire = glowTex('rgba(255,170,60,.9)', 'rgba(255,60,20,0)');
+  const NUM_ASPECT = 320 / 180;
   function spawnWave() {
     if (game.over || st.disposed) return;
     game.wave.forEach((m) => removeMeteor(m));
@@ -582,61 +628,73 @@ async function startMeteor3D() {
     const n = game.score >= 12 ? 4 : 3;
     const opts = choicesFor(t, n);
     const dur = clamp(12 - game.score * 0.35, 5, 12);
+    if (gauge) gauge.style.setProperty('--spd', String(clamp((12 - dur) / 7, 0, 1)));
     game.wave = opts.map((v, i) => {
-      const mesh = new T.Mesh(rockGeo(), new T.MeshStandardMaterial({ color: new T.Color().setHSL(0.07 + Math.random() * 0.04, 0.25, 0.32 + Math.random() * 0.1), roughness: 0.95, flatShading: true, emissive: 0x000000 }));
+      const mesh = new T.Mesh(rockGeo(), new T.MeshStandardMaterial({ color: new T.Color().setHSL(0.07 + Math.random() * 0.04, 0.25, 0.3 + Math.random() * 0.08), roughness: 0.95, flatShading: true, emissive: 0x000000 }));
       const halo = new T.Sprite(new T.SpriteMaterial({ map: fire, blending: T.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.7 }));
-      halo.scale.set(5.2, 5.2, 1); mesh.add(halo); halo.position.z = -0.8;
+      halo.scale.set(R * 3.3, R * 3.3, 1); mesh.add(halo); halo.position.z = -1.1;
+      const label = new T.Sprite(new T.SpriteMaterial({ map: numCanvasTex(String(v), { fill: '#fff8e8', stroke: '#2a1405', glow: 'rgba(255,140,40,.95)' }), depthTest: false, depthWrite: false, transparent: true }));
+      label.renderOrder = 10;
+      scene.add(label);
       // weit auseinander starten, damit sich die Zahlen nie überdecken
-      const spread = n === 4 ? 8.5 : 10;
-      const x0 = (i - (n - 1) / 2) * spread + (Math.random() - 0.5) * 2;
-      const y0 = (i % 2 ? 4 : -2.5) + (Math.random() - 0.5) * 2.5;
-      const z0 = -62 - Math.random() * 14;
+      const spread = (n === 4 ? 8 : 9.5) * clamp(camera.aspect / 1.6, 0.48, 1);
+      const x0 = (i - (n - 1) / 2) * spread + (Math.random() - 0.5) * 1.5;
+      const y0 = (i % 2 ? 3.4 : -1.6) + (Math.random() - 0.5) * 1.8;
+      const z0 = -48 - Math.random() * 10;
       mesh.position.set(x0, y0, z0);
-      mesh.userData = { spin: new T.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(1.6), x0, y0, z0 };
+      mesh.userData = { spin: new T.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(1.4), x0, y0, z0 };
+      mesh.scale.setScalar(0.01);
+      st.tween(420, (u, e) => mesh.scale.setScalar(Math.max(0.01, e)), ease.back);
       scene.add(mesh);
-      const el = g3Label(String(v), 'meteor-tag', { action: 'g3-pick', v });
-      const lab = st.addLabel(el, () => mesh.position, { dist: 16, base: 1, min: 0.7, max: 1.55 });
-      const m = { mesh, el, lab, val: v, correct: v === t.answer, dead: false, vz: (-z0 - 3) / dur };
-      el.__m = m;
-      return m;
+      return { mesh, label, val: v, correct: v === t.answer, dead: false, vz: (-z0 - 3) / dur, tint: null };
     });
     t.shownAt = performance.now();
   }
   function removeMeteor(m) {
     m.dead = true;
-    st.removeLabel(m.lab);
-    scene.remove(m.mesh);
+    scene.remove(m.mesh); scene.remove(m.label);
     m.mesh.geometry.dispose(); m.mesh.material.dispose();
+    m.label.material.map.dispose(); m.label.material.dispose();
   }
-  st.onFrame((dt) => {
-    if (game.over) return;
+  const tmpV = new T.Vector3();
+  st.onFrame((dt, t) => {
     for (const m of game.wave) {
       if (m.dead) continue;
       const u = m.mesh.userData;
-      m.mesh.position.z += m.vz * dt;
-      const prog = 1 - (m.mesh.position.z + 3) / (u.z0 + 3);
-      m.mesh.position.x = u.x0 * (1 - 0.72 * prog);
-      m.mesh.position.y = u.y0 * (1 - 0.72 * prog) - 0.4 * prog;
+      if (!game.over) {
+        m.mesh.position.z += m.vz * dt;
+        const prog = 1 - (m.mesh.position.z + 3) / (u.z0 + 3);
+        m.mesh.position.x = u.x0 * (1 - 0.72 * prog);
+        m.mesh.position.y = u.y0 * (1 - 0.72 * prog) - 0.4 * prog;
+      }
       m.mesh.rotation.x += u.spin.x * dt; m.mesh.rotation.y += u.spin.y * dt;
+      // Zahl: sitzt im Stein, wird mit ihm grösser, ist aber auch von weitem lesbar (mind. 34 Pixel hoch)
+      const d = m.mesh.position.length();
+      const minH = (40 * 2 * d * Math.tan((camera.fov * Math.PI) / 360)) / st.h;
+      const hgt = Math.max(minH, R * 0.95) * m.mesh.scale.x * (m.pulse ? 1 + Math.sin(t * 10) * 0.08 : 1);
+      tmpV.copy(m.mesh.position).multiplyScalar(-1).normalize().multiplyScalar(R * 0.4);
+      m.label.position.copy(m.mesh.position).add(tmpV);
+      m.label.scale.set(hgt * NUM_ASPECT * 1.4, hgt * 1.4, 1);
+      if (game.over) continue;
       if (m.correct && m.mesh.position.z > -3.2) { impact(m); break; }
       if (!m.correct && m.mesh.position.z > -2) removeMeteor(m);
     }
   });
   function laser(to) {
     [-1, 1].forEach((s) => {
-      const from = camera.localToWorld(new T.Vector3(s * 1.1, -0.85, -1.2));
+      const from = new T.Vector3(s * 1.3, -0.36 + camera.position.y, -1.2);
       const dir = to.clone().sub(from);
       const len = dir.length();
-      const beam = new T.Mesh(new T.CylinderGeometry(0.035, 0.035, len, 8, 1, true), new T.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+      const beam = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, len, 8, 1, true), new T.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
       beam.position.copy(from).add(dir.clone().multiplyScalar(0.5));
       beam.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize());
       scene.add(beam);
       st.tween(260, (u) => { beam.material.opacity = 1 - u; beam.scale.x = beam.scale.z = 1 + u * 2; }).then(() => { scene.remove(beam); beam.geometry.dispose(); beam.material.dispose(); });
     });
+    $$('.ck-gun').forEach((g) => { g.classList.toggle('fire', false); void g.offsetWidth; g.classList.add('fire'); });
     sfx.zap();
   }
-  function hit(el) {
-    const m = el.__m;
+  function hit(m) {
     if (!m || m.dead || game.over) return;
     const t = game.task;
     if (m.correct) {
@@ -646,6 +704,7 @@ async function startMeteor3D() {
       laser(m.mesh.position.clone());
       const p = m.mesh.position.clone();
       setTimeout(() => {
+        if (st.disposed) return;
         burst(st, p, { n: 160, colors: [0xffc233, 0xff6b4a, 0xffffff, 0xfff1a6], speed: 9, life: 1.1, size: 0.6, gravity: 0 });
         burst(st, p, { n: 40, colors: [0x8a6f5a, 0x5b4636], speed: 5, life: 1.4, size: 0.35, gravity: 0 });
         const fl = new T.PointLight(0xffaa55, 30, 30); fl.position.copy(p); scene.add(fl);
@@ -654,7 +713,7 @@ async function startMeteor3D() {
         st.shake(0.08);
       }, 120);
       removeMeteor(m);
-      game.wave.forEach((x) => { if (!x.dead) { x.el.classList.add('fade'); st.tween(350, (u) => { x.mesh.scale.setScalar(1 - u); }).then(() => !x.dead && removeMeteor(x)); x.dead = true; } });
+      game.wave.forEach((x) => { if (!x.dead) { x.dead = true; x.label.material.opacity = 0.3; st.tween(350, (u) => { x.mesh.scale.setScalar(Math.max(0.01, 1 - u)); }).then(() => removeMeteor(x)); } });
       $('#mscore').textContent = game.score;
       speed = 18 + Math.min(60, game.score * 3);
       bigWord(host, `+1${game.streak >= 3 ? `<small>${game.streak}er-Serie!</small>` : ''}`, 'good small');
@@ -663,14 +722,13 @@ async function startMeteor3D() {
       if (!game.recorded) { recordAnswer(t, m.val, performance.now() - t.shownAt); game.recorded = true; }
       game.streak = 0;
       sfx.bad();
-      el.classList.add('wrong');
       m.mesh.material.emissive.set(0xaa1111);
+      m.label.material.color.set(0xff7a7a);
       laser(m.mesh.position.clone());
-      const p0 = m.mesh.position.clone();
-      st.tween(400, (u) => { m.mesh.position.x = p0.x + Math.sin(u * 30) * 0.3 * (1 - u); });
+      const u = m.mesh.userData, x0 = u.x0;
+      st.tween(400, (k) => { u.x0 = x0 + Math.sin(k * 30) * 0.4 * (1 - k); });
       const right = game.wave.find((x) => x.correct && !x.dead);
-      right?.el.classList.add('hint');
-      if (right) right.mesh.material.emissive.set(0x2a5a10);
+      if (right) { right.mesh.material.emissive.set(0x1f5a10); right.label.material.color.set(0xb9ffa0); right.pulse = true; }
     }
   }
   function impact(m) {
@@ -684,267 +742,554 @@ async function startMeteor3D() {
     host.classList.add('hit');
     $('#crack').classList.add('show');
     bigWord(host, `Treffer!<small>${esc(taskText(t, true))}</small>`, 'bad');
-    setTimeout(() => { host.classList.remove('hit'); $('#crack')?.classList.remove('show'); }, 1500);
+    setTimeout(() => { host.classList.toggle('hit', false); $('#crack')?.classList.toggle('show', false); }, 1500);
     $$('#lives i').forEach((el, i) => el.classList.toggle('on', i < game.lives));
     if (game.lives <= 0) { game.over = true; gLater(meteorEnd, 1500); return; }
     gLater(spawnWave, 1600);
   }
-  game.pick = hit;
+  // Antippen: der Meteorit, der dem Finger am nächsten ist (grosszügig, damit es auch auf dem Tablet gut geht)
+  stageTap(st, (x, y) => {
+    let best = null, bestD = Infinity;
+    for (const m of game.wave) {
+      if (m.dead) continue;
+      const q = st.project(m.mesh.position);
+      if (q.z > 1) continue;
+      const rad = Math.max(42, screenRadius(st, m.mesh.position, R * 1.25 * m.mesh.scale.x));
+      const d = Math.hypot(q.x - x, q.y - y) / rad;
+      if (d < 1 && d < bestD) { best = m; bestD = d; }
+    }
+    if (best) hit(best);
+  });
+  game.pickVal = (v) => hit(game.wave.find((m) => !m.dead && m.val === Number(v)));
+  setGameKeys((e) => {
+    if (!/^[1-4]$/.test(e.key)) return;
+    const live = game.wave.filter((m) => !m.dead).sort((a, b) => a.mesh.position.x - b.mesh.position.x);
+    hit(live[+e.key - 1]);
+  });
   gLater(spawnWave, 400);
 }
 
 /* =========================================================
-   🐸 Frosch-Hüpfen 3D – aus den Augen des Froschs
+   🐸 Frosch-Hüpfen 3D – über den Teich ans andere Ufer
    ========================================================= */
-async function startFrog3D(opts = {}) {
+async function startFrog3D() {
   const T = await loadThree();
-  const ps = practiceSettings();
-  const r = opts.reihe || (ps.reihen.includes(game.frogReihe) ? game.frogReihe : weakestReihe());
-  Object.assign(game, { frogReihe: r, k: 0, dir: opts.dir || 1, locked: true, roundErr: 0, reihenDone: game.reihenDone || 0 });
+  await loadNumFont();
+  Object.assign(game, { picker: gamePicker(), k: 0, firstOk: 0, roundErr: 0, tries: 0, locked: true, task: null });
   $('#view').innerHTML = gameShell('frog', `
     <div class="g3 g3-pond" id="g3">
-      <div class="g3-hud top"><div class="chain" id="chain"></div></div>
-      <div class="frog-feet" aria-hidden="true"><i></i><i></i></div>
-      <div class="g3-hud bottom"><span class="frog-now" id="frognow"></span></div>
+      <div class="g3-hud top"><div class="pond-board"><span class="pb-task" id="ftask"></span>${frogWayHTML()}</div></div>
     </div>
-    <p class="mode-hint">Tippe auf die Seerose mit der nächsten Zahl der ${r}er-Reihe – der Frosch springt.</p>`);
+    <p class="mode-hint">Tippe auf die Seerose mit dem richtigen Ergebnis – der Frosch springt. Tasten 1–3 gehen auch.</p>`);
   const host = $('#g3');
-  const st = createStage(host, { fov: 62, clear: 0x9fd3ee });
+  const st = createStage(host, { fov: 55, clear: 0xbfe3f2 });
   game.stage3d = st;
   const { scene, camera } = st;
-  scene.fog = new T.Fog(0xbfe3f2, 18, 70);
-  scene.add(new T.HemisphereLight(0xe6f6ff, 0x2f5a3a, 1.3));
-  const sunL = new T.DirectionalLight(0xfff0cf, 2.1); sunL.position.set(10, 14, -8); scene.add(sunL);
-  // Himmel mit Abendlicht
-  const sky = new T.Mesh(new T.SphereGeometry(150, 32, 16), new T.MeshBasicMaterial({ side: T.BackSide, fog: false, map: canvasTex(16, 256, (g, w, h) => {
-    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#5aa7e6'); gr.addColorStop(0.42, '#bfe3f7'); gr.addColorStop(0.5, '#ffe2b5'); gr.addColorStop(1, '#ffe2b5');
+  scene.fog = new T.Fog(0xd3e9ef, 24, 75);
+  scene.add(new T.HemisphereLight(0xeaf6ff, 0x3d5a2a, 1.2));
+  const sunL = new T.DirectionalLight(0xfff1d6, 2.1); sunL.position.set(9, 18, 14); scene.add(sunL);
+
+  // ---------- Himmel, Sonne, Wolken ----------
+  const sky = new T.Mesh(new T.SphereGeometry(160, 32, 16), new T.MeshBasicMaterial({ side: T.BackSide, fog: false, map: canvasTex(16, 256, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#4f9be0'); gr.addColorStop(0.38, '#9fd0f2'); gr.addColorStop(0.5, '#e6f3f6'); gr.addColorStop(1, '#e6f3f6');
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   }) }));
   scene.add(sky);
-  const sunS = new T.Sprite(new T.SpriteMaterial({ map: glowTex('rgba(255,244,200,1)', 'rgba(255,220,150,0)'), blending: T.AdditiveBlending, depthWrite: false, fog: false }));
-  sunS.position.set(30, 18, -110); sunS.scale.set(40, 40, 1); scene.add(sunS);
-  // Wasser mit Wellen (eigener kleiner Shader)
-  const water = new T.Mesh(new T.PlaneGeometry(160, 160, 140, 140), new T.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uFogColor: { value: new T.Color(0xbfe3f2) }, uCam: { value: new T.Vector3() } },
+  const sunS = new T.Sprite(new T.SpriteMaterial({ map: glowTex('rgba(255,248,215,1)', 'rgba(255,230,170,0)'), blending: T.AdditiveBlending, depthWrite: false, fog: false }));
+  sunS.position.set(45, 34, -110); sunS.scale.set(34, 34, 1); scene.add(sunS);
+  const cloudTex = canvasTex(256, 128, (g) => {
+    g.fillStyle = '#fff';
+    [[70, 80, 40], [115, 62, 50], [165, 76, 42], [200, 88, 30], [40, 92, 26], [130, 92, 46]].forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); });
+  });
+  for (let i = 0; i < 7; i++) {
+    const c = new T.Sprite(new T.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
+    c.position.set(-70 + i * 24 + Math.random() * 10, 22 + Math.random() * 12, -95 - Math.random() * 30);
+    const s = 16 + Math.random() * 14; c.scale.set(s, s / 2, 1);
+    scene.add(c);
+  }
+
+  // ---------- Der Teich: abgeschlossen, mit Ufer ringsum ----------
+  const P = { cx: 0, cz: -10.6, rx: 8.6, rz: 14.4 }; // Ufer vorne bei z = 3.8, drüben bei z = -25
+  const edgeX = (z, m = 0) => { const q = (z - P.cz) / P.rz; return q * q >= 1 ? 0 : Math.max(0, P.rx * Math.sqrt(1 - q * q) - m); };
+  const inPond = (x, z, m = 0) => Math.abs(x) <= edgeX(z, m) && edgeX(z, m) > 0;
+  const WATER_Y = -0.06;
+  const water = new T.Mesh(new T.PlaneGeometry(64, 64, 110, 110), new T.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uFogColor: { value: new T.Color(0xd3e9ef) }, uCam: { value: new T.Vector3() } },
     vertexShader: `uniform float uTime; varying vec3 vW; varying float vH;
       void main(){ vec4 w = modelMatrix * vec4(position,1.0);
-        float h = sin(w.x*0.7+uTime*1.3)*0.025 + sin(w.z*0.9-uTime*1.1)*0.02 + sin((w.x+w.z)*2.1+uTime*2.3)*0.008 - 0.06;
+        float h = sin(w.x*0.8+uTime*1.2)*0.018 + sin(w.z*1.1-uTime*1.0)*0.015 + sin((w.x+w.z)*2.3+uTime*2.1)*0.007;
         w.y += h; vW = w.xyz; vH = h; gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: `uniform float uTime; uniform vec3 uFogColor; uniform vec3 uCam; varying vec3 vW; varying float vH;
-      void main(){ vec3 deep = vec3(0.06,0.32,0.36); vec3 shallow = vec3(0.25,0.62,0.6);
+      void main(){ vec3 deep = vec3(0.07,0.25,0.22); vec3 shallow = vec3(0.2,0.42,0.36);
         float d = length(vW.xz - uCam.xz);
-        vec3 c = mix(shallow, deep, clamp(d/26.0,0.0,1.0)) + (vH+0.06)*3.0;
-        float spark = pow(max(0.0, sin(vW.x*3.1+uTime*1.7)*sin(vW.z*2.7-uTime*1.3)), 18.0);
-        c += vec3(1.0,0.95,0.8)*spark*0.55;
-        float sky = smoothstep(8.0, 60.0, d); c = mix(c, vec3(0.75,0.88,0.92), sky*0.55);
-        float f = smoothstep(20.0, 70.0, d); gl_FragColor = vec4(mix(c, uFogColor, f), 1.0); }`,
+        vec3 c = mix(shallow, deep, clamp(d/22.0,0.0,1.0)) + vH*3.0;
+        float spark = pow(max(0.0, sin(vW.x*3.3+uTime*1.6)*sin(vW.z*2.9-uTime*1.2)), 24.0);
+        c += vec3(1.0,0.97,0.85)*spark*0.45;
+        vec3 view = normalize(uCam - vW); float fres = pow(1.0 - clamp(view.y, 0.0, 1.0), 3.0);
+        c = mix(c, vec3(0.72,0.85,0.9), fres*0.55);
+        float f = smoothstep(26.0, 75.0, d); gl_FragColor = vec4(mix(c, uFogColor, f), 1.0); }`,
   }));
   water.rotation.x = -Math.PI / 2;
+  water.position.set(0, WATER_Y, P.cz);
   scene.add(water);
-  st.onFrame((dt, t) => { water.material.uniforms.uTime.value = t; water.material.uniforms.uCam.value.copy(camera.position); water.position.x = camera.position.x; water.position.z = camera.position.z; });
-  // Ufer: Bäume und Schilf im Kreis
-  const treeMat = new T.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 1, flatShading: true });
-  const trunkMat = new T.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 });
-  const shore = new T.Group();
-  for (let i = 0; i < 70; i++) {
-    const a = (i / 70) * Math.PI * 2, rr = 46 + Math.random() * 14;
-    const tr = new T.Group();
-    const h = 4 + Math.random() * 6;
-    const cone = new T.Mesh(new T.ConeGeometry(1.6 + Math.random(), h, 7), treeMat); cone.position.y = h / 2 + 1; tr.add(cone);
-    const tk = new T.Mesh(new T.CylinderGeometry(0.2, 0.3, 1.4, 6), trunkMat); tk.position.y = 0.6; tr.add(tk);
-    tr.position.set(Math.cos(a) * rr, -0.2, Math.sin(a) * rr);
-    shore.add(tr);
+  st.onFrame((dt, t) => { water.material.uniforms.uTime.value = t; water.material.uniforms.uCam.value.copy(camera.position); });
+  // Ufer: Ring um den Teich, innen schlammig/sandig, aussen Wiese und sanfte Hügel
+  const bankY = (d, n = 0) => (d <= 0 ? -0.36 + (d + 0.9) * 0.24 : -0.15 + 0.55 * (1 - Math.exp(-d / 0.9)) + (d > 5 ? (d - 5) * 0.06 : 0) + n * 0.14 * Math.min(1, d / 3));
+  const bankNoise = (a) => Math.sin(a * 7 + 1.3) * 0.5 + Math.sin(a * 13 + 0.7) * 0.3 + Math.sin(a * 3) * 0.4;
+  {
+    const DS = [-0.9, 0, 0.3, 0.7, 1.2, 1.9, 2.8, 4, 5.5, 7.5, 10, 14, 19, 26, 36];
+    const SEG = 180;
+    const pos = [], col = [], uv = [], idx = [];
+    const cMud = new T.Color(0x5f5438), cSand = new T.Color(0x9a8a5e), cGrass = new T.Color(0x67a548), cGrass2 = new T.Color(0x4f8f37), cDark = new T.Color(0x3e7a2c);
+    for (let j = 0; j < DS.length; j++) {
+      for (let i = 0; i <= SEG; i++) {
+        const a = (i / SEG) * Math.PI * 2, d = DS[j], n = bankNoise(a);
+        const x = P.cx + (P.rx + d) * Math.cos(a), z = P.cz + (P.rz + d) * Math.sin(a);
+        pos.push(x, bankY(d, n), z);
+        uv.push(x / 2.5, z / 2.5);
+        const c = d < 0.3 ? cMud.clone().lerp(cSand, clamp((d + 0.9) / 1.2, 0, 1)) : d < 1.3 ? cSand.clone().lerp(cGrass, (d - 0.3) / 1.0) : cGrass.clone().lerp(n > 0 ? cGrass2 : cDark, Math.min(1, Math.abs(n)) * 0.7);
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    const W = SEG + 1;
+    for (let j = 0; j < DS.length - 1; j++) for (let i = 0; i < SEG; i++) {
+      const a = j * W + i, b = a + 1, c = a + W, d = c + 1;
+      idx.push(a, b, c, b, d, c); // Vorderseite nach oben
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const grassTex = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#e8e8e8'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 5000; i++) { const v = 170 + Math.random() * 85; g.fillStyle = `rgba(${v},${v},${v},.55)`; g.fillRect(Math.random() * w, Math.random() * h, 1.5, 3 + Math.random() * 3); }
+    }, { repeat: [1, 1] });
+    const bank = new T.Mesh(geo, new T.MeshStandardMaterial({ vertexColors: true, map: grassTex, roughness: 1 }));
+    scene.add(bank);
   }
-  scene.add(shore);
-  const reedMat = new T.MeshStandardMaterial({ color: 0x5a8f3a, roughness: 1 });
+  // Bäume, Büsche und Steine am Ufer (nicht dort, wo die Kamera steht)
+  const leafMats = [0x2f6b3a, 0x3a7d3f, 0x4a8c3a].map((c) => new T.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true }));
+  const trunkMat = new T.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 });
+  const stoneMat = new T.MeshStandardMaterial({ color: 0x8b8f87, roughness: 0.95, flatShading: true });
+  const ringPos = (a, d) => ({ x: P.cx + (P.rx + d) * Math.cos(a), z: P.cz + (P.rz + d) * Math.sin(a), y: bankY(d, bankNoise(a)) });
+  for (let i = 0; i < 80; i++) {
+    const a = Math.random() * Math.PI * 2, d = 2.6 + Math.random() * 15;
+    const p = ringPos(a, d);
+    if ((p.z > -1 && Math.abs(p.x) < 6.5) || (p.z < -24 && p.z > -34 && Math.abs(p.x) < 3.2)) continue; // Blick frei lassen (Start und Ziel)
+    const tr = new T.Group();
+    const h = 2.6 + Math.random() * 3.6;
+    if (Math.random() < 0.55) {
+      for (let k = 0; k < 3; k++) { const c = new T.Mesh(new T.ConeGeometry((1.3 - k * 0.3) * (h / 4), h * 0.5, 8), leafMats[k % 3]); c.position.y = h * (0.35 + k * 0.2); tr.add(c); }
+    } else {
+      const crown = new T.Mesh(new T.IcosahedronGeometry(h * 0.33, 1), leafMats[rand(3)]); crown.position.y = h * 0.72; crown.scale.y = 0.85; tr.add(crown);
+    }
+    const tk = new T.Mesh(new T.CylinderGeometry(0.1, 0.16, h * 0.45, 6), trunkMat); tk.position.y = h * 0.22; tr.add(tk);
+    tr.position.set(p.x, p.y - 0.05, p.z); tr.rotation.y = Math.random() * 6;
+    scene.add(tr);
+  }
+  for (let i = 0; i < 40; i++) {
+    const a = Math.random() * Math.PI * 2, d = 0.9 + Math.random() * 2.2;
+    const p = ringPos(a, d);
+    if ((p.z > -1 || p.z < -24) && Math.abs(p.x) < 4.5) continue;
+    const b = new T.Mesh(new T.IcosahedronGeometry(0.35 + Math.random() * 0.35, 0), leafMats[rand(3)]);
+    b.position.set(p.x, p.y + 0.15, p.z); b.scale.y = 0.7; scene.add(b);
+  }
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * Math.PI * 2, d = -0.2 + Math.random() * 1.4;
+    const p = ringPos(a, d);
+    if ((p.z > 1 || p.z < -24) && Math.abs(p.x) < 3) continue;
+    const s = new T.Mesh(new T.DodecahedronGeometry(0.18 + Math.random() * 0.3, 0), stoneMat);
+    s.position.set(p.x, p.y + 0.05, p.z); s.scale.y = 0.6; s.rotation.set(Math.random(), Math.random() * 6, 0); scene.add(s);
+  }
+  // Schilf und Rohrkolben im seichten Wasser am Rand
+  const reedMat = new T.MeshStandardMaterial({ color: 0x5f8f3a, roughness: 1 });
   const catMat = new T.MeshStandardMaterial({ color: 0x6b3f1f, roughness: 1 });
-  const reeds = new T.Group();
-  scene.add(reeds);
-  function addReeds(cx, cz) {
-    for (let i = 0; i < 6; i++) {
+  const reeds = new T.Group(); scene.add(reeds);
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * Math.PI * 2, d = -0.6 + Math.random() * 0.8;
+    const p = ringPos(a, d);
+    if (Math.abs(p.x) < 3.2 && (p.z > -2 || p.z < -22)) continue; // Start und Ziel frei
+    for (let k = 0; k < 7; k++) {
       const g = new T.Group();
-      const h = 0.9 + Math.random() * 1.1;
-      const st1 = new T.Mesh(new T.CylinderGeometry(0.015, 0.025, h, 5), reedMat); st1.position.y = h / 2; g.add(st1);
-      if (Math.random() < 0.5) { const c = new T.Mesh(new T.CapsuleGeometry(0.045, 0.22, 3, 6), catMat); c.position.y = h - 0.05; g.add(c); }
-      g.position.set(cx + (Math.random() - 0.5) * 1.2, -0.05, cz + (Math.random() - 0.5) * 1.2);
+      const h = 0.8 + Math.random() * 1.0;
+      const s1 = new T.Mesh(new T.CylinderGeometry(0.012, 0.022, h, 5), reedMat); s1.position.y = h / 2; g.add(s1);
+      if (Math.random() < 0.45) { const c = new T.Mesh(new T.CapsuleGeometry(0.04, 0.2, 3, 6), catMat); c.position.y = h - 0.04; g.add(c); }
+      g.position.set(p.x + (Math.random() - 0.5) * 1.1, WATER_Y - 0.05, p.z + (Math.random() - 0.5) * 1.1);
       g.userData.ph = Math.random() * 6;
       reeds.add(g);
     }
   }
-  st.onFrame((dt, t) => reeds.children.forEach((g) => { g.rotation.z = Math.sin(t * 1.4 + g.userData.ph) * 0.06; g.rotation.x = Math.cos(t * 1.1 + g.userData.ph) * 0.04; }));
-  // Glühwürmchen / Pollen in der Luft
-  const flyGeo = new T.BufferGeometry();
-  const fp = new Float32Array(120 * 3);
-  for (let i = 0; i < 120; i++) fp.set([(Math.random() - 0.5) * 30, 0.3 + Math.random() * 3, -Math.random() * 30], i * 3);
-  flyGeo.setAttribute('position', new T.BufferAttribute(fp, 3));
-  const flies = new T.Points(flyGeo, new T.PointsMaterial({ size: 0.12, map: glowTex('rgba(255,250,200,1)'), color: 0xfff6b0, transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
-  scene.add(flies);
-  st.onFrame((dt, t) => { flies.position.x = camera.position.x; flies.position.z = camera.position.z; flies.rotation.y = t * 0.03; });
-  // Seerosen
-  const padTex = canvasTex(256, 256, (g, w, h) => {
-    const r = g.createRadialGradient(128, 128, 10, 128, 128, 128); r.addColorStop(0, '#9be36f'); r.addColorStop(0.7, '#4fae3c'); r.addColorStop(1, '#3b8f2e');
+  st.onFrame((dt, t) => reeds.children.forEach((g) => { g.rotation.z = Math.sin(t * 1.3 + g.userData.ph) * 0.05; g.rotation.x = Math.cos(t * 1.1 + g.userData.ph) * 0.035; }));
+
+  // ---------- Seerosen ----------
+  const padTex = canvasTex(256, 256, (g) => {
+    const r = g.createRadialGradient(128, 128, 8, 128, 128, 128); r.addColorStop(0, '#93d66a'); r.addColorStop(0.75, '#4c9f38'); r.addColorStop(1, '#3a842b');
     g.fillStyle = r; g.beginPath(); g.arc(128, 128, 128, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(40,110,30,.55)'; g.lineWidth = 3;
-    for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; g.beginPath(); g.moveTo(128, 128); g.lineTo(128 + Math.cos(a) * 120, 128 + Math.sin(a) * 120); g.stroke(); }
+    g.strokeStyle = 'rgba(38,100,30,.5)'; g.lineWidth = 2.5;
+    for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; g.beginPath(); g.moveTo(128, 128); g.quadraticCurveTo(128 + Math.cos(a + 0.15) * 60, 128 + Math.sin(a + 0.15) * 60, 128 + Math.cos(a) * 122, 128 + Math.sin(a) * 122); g.stroke(); }
   });
-  const padMat = new T.MeshStandardMaterial({ map: padTex, roughness: 0.6, side: T.DoubleSide });
-  const petalMat = new T.MeshStandardMaterial({ color: 0xffb6d5, roughness: 0.5 });
-  function makePad(rad = 0.62, flower = false) {
+  const padMat = new T.MeshStandardMaterial({ map: padTex, roughness: 0.55, side: T.DoubleSide });
+  const rimMat = new T.MeshStandardMaterial({ color: 0x2f7d26, roughness: 0.6 });
+  const petalMats = [0xffb6d5, 0xffffff].map((c) => new T.MeshStandardMaterial({ color: c, roughness: 0.5 }));
+  const seedMat = new T.MeshStandardMaterial({ color: 0xffd34d });
+  function makePad(rad = 0.7, flower = false) {
     const g = new T.Group();
     const m = new T.Mesh(new T.CircleGeometry(rad, 40, 0.25, Math.PI * 2 - 0.5), padMat);
     m.rotation.x = -Math.PI / 2; g.add(m);
-    const rimM = new T.Mesh(new T.TorusGeometry(rad, 0.025, 6, 40, Math.PI * 2 - 0.5), new T.MeshStandardMaterial({ color: 0x2f7d26 }));
-    rimM.rotation.x = -Math.PI / 2; rimM.rotation.z = 0.25; g.add(rimM);
+    const rim = new T.Mesh(new T.TorusGeometry(rad, 0.022, 6, 40, Math.PI * 2 - 0.5), rimMat);
+    rim.rotation.x = -Math.PI / 2; rim.rotation.z = 0.25; g.add(rim);
     if (flower) {
-      const f = new T.Group();
-      for (let i = 0; i < 8; i++) { const p = new T.Mesh(new T.SphereGeometry(0.09, 10, 8), petalMat); p.scale.set(0.6, 0.35, 1.6); const a = (i / 8) * Math.PI * 2; p.position.set(Math.cos(a) * 0.1, 0.1, Math.sin(a) * 0.1); p.rotation.y = -a; p.rotation.x = 0.6; f.add(p); }
-      const c = new T.Mesh(new T.SphereGeometry(0.06, 10, 8), new T.MeshStandardMaterial({ color: 0xffd34d })); c.position.y = 0.12; f.add(c);
-      f.position.set(rad * 0.45, 0, rad * 0.25); g.add(f);
+      const f = new T.Group(), pm = petalMats[rand(2)];
+      for (let i = 0; i < 8; i++) { const p = new T.Mesh(new T.SphereGeometry(0.08, 10, 8), pm); p.scale.set(0.6, 0.35, 1.6); const a = (i / 8) * Math.PI * 2; p.position.set(Math.cos(a) * 0.09, 0.09, Math.sin(a) * 0.09); p.rotation.y = -a; p.rotation.x = 0.6; f.add(p); }
+      const c = new T.Mesh(new T.SphereGeometry(0.05, 10, 8), seedMat); c.position.y = 0.11; f.add(c);
+      f.position.set(-rad * 0.5, 0, -rad * 0.3); g.add(f);
     }
-    g.position.y = 0.015;
-    g.userData = { ph: Math.random() * 6, baseY: 0.015, dip: 0 };
+    g.rotation.y = Math.random() * 6;
+    g.userData = { ph: Math.random() * 6, baseY: 0.0, dip: 0, bob: true };
     scene.add(g);
     return g;
   }
-  st.onFrame((dt, t) => scene.children.forEach((o) => { if (o.userData?.ph != null && o.userData.baseY != null) { o.userData.dip *= Math.pow(0.02, dt); o.position.y = o.userData.baseY + Math.sin(t * 1.5 + o.userData.ph) * 0.012 - o.userData.dip; o.rotation.y += dt * 0.02; } }));
-  // Wellenringe beim Landen
-  function ripple(p, n = 3) {
+  // Schmuck-Seerosen am Rand (ohne Zahlen, nicht auf dem Weg)
+  for (let i = 0; i < 26; i++) {
+    const z = P.cz + (Math.random() * 2 - 1) * P.rz * 0.9;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const ex = edgeX(z, 0.9);
+    if (ex < 4) continue;
+    const x = side * (3.9 + Math.random() * (ex - 3.9));
+    const p = makePad(0.4 + Math.random() * 0.35, Math.random() < 0.3);
+    p.position.set(x, 0, z);
+  }
+  st.onFrame((dt, t) => scene.children.forEach((o) => { const u = o.userData; if (u?.bob) { u.dip *= Math.pow(0.03, dt); o.position.y = u.baseY + Math.sin(t * 1.4 + u.ph) * 0.01 - u.dip; } }));
+  // Wellenringe
+  function ripple(p, n = 2, r0 = 0.5) {
     for (let i = 0; i < n; i++) {
-      const ring = new T.Mesh(new T.RingGeometry(0.62, 0.66, 64), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, 0.03, p.z);
+      const ring = new T.Mesh(new T.RingGeometry(r0, r0 + 0.035, 48), new T.MeshBasicMaterial({ color: 0xe8f6f2, transparent: true, opacity: 0.35, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(p.x, WATER_Y + 0.045, p.z);
+      ring.material.opacity = 0.22;
       scene.add(ring);
-      setTimeout(() => st.tween(1400, (u) => { ring.scale.setScalar(1 + u * 2.2); ring.material.opacity = 0.3 * (1 - u); }, ease.out).then(() => { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); }), i * 180);
+      setTimeout(() => { if (st.disposed) return; st.tween(1300, (u) => { ring.scale.setScalar(1 + u * 1.3); ring.material.opacity = 0.22 * (1 - u); }, ease.out).then(() => { scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); }); }, i * 200);
     }
   }
-  // Zustand: Frosch sitzt auf „home“, vorne liegen die Seerosen zur Wahl
-  const EYE = 0.34;
-  let home = makePad(0.7, false);
-  home.position.set(0, 0.015, 0);
-  let heading = 0; // Blickrichtung (Winkel um y)
-  const look = new T.Vector3();
-  const setCam = (p, hd, pitch = -0.12) => {
-    camera.position.set(p.x, p.y, p.z);
-    look.set(p.x - Math.sin(hd) * 4, p.y + pitch * 4, p.z - Math.cos(hd) * 4);
-    camera.lookAt(look);
-  };
-  setCam(new T.Vector3(0, EYE, 0.35), 0);
-  addReeds(-3.2, -1.2); addReeds(3.6, -2); addReeds(-5.5, -4.5);
-  // Schilf im Blickfächer vor dem Frosch (und weit hinten) wegräumen, damit es nie die Seerosen verdeckt
-  function cullReeds() {
-    const fx = -Math.sin(heading), fz = -Math.cos(heading), rx = Math.cos(heading), rz = -Math.sin(heading);
-    [...reeds.children].forEach((g) => {
-      const dx = g.position.x - home.position.x, dz = g.position.z - home.position.z;
-      const f = dx * fx + dz * fz, l = dx * rx + dz * rz;
-      if ((f > -0.6 && f < 6 && Math.abs(l) < 0.75 * Math.max(f, 0) + 0.9) || f < -10) {
-        reeds.remove(g);
-        g.traverse((o) => o.geometry?.dispose());
+  const splash = (p, n = 40) => burst(st, new T.Vector3(p.x, WATER_Y + 0.08, p.z), { n, colors: [0xffffff, 0xd8f0f3], speed: 1.8, life: 0.7, size: 0.07, gravity: -6 });
+
+  // ---------- Fische: Schatten unter Wasser, ab und zu springt einer heraus ----------
+  const fishShadowTex = canvasTex(128, 64, (g) => {
+    g.fillStyle = 'rgba(10,35,28,1)';
+    g.beginPath(); g.ellipse(52, 32, 40, 13, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(88, 32); g.lineTo(122, 16); g.lineTo(122, 48); g.closePath(); g.fill();
+  });
+  const fishes = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new T.Mesh(new T.PlaneGeometry(0.55, 0.28), new T.MeshBasicMaterial({ map: fishShadowTex, transparent: true, opacity: 0.32, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    const z = P.cz + (Math.random() * 2 - 1) * P.rz * 0.7;
+    m.position.set((Math.random() * 2 - 1) * edgeX(z, 1.5), WATER_Y + 0.045, z);
+    m.userData = { dir: Math.random() * 6, sp: 0.35 + Math.random() * 0.35, turn: 0 };
+    scene.add(m); fishes.push(m);
+  }
+  st.onFrame((dt, t) => fishes.forEach((m) => {
+    const u = m.userData;
+    u.turn += (Math.random() - 0.5) * dt * 2; u.turn *= 0.98; u.dir += u.turn * dt * 2 + Math.sin(t * 0.7 + u.sp * 9) * dt * 0.4;
+    const nx = m.position.x + Math.cos(u.dir) * u.sp * dt, nz = m.position.z + Math.sin(u.dir) * u.sp * dt;
+    if (!inPond(nx, nz, 1.2)) u.dir += Math.PI * 0.8; else { m.position.x = nx; m.position.z = nz; }
+    m.rotation.z = -u.dir + Math.PI;
+  }));
+  const fishMat = [0xe8953a, 0xb9c4b0, 0xd9a441].map((c) => new T.MeshStandardMaterial({ color: c, roughness: 0.35, metalness: 0.2 }));
+  function fishJump() {
+    if (st.disposed) return;
+    const fz = frog.position.z - 3 - Math.random() * 6;
+    const ex = edgeX(fz, 1.4);
+    if (ex > 0.5) {
+      const x = (Math.random() * 2 - 1) * ex;
+      const free = choices.every((c) => Math.hypot(c.pad.position.x - x, c.pad.position.z - fz) > 1.4);
+      if (free) {
+        const f = new T.Group();
+        const mat = fishMat[rand(3)];
+        const body = new T.Mesh(new T.SphereGeometry(0.1, 14, 10), mat); body.scale.set(0.75, 0.9, 2.3); f.add(body);
+        const tail = new T.Mesh(new T.ConeGeometry(0.09, 0.16, 4), mat); tail.rotation.x = -Math.PI / 2; tail.scale.set(0.3, 1, 1.2); tail.position.z = 0.3; f.add(tail);
+        const dir = Math.random() * Math.PI * 2, dx = Math.cos(dir) * 1.1, dz = Math.sin(dir) * 1.1;
+        f.rotation.y = -dir - Math.PI / 2;
+        scene.add(f);
+        const p0 = new T.Vector3(x, WATER_Y, fz);
+        splash(p0, 24); ripple(p0, 1, 0.15);
+        noise(0.25, { freq: 1800, gain: 0.03 });
+        st.tween(900, (u) => {
+          f.position.set(p0.x + dx * u, WATER_Y + Math.sin(u * Math.PI) * 0.75, p0.z + dz * u);
+          f.rotation.x = (u - 0.5) * 2.2;
+          tail.rotation.y = Math.sin(u * 40) * 0.5;
+        }, (u) => u).then(() => {
+          const p1 = new T.Vector3(p0.x + dx, WATER_Y, p0.z + dz);
+          splash(p1, 30); ripple(p1, 2, 0.15);
+          noise(0.3, { freq: 1400, gain: 0.035 });
+          scene.remove(f); body.geometry.dispose(); tail.geometry.dispose();
+        });
       }
+    }
+    gLater(fishJump, 2500 + Math.random() * 3500);
+  }
+
+  // ---------- Fliegen und eine Libelle ----------
+  const flyMat = new T.MeshBasicMaterial({ color: 0x1b1b1b });
+  const wingMat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, side: T.DoubleSide, depthWrite: false });
+  const flies = [];
+  for (let i = 0; i < 6; i++) {
+    const f = new T.Group();
+    f.add(new T.Mesh(new T.SphereGeometry(0.022, 8, 6), flyMat));
+    const w1 = new T.Mesh(new T.PlaneGeometry(0.05, 0.025), wingMat), w2 = w1.clone();
+    w1.position.set(0.025, 0.012, 0); w2.position.set(-0.025, 0.012, 0); f.add(w1, w2);
+    f.userData = { o: new T.Vector3((Math.random() - 0.5) * 3.5, 0.5 + Math.random() * 0.7, -1 - Math.random() * 3.5), a: 1 + Math.random() * 2, b: 1.3 + Math.random() * 2, c: 0.8 + Math.random() * 2, r: 0.3 + Math.random() * 0.4, w1, w2 };
+    scene.add(f); flies.push(f);
+  }
+  const dfly = new T.Group();
+  {
+    const dm = new T.MeshStandardMaterial({ color: 0x1fa3b8, metalness: 0.5, roughness: 0.3 });
+    const b = new T.Mesh(new T.CylinderGeometry(0.018, 0.012, 0.36, 6), dm); b.rotation.x = Math.PI / 2; dfly.add(b);
+    const hd = new T.Mesh(new T.SphereGeometry(0.035, 10, 8), dm); hd.position.z = -0.2; dfly.add(hd);
+    const dw = new T.MeshBasicMaterial({ color: 0xdff6ff, transparent: true, opacity: 0.45, side: T.DoubleSide, depthWrite: false });
+    dfly.userData.wings = [-1, 1].flatMap((s) => [-0.09, -0.03].map((z) => { const w = new T.Mesh(new T.PlaneGeometry(0.24, 0.045), dw); w.position.set(s * 0.13, 0.01, z); w.rotation.x = -Math.PI / 2; dfly.add(w); return w; }));
+    dfly.userData.to = new T.Vector3(); dfly.userData.next = 0;
+    scene.add(dfly);
+  }
+  st.onFrame((dt, t) => {
+    flies.forEach((f) => {
+      const u = f.userData;
+      f.position.set(frog.position.x + u.o.x + Math.sin(t * u.a * 2) * u.r, u.o.y + Math.sin(t * u.b * 3) * 0.12, frog.position.z + u.o.z + Math.cos(t * u.c * 2) * u.r);
+      const s = Math.abs(Math.sin(t * 90 + u.a)); u.w1.scale.y = s; u.w2.scale.y = s;
     });
+    const u = dfly.userData;
+    if (t > u.next) { u.to.set(frog.position.x + (Math.random() - 0.5) * 5, 0.45 + Math.random() * 0.9, frog.position.z - 1.5 - Math.random() * 4.5); u.next = t + 1.6 + Math.random() * 2; }
+    const prev = dfly.position.clone();
+    dfly.position.lerp(u.to, 1 - Math.exp(-dt * 2.2));
+    dfly.position.y += Math.sin(t * 9) * 0.004;
+    const mv = dfly.position.clone().sub(prev);
+    if (mv.lengthSq() > 1e-7) dfly.rotation.y = Math.atan2(-mv.x, -mv.z);
+    u.wings.forEach((w, i) => { w.rotation.y = Math.sin(t * 70 + i) * 0.35; });
+  });
+
+  // ---------- Der Frosch (von hinten zu sehen) ----------
+  const frog = new T.Group();
+  const legs = [];
+  {
+    const skin = new T.MeshStandardMaterial({ color: 0x4caf3f, roughness: 0.42 });
+    const dark = new T.MeshStandardMaterial({ color: 0x2f7d2a, roughness: 0.5 });
+    const light = new T.MeshStandardMaterial({ color: 0xc8eb8a, roughness: 0.6 });
+    const eyeM = new T.MeshStandardMaterial({ color: 0xf2d75a, roughness: 0.25 });
+    const pupM = new T.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 });
+    const body = new T.Mesh(new T.SphereGeometry(0.3, 28, 20), skin); body.scale.set(1.05, 0.7, 1.25); body.position.set(0, 0.25, 0.04); body.rotation.x = 0.28; frog.add(body);
+    const bel = new T.Mesh(new T.SphereGeometry(0.26, 20, 14), light); bel.scale.set(0.95, 0.55, 1.05); bel.position.set(0, 0.17, -0.06); frog.add(bel);
+    const head = new T.Mesh(new T.SphereGeometry(0.24, 24, 18), skin); head.scale.set(1.12, 0.72, 1.0); head.position.set(0, 0.37, -0.3); frog.add(head);
+    [-1, 1].forEach((s) => {
+      const bulge = new T.Mesh(new T.SphereGeometry(0.088, 16, 12), skin); bulge.position.set(s * 0.14, 0.47, -0.34); frog.add(bulge);
+      const eye = new T.Mesh(new T.SphereGeometry(0.068, 16, 12), eyeM); eye.position.set(s * 0.15, 0.49, -0.38); frog.add(eye);
+      const pup = new T.Mesh(new T.SphereGeometry(0.034, 10, 8), pupM); pup.scale.set(1.4, 0.8, 1); pup.position.set(s * 0.155, 0.5, -0.435); frog.add(pup);
+      // Hinterbein: Oberschenkel, Unterschenkel und Schwimmfuss (Drehpunkt an der Hüfte)
+      const leg = new T.Group(); leg.position.set(s * 0.2, 0.2, 0.2);
+      const thigh = new T.Mesh(new T.SphereGeometry(0.12, 16, 12), skin); thigh.scale.set(0.95, 0.85, 2.0); thigh.position.set(s * 0.06, -0.02, -0.06); thigh.rotation.y = s * 0.35; leg.add(thigh);
+      const shin = new T.Mesh(new T.CapsuleGeometry(0.055, 0.28, 4, 10), skin); shin.rotation.x = Math.PI / 2; shin.rotation.y = s * -0.2; shin.position.set(s * 0.12, -0.11, -0.02); leg.add(shin);
+      const foot = new T.Mesh(new T.SphereGeometry(0.09, 12, 8), dark); foot.scale.set(1.3, 0.25, 1.6); foot.position.set(s * 0.15, -0.17, 0.14); leg.add(foot);
+      frog.add(leg); legs.push(leg);
+      const arm = new T.Mesh(new T.CapsuleGeometry(0.04, 0.16, 4, 8), skin); arm.position.set(s * 0.17, 0.1, -0.38); arm.rotation.z = s * 0.25; frog.add(arm);
+      const hand = new T.Mesh(new T.SphereGeometry(0.05, 10, 8), dark); hand.scale.set(1.3, 0.3, 1.3); hand.position.set(s * 0.2, 0.02, -0.42); frog.add(hand);
+    });
+    for (let i = 0; i < 6; i++) {
+      const sp = new T.Mesh(new T.SphereGeometry(0.04 + Math.random() * 0.03, 10, 6), dark);
+      sp.scale.y = 0.3; sp.position.set((Math.random() - 0.5) * 0.36, 0.43 - Math.random() * 0.05, 0.12 - Math.random() * 0.34); frog.add(sp);
+    }
+    frog.scale.setScalar(1.05);
+  }
+  scene.add(frog);
+  // Start: ein flacher Stein am Ufer
+  const startStone = new T.Mesh(new T.CylinderGeometry(0.62, 0.75, 0.24, 9), stoneMat);
+  startStone.position.set(0, WATER_Y + 0.02, 2.55); startStone.scale.set(1, 1, 0.85);
+  scene.add(startStone);
+  frog.position.set(0, startStone.position.y + 0.12, 2.55);
+  let home = null; // Seerose, auf der der Frosch sitzt (am Anfang der Stein)
+
+  // ---------- Kamera: hinter und über dem Frosch, rutscht weich nach ----------
+  const CAM_OFF = new T.Vector3(0, 1.6, 2.4);
+  // Hochformat (Handy): Kamera etwas weiter weg und weitwinkliger, Seerosen näher beieinander
+  const portrait = () => clamp((1.25 - camera.aspect) / 0.65, 0, 1);
+  let lastFit = -1;
+  const fitView = () => {
+    const f = portrait();
+    if (Math.abs(f - lastFit) < 0.01) return;
+    lastFit = f;
+    camera.fov = 55 + 16 * f; camera.updateProjectionMatrix();
+    CAM_OFF.set(0, 1.6 + 0.6 * f, 2.4 + 1.3 * f);
+  };
+  fitView();
+  st.onFrame(fitView);
+  const lookAt = new T.Vector3();
+  const camGoal = new T.Vector3(), lookGoal = new T.Vector3();
+  const setGoals = () => { camGoal.copy(frog.position).add(CAM_OFF); camGoal.y = Math.max(camGoal.y, frog.position.y + 1.4); lookGoal.set(frog.position.x, 0.05, frog.position.z - 3.1); };
+  setGoals(); camera.position.copy(camGoal); lookAt.copy(lookGoal); camera.lookAt(lookAt);
+  st.onFrame((dt) => {
+    setGoals();
+    const k = 1 - Math.exp(-dt * 3.2);
+    camera.position.lerp(camGoal, k);
+    lookAt.lerp(lookGoal, k);
+    camera.lookAt(lookAt);
+  });
+  // Frosch atmet und schaut sich um
+  let idle = true;
+  st.onFrame((dt, t) => { if (!idle) return; const b = 1 + Math.sin(t * 2.4) * 0.025; frog.scale.set(1.05 * b, 1.05 / b, 1.05 * b); });
+
+  // ---------- Zahlen auf den Seerosen ----------
+  const NUM_H = 0.8, NUM_AR = 320 / 180;
+  function padNumber(v) {
+    const s = new T.Sprite(new T.SpriteMaterial({ map: numCanvasTex(String(v), { fill: '#ffffff', stroke: '#123d1c', size: 136, line: 0.2 }), transparent: true, depthWrite: false }));
+    s.center.set(0.5, 0.14);
+    s.scale.set(NUM_H * NUM_AR, NUM_H, 1);
+    s.renderOrder = 5;
+    scene.add(s);
+    return s;
   }
   let choices = [];
-  function chainHTML() {
-    const b = game.frogReihe, seen = [];
-    for (let k = game.dir === 1 ? 1 : 10; game.dir === 1 ? k <= game.k : k >= game.k; k += game.dir) if (k >= 1 && k <= 10) seen.push(k * b);
-    const done = game.k + game.dir < 1 || game.k + game.dir > 10;
-    return `<span class="chain-title">${b}er-Reihe ${game.dir === 1 ? 'vorwärts' : 'rückwärts'}</span><span class="chain-nums">${seen.map((x) => `<b>${x}</b>`).join('')}${done ? '' : '<b class="q">?</b>'}</span>`;
+  st.onFrame((dt, t) => choices.forEach((c) => {
+    c.label.position.set(c.pad.position.x, c.pad.position.y + 0.03, c.pad.position.z);
+    if (c.hint) { const k = 1 + Math.sin(t * 9) * 0.07; c.label.scale.set(NUM_H * NUM_AR * k, NUM_H * k, 1); }
+  }));
+  function dropChoice(c, sink = true) {
+    choices = choices.filter((x) => x !== c);
+    const y0 = c.pad.position.y;
+    c.pad.userData.bob = false;
+    st.tween(sink ? 700 : 400, (u) => { c.pad.position.y = y0 - u * 0.4; c.pad.rotation.z = u * 0.4; c.label.material.opacity = 1 - u; c.label.position.y = c.pad.position.y + 0.03; })
+      .then(() => { scene.remove(c.pad); scene.remove(c.label); c.label.material.map.dispose(); c.label.material.dispose(); });
   }
   function step() {
-    const b = game.frogReihe;
-    const nextK = game.k + game.dir;
-    $('#chain').innerHTML = chainHTML();
-    const cur = game.k >= 1 && game.k <= 10 ? game.k * b : (game.dir === 1 ? 0 : '');
-    $('#frognow').innerHTML = cur !== '' ? `Du sitzt auf <b>${cur}</b>` : 'Los geht’s!';
-    if (nextK < 1 || nextK > 10) { finish(); return; }
-    const target = nextK * b;
-    const cand = new Set([target]);
-    for (const x of shuffle([target + 1, target - 1, target + 2, target - 2, target + b, target - b, target + 10, target - 10]).filter((x) => x > 0 && x !== target && x !== cur)) { if (cand.size >= 3) break; cand.add(x); }
-    game.task = { ...makeTask(nextK, b, 'mul'), shownAt: performance.now() };
-    const vals = shuffle([...cand]);
-    const angles = [-0.62, 0, 0.62];
+    frogWayUpdate();
+    if (game.k >= FROG_JUMPS) { finish(); return; }
+    const t = game.picker.next();
+    game.task = { ...t, shownAt: performance.now() };
+    game.tries = 0;
+    $('#ftask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
+    const vals = choicesFor(t, 3);
+    const zBase = frog.position.z - 2.5;
+    const bound = edgeX(zBase - 0.3, 1.0);
+    const f = portrait(), gap = 1.85 - 0.35 * f;
+    const cx = clamp(frog.position.x, -Math.max(0, bound - gap), Math.max(0, bound - gap));
     choices = vals.map((v, i) => {
-      const a = heading + angles[i] + (Math.random() - 0.5) * 0.12;
-      const d = 2.6 + Math.random() * 0.9 + (i === 1 ? 0.5 : 0);
-      const pad = makePad(0.55 + Math.random() * 0.12, Math.random() < 0.3);
-      pad.position.set(home.position.x - Math.sin(a) * d, 0.015, home.position.z - Math.cos(a) * d);
-      pad.scale.setScalar(0.01);
-      st.tween(500, (u, e) => pad.scale.setScalar(Math.max(0.01, e)), ease.back);
-      const el = g3Label(String(v), 'pad-tag', { action: 'g3-pick', v });
-      const lab = st.addLabel(el, () => new T.Vector3(pad.position.x, pad.position.y + 0.42, pad.position.z), { dist: 3, base: 1, min: 0.6, max: 1.35 });
-      const c = { pad, el, lab, val: v, a };
-      el.__c = c;
-      // Schilf nur seitlich (quer zur Blickrichtung), damit es nicht die Sicht versperrt
-      if (i !== 1 && Math.random() < 0.6) {
-        const side = -Math.sign(angles[i]) * (1.8 + Math.random() * 0.8);
-        addReeds(pad.position.x + Math.cos(heading) * side - Math.sin(heading) * 0.6, pad.position.z - Math.sin(heading) * side - Math.cos(heading) * 0.6);
-      }
-      return c;
+      const pad = makePad(0.68 - 0.06 * f + Math.random() * 0.05, Math.random() < 0.22);
+      const x = cx + (i - 1) * gap + (Math.random() - 0.5) * 0.2;
+      const z = zBase - Math.random() * 0.3 - (i === 1 ? 0.25 : 0);
+      pad.position.set(x, -0.35, z);
+      pad.userData.bob = false;
+      pad.scale.setScalar(0.4);
+      const label = padNumber(v);
+      label.material.opacity = 0;
+      st.tween(520, (u, e) => { pad.position.y = -0.35 * (1 - e); pad.scale.setScalar(0.4 + 0.6 * e); label.material.opacity = clamp(u * 1.6 - 0.3, 0, 1); }, ease.back)
+        .then(() => { pad.userData.bob = true; });
+      ripple(new T.Vector3(x, 0, z), 1, 0.6);
+      return { pad, label, val: v };
     });
-    cullReeds();
     game.locked = false;
   }
-  async function jump(el) {
-    const c = el.__c;
-    if (game.locked || !c) return;
+  async function jumpTo(target, { height = 0.95, ms = 640 } = {}) {
+    idle = false;
+    const p0 = frog.position.clone();
+    const yaw0 = frog.rotation.y, far = Math.hypot(target.x - p0.x, target.z - p0.z) > 0.05;
+    const yaw1 = far ? Math.atan2(-(target.x - p0.x), -(target.z - p0.z)) : yaw0;
+    await st.tween(140, (u) => { frog.scale.set(1.05 * (1 + 0.1 * u), 1.05 * (1 - 0.2 * u), 1.05 * (1 + 0.06 * u)); frog.rotation.y = yaw0 + (yaw1 - yaw0) * u; legs.forEach((l) => { l.rotation.x = 0.15 * u; }); });
+    sfx.jump();
+    await st.tween(ms, (u, e) => {
+      frog.position.lerpVectors(p0, target, e);
+      frog.position.y = p0.y + (target.y - p0.y) * e + Math.sin(u * Math.PI) * height;
+      const s = Math.sin(u * Math.PI);
+      frog.scale.set(1.05 * (1 - 0.06 * s), 1.05 * (1 + 0.12 * s), 1.05 * (1 + 0.14 * s));
+      frog.rotation.x = -0.35 * Math.sin(Math.min(1, u * 1.5) * Math.PI) + (u > 0.6 ? 0.25 * (u - 0.6) / 0.4 : 0);
+      const ext = u < 0.25 ? u / 0.25 : u > 0.7 ? 1 - (u - 0.7) / 0.3 : 1;
+      legs.forEach((l) => { l.rotation.x = -1.35 * ext; });
+    }, (x) => x);
+    frog.rotation.x = 0;
+    await st.tween(170, (u) => { const s = 1 - u; frog.scale.set(1.05 * (1 + 0.12 * s), 1.05 * (1 - 0.22 * s), 1.05 * (1 + 0.08 * s)); legs.forEach((l) => { l.rotation.x = 0.15 * s; }); });
+    st.tween(500, (u, e) => { frog.rotation.y = yaw1 * (1 - e); });
+    idle = true;
+  }
+  async function pick(c) {
+    if (game.locked || !c || !choices.includes(c)) return;
     const t = game.task;
+    const first = game.tries === 0;
+    game.tries++;
+    if (first) recordAnswer(t, c.val, performance.now() - t.shownAt);
     if (c.val !== t.answer) {
-      recordAnswer(t, c.val, performance.now() - t.shownAt);
       game.roundErr++;
-      sfx.splash(); noise(0.5, { freq: 700, gain: 0.08, sweep: -500 });
-      el.classList.add('wrong');
-      st.removeLabel(c.lab);
-      choices = choices.filter((x) => x !== c);
-      ripple(c.pad.position, 2);
-      burst(st, c.pad.position.clone().setY(0.1), { n: 50, colors: [0xffffff, 0xcdeffb], speed: 2.2, life: 0.8, size: 0.08, gravity: -6 });
-      st.tween(700, (u) => { c.pad.position.y = 0.015 - u * 0.4; c.pad.rotation.z = u * 0.5; }).then(() => scene.remove(c.pad));
+      sfx.splash(); noise(0.5, { freq: 700, gain: 0.07, sweep: -500 });
+      c.label.material.color.set(0xff8a8a);
+      splash(c.pad.position, 50); ripple(c.pad.position, 2, 0.6);
+      dropChoice(c);
+      // Frosch schüttelt den Kopf
+      const y0 = frog.rotation.y;
+      st.tween(420, (u) => { frog.rotation.y = y0 + Math.sin(u * Math.PI * 4) * 0.18 * (1 - u); });
+      if (choices.length === 1) choices[0].hint = true;
       return;
     }
+    if (first) game.firstOk++;
     game.locked = true;
-    choices.forEach((x) => { st.removeLabel(x.lab); });
-    sfx.jump();
-    host.classList.add('jumping');
-    const p0 = camera.position.clone();
-    const p1 = new T.Vector3(c.pad.position.x, EYE, c.pad.position.z + 0.0);
-    const h0 = heading, h1 = c.a;
-    await st.tween(720, (u, e) => {
-      const p = p0.clone().lerp(p1, e);
-      p.y = EYE + Math.sin(u * Math.PI) * 0.95;
-      const hd = h0 + (h1 - h0) * e;
-      setCam(p, hd, -0.12 - Math.sin(u * Math.PI) * 0.25 + (u > 0.6 ? (u - 0.6) * 0.4 : 0));
-      camera.fov = 62 + Math.sin(u * Math.PI) * 8; camera.updateProjectionMatrix();
-    }, (x) => x);
-    host.classList.remove('jumping');
-    heading = h1;
-    c.pad.userData.dip = 0.08;
-    st.shake(0.04);
-    burst(st, c.pad.position.clone().setY(0.1), { n: 40, colors: [0xffffff, 0xd8f3ff], speed: 1.8, life: 0.7, size: 0.07, gravity: -5 });
+    choices.filter((x) => x !== c).forEach((x) => dropChoice(x, false));
+    c.label.material.color.set(0xd9ffb8);
+    const target = new T.Vector3(c.pad.position.x, 0.02, c.pad.position.z);
+    await jumpTo(target);
+    if (st.disposed) return;
+    c.pad.userData.dip = 0.06;
+    splash(target, 30); ripple(target, 2, 0.7);
     sfx.splash();
-    // alte Seerosen versinken langsam
-    const old = [home, ...choices.filter((x) => x !== c).map((x) => x.pad)];
-    old.forEach((p) => st.tween(900, (u) => { p.position.y = 0.015 - u * 0.25; }).then(() => scene.remove(p)));
+    // die alte Seerose (oder der Stein) versinkt langsam, die Zahl der neuen verschwindet
+    const old = home;
+    if (old) { old.userData.bob = false; const y0 = old.position.y; st.tween(1200, (u) => { old.position.y = y0 - u * 0.3; }).then(() => scene.remove(old)); }
     home = c.pad;
-    game.k += game.dir;
-    game.done = (game.done || 0) + 1;
+    choices = choices.filter((x) => x !== c);
+    st.tween(300, (u) => { c.label.material.opacity = 1 - u; c.label.position.y += 0.01; }).then(() => { scene.remove(c.label); c.label.material.map.dispose(); c.label.material.dispose(); });
+    game.k++;
     step();
   }
-  function finish() {
-    game.reihenDone++;
+  async function finish() {
+    game.locked = true;
+    $('#ftask').innerHTML = '<span class="pb-goal">Ans Ufer!</span>';
+    // letzter Sprung ans andere Ufer
+    const d = 1.1, a = -Math.PI / 2;
+    const target = new T.Vector3(clamp(frog.position.x, -1.5, 1.5), 0, P.cz + (P.rz + d) * Math.sin(a));
+    target.y = bankY(d, bankNoise(a)) + 0.02;
+    await sleep(250);
+    await jumpTo(target, { height: 1.1, ms: 720 });
+    if (st.disposed) return;
+    if (home) { const old = home; old.userData.bob = false; st.tween(1200, (u) => { old.position.y = -u * 0.3; }).then(() => scene.remove(old)); home = null; }
     sfx.win();
     tone([196, 147], 0.18, 'square', 0.06); // Quaken
-    const st3 = game.roundErr === 0 ? 3 : game.roundErr <= 2 ? 2 : 1;
-    if (st3 === 3) confetti();
-    burst(st, camera.position.clone().add(new T.Vector3(0, 0.5, -2)), { n: 120, colors: [0xfff6b0, 0xffc233, 0x9be36f], speed: 2.5, life: 1.8, size: 0.1, gravity: 0.5 });
-    const { rec } = saveBest('frog', game.reihenDone);
-    const b = game.frogReihe;
+    const stars3 = game.roundErr === 0 ? 3 : game.roundErr <= 2 ? 2 : game.roundErr <= 5 ? 1 : 0;
+    if (stars3 >= 2) confetti();
+    burst(st, frog.position.clone().add(new T.Vector3(0, 0.8, -0.4)), { n: 120, colors: [0xfff6b0, 0xffc233, 0x9be36f, 0x38bdf8], speed: 2.6, life: 1.6, size: 0.1, gravity: 0.4 });
+    // Freudensprünge
+    for (let i = 0; i < 2 && !st.disposed; i++) await jumpTo(frog.position.clone(), { height: 0.45, ms: 380 });
+    if (st.disposed) return;
+    const { rec, old } = saveBest('frog', game.firstOk);
     const card = document.createElement('div');
-    card.className = 'frog-done g3-card';
-    card.innerHTML = `${stars(st3)}<h2>${b}er-Reihe ${game.dir === 1 ? 'vorwärts' : 'rückwärts'} geschafft!</h2>
-      <p>${game.roundErr ? `${game.roundErr} ${game.roundErr === 1 ? 'Fehlsprung' : 'Fehlsprünge'}` : 'Ohne einen Fehlsprung!'}${rec ? ' · Neuer Rekord!' : ''}</p>
-      <div class="row center">${game.dir === 1 ? `<button class="btn primary" data-action="frog-back">${icon('left')} Jetzt rückwärts</button>` : ''}
-      <button class="btn ${game.dir === 1 ? 'secondary' : 'primary'}" data-action="game-again">Andere Reihe</button></div>`;
+    card.className = 'g3-card frog-done';
+    card.innerHTML = `${stars(stars3)}<h2>Am anderen Ufer angekommen!</h2>
+      <p>${game.firstOk} von ${FROG_JUMPS} Sprüngen auf Anhieb${game.roundErr ? ` · ${game.roundErr} ${game.roundErr === 1 ? 'Fehlsprung' : 'Fehlsprünge'}` : ' – ohne einen Fehlsprung!'}</p>
+      ${rec && old != null ? '<p class="pill good">Neuer Rekord!</p>' : ''}
+      <div class="row center"><button class="btn primary" data-action="game-again">${icon('flip')} Nochmals</button><button class="btn ghost" data-action="home">Anderes Spiel</button></div>`;
     host.appendChild(card);
   }
-  game.pick = jump;
-  game.frogBack = () => { host.querySelector('.g3-card')?.remove(); game.dir = -1; game.k = 11; game.roundErr = 0; step(); };
-  setGameKeys((e) => { if (/^[1-3]$/.test(e.key) && choices[+e.key - 1]) jump(choices[+e.key - 1].el); });
-  step();
+  // Antippen: die Seerose (oder Zahl), die dem Finger am nächsten ist
+  stageTap(st, (x, y) => {
+    if (game.locked) return;
+    let best = null, bestD = Infinity;
+    for (const c of choices) {
+      const q1 = st.project(c.pad.position), q2 = st.project(c.label.position.clone().add(new T.Vector3(0, NUM_H * 0.35, 0)));
+      const rad = Math.max(46, screenRadius(st, c.pad.position, 0.85));
+      const d = Math.min(Math.hypot(q1.x - x, q1.y - y), Math.hypot(q2.x - x, q2.y - y)) / rad;
+      if (d < 1 && d < bestD) { best = c; bestD = d; }
+    }
+    if (best) pick(best);
+  });
+  game.pickVal = (v) => pick(choices.find((c) => c.val === Number(v)));
+  setGameKeys((e) => {
+    if (!/^[1-3]$/.test(e.key)) return;
+    const s = [...choices].sort((a, b) => a.pad.position.x - b.pad.position.x);
+    pick(s[+e.key - 1]);
+  });
+  gLater(fishJump, 1800);
+  gLater(step, 350);
 }

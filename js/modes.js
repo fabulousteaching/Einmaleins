@@ -1,4 +1,4 @@
-/* Einmaleins – Übungen: Trainer, Auswählen, Geteilt & Lücken, Reihen-Treppe, Blitztest */
+/* Einmaleins – Übungen: Trainer, Auswählen, Reihen-Treppe, Blitztest */
 'use strict';
 
 const EX_ART = {
@@ -11,7 +11,7 @@ const EX_ART = {
 const EXERCISES = [
   { id: 'trainer', name: 'Trainer', desc: 'Ergebnis eintippen. Was Mühe macht, kommt wieder.', color: 'teal', art: EX_ART.trainer },
   { id: 'choice', name: 'Auswählen', desc: 'Aus vier Antworten die richtige antippen.', color: 'coral', art: EX_ART.choice },
-  { id: 'reihen', name: 'Reihen-Treppe', desc: 'Eine Reihe hinauf, dann gemischt.', color: 'purple', art: EX_ART.reihen },
+  { id: 'reihen', name: 'Reihen-Treppe', desc: 'Eine Reihe hinauf und wieder hinunter.', color: 'purple', art: EX_ART.reihen },
   { id: 'blitz', name: 'Blitztest', desc: '20 Rechnungen auf Zeit. Schaffst du 3 Sterne?', color: 'sun', art: EX_ART.blitz, bestText: (ms) => `${(ms / 1000).toFixed(1).replace('.', ',')} s` },
 ];
 const EXERCISE_BY_ID = Object.fromEntries(EXERCISES.map((x) => [x.id, x]));
@@ -294,15 +294,14 @@ function renderReihenStart() {
     <div class="panel reihen-start">
       <h2>Welche Reihe?</h2>
       <div class="reihen">${ps.reihen.map((r) => `<button type="button" class="reihe r${r}" data-action="reihe-pick" data-r="${r}" aria-pressed="${ex.reihe === r}"><b>${r}</b><small>er</small></button>`).join('')}</div>
-      <p class="hint">Vorgeschlagen ist die Reihe, die dir am meisten Mühe macht. Zuerst gehst du die Treppe hinauf (1 ${SIGN()} ${ex.reihe}, 2 ${SIGN()} ${ex.reihe} …), dann kommen dieselben Rechnungen gemischt.</p>
+      <p class="hint">Vorgeschlagen ist die Reihe, die dir am meisten Mühe macht. Zuerst gehst du die Treppe hinauf (1 ${SIGN()} ${ex.reihe}, 2 ${SIGN()} ${ex.reihe} …), dann wieder hinunter (10 ${SIGN()} ${ex.reihe}, 9 ${SIGN()} ${ex.reihe} …). Für jede Stufe hast du 3 Versuche.</p>
       <button class="btn primary big" data-action="reihe-go">${icon('play')} Los</button>
     </div>
   </section>`;
 }
 function startReihe() {
   stopExercise();
-  Object.assign(ex, { mode: 'reihen', step: 0, stage: 'up', right: 0, wrong: 0, mistakes: [], i: 0, total: 20, t0: performance.now() });
-  ex.order = shuffle(REIHEN_KLEIN);
+  Object.assign(ex, { mode: 'reihen', step: 0, stage: 'up', right: 0, wrong: 0, mistakes: [], i: 0, total: 20, tries: 0, t0: performance.now() });
   const b = ex.reihe;
   $('#view').innerHTML = `<section class="mode ex-reihen c-purple">
     <div class="mode-bar"><h1 class="mode-title">${b}er-Reihe</h1>
@@ -317,46 +316,90 @@ function startReihe() {
   moveClimber(0, false);
   nextReiheTask();
 }
+/** Hinauf: 1·b bis 10·b (das Eichhörnchen springt auf die gelöste Stufe).
+ *  Hinunter: 10·b bis 1·b (es steht auf der Stufe und springt nach dem Lösen eine Stufe tiefer). */
 function nextReiheTask() {
   const b = ex.reihe;
   if (ex.i >= 20) { finishExercise(); return; }
-  const a = ex.stage === 'up' ? ex.i + 1 : ex.order[ex.i - 10];
+  const a = ex.stage === 'up' ? ex.i + 1 : 20 - ex.i;
   ex.task = { ...makeTask(a, b, 'mul'), shownAt: performance.now() };
   ex.phase = 'ask';
+  ex.tries = 0;
   updateExProgress();
-  $('#rstage').textContent = ex.stage === 'up' ? 'Treppe hinauf' : 'Jetzt gemischt';
+  $('#rstage').textContent = ex.stage === 'up' ? 'Treppe hinauf' : 'Treppe hinunter';
   $$('.stair').forEach((s) => s.classList.toggle('cur', +s.dataset.a === a));
   renderInputTask();
   $('.under-pad')?.remove();
+  $('#fb').innerHTML = triesHTML(0);
+}
+const REIHE_TRIES = 3;
+function triesHTML(used) {
+  return `<span class="tries" aria-label="${REIHE_TRIES - used} Versuche">${Array.from({ length: REIHE_TRIES }, (_, i) => `<i class="${i < used ? 'used' : ''}"></i>`).join('')}</span>`;
+}
+/** Kurz rot aufleuchten und wieder in die normale Farbe verblassen */
+function flashBad(el) {
+  if (!el) return;
+  el.classList.toggle('flash-bad', false); void el.offsetWidth; el.classList.add('flash-bad');
 }
 function reiheAnswer(v) {
   const t = ex.task;
   const ok = Number(v) === t.answer;
-  // Die Treppe hinauf ist leichter (immer + die Reihe): nur Fehler zählen fürs Gedächtnis. Gemischt zählt alles.
   const ms = performance.now() - t.shownAt;
+  const first = ex.tries === 0;
   const before = statOf(t.key) ? { ...statOf(t.key) } : null;
-  if (ex.stage === 'mix' || !ok) recordAnswer(t, v, ms);
-  if (ok) earnPoints(pointsFor(before, ms, true, ex.stage === 'mix' ? 1 : 0.5), $('#tcard'));
+  // Die Treppe ist leichter als freies Rechnen (immer ± die Reihe): fürs Gedächtnis zählen nur Fehler
+  // beim ersten Versuch; Punkte gibt es nur, wenn es auf Anhieb stimmt.
+  if (first && !ok) recordAnswer(t, v, ms);
   const st = $(`.stair[data-a="${t.a}"]`);
+  const card = $('#tcard');
   if (ok) {
-    ex.right++; sfx.jump();
-    st?.classList.add('done'); if (st) st.querySelector('.st-v').textContent = t.answer;
-    $('#tcard')?.classList.add('good');
-    moveClimber(t.a);
-  } else {
-    ex.wrong++; sfx.bad();
-    ex.mistakes.push({ t, given: v });
-    $('#tcard')?.classList.add('bad');
-    $('#fb').innerHTML = `<span class="fb-bad">${esc(taskText(t, true))}</span>`;
-    if (st) { st.classList.add('done', 'was-bad'); st.querySelector('.st-v').textContent = t.answer; }
+    if (first) { ex.right++; earnPoints(pointsFor(before, ms, true, 0.5), card); }
+    sfx.jump();
+    pad.active = false;
+    card?.classList.add('good');
+    $('#fb').innerHTML = `<span class="fb-good">${icon('check')} ${first ? pick(['Richtig!', 'Genau!', 'Super!', 'Hopp!']) : 'Jetzt stimmt’s!'}</span>`;
+    reiheStep(t, st, false);
+    return;
   }
+  ex.tries++;
+  sfx.bad();
+  if (first) { ex.wrong++; ex.mistakes.push({ t, given: v }); }
+  updateExProgress();
+  flashBad(card); flashBad(st);
   pad.active = false;
+  if (ex.tries < REIHE_TRIES) {
+    // Nochmals versuchen: Eingabe leeren
+    const left = REIHE_TRIES - ex.tries;
+    $('#fb').innerHTML = `${triesHTML(ex.tries)}<span class="fb-retry">Nochmals! ${left === 1 ? 'Noch 1 Versuch.' : `Noch ${left} Versuche.`}</span>`;
+    exLater(() => {
+      pad.value = '';
+      const s = $('#slot .slot-val'); if (s) s.textContent = '';
+      $('#slot')?.classList.toggle('filled', false);
+      ex.phase = 'ask'; pad.active = true;
+    }, 420);
+    return;
+  }
+  // Dreimal falsch: Lösung zeigen und trotzdem weiter zur nächsten Stufe
+  const s = $('#slot .slot-val'); if (s) s.textContent = t.answer;
+  $('#slot')?.classList.add('filled', 'solved');
+  $('#fb').innerHTML = `<span class="fb-bad">${esc(taskText(t, true))}</span>`;
+  exLater(() => reiheStep(t, st, true), 1600);
+}
+/** Stufe abschliessen und das Eichhörnchen springen lassen */
+function reiheStep(t, st, bad) {
+  if (st) { st.classList.add('done'); st.classList.toggle('was-bad', bad); st.querySelector('.st-v').textContent = t.answer; }
+  moveClimber(ex.stage === 'up' ? t.a : t.a - 1);
   updateExProgress();
   exLater(() => {
     ex.i++;
-    if (ex.i === 10) { ex.stage = 'mix'; $$('.stair').forEach((s) => { s.classList.remove('done', 'was-bad'); s.querySelector('.st-v').textContent = ''; }); moveClimber(0); }
+    if (ex.i === 10) {
+      // oben angekommen: umdrehen und wieder hinunter
+      ex.stage = 'down';
+      $$('.stair').forEach((x) => { x.classList.toggle('done', false); x.classList.toggle('was-bad', false); x.querySelector('.st-v').textContent = ''; });
+      $('#climber')?.classList.add('flip');
+    }
     nextReiheTask();
-  }, ok ? 550 : 1500);
+  }, 700);
 }
 /* Eichhörnchen: schaut nach rechts, springt mit Beinbewegung von Stufe zu Stufe */
 const SQUIRREL_SVG = `<svg viewBox="0 0 120 100" aria-hidden="true"><defs><linearGradient id="sqf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8873F"/><stop offset="1" stop-color="#B9581F"/></linearGradient></defs>
@@ -386,7 +429,8 @@ function moveClimber(a, jump = true) {
   if (!jump || reduceMotion()) return;
   const dx = to.left - from.left;
   c.classList.toggle('flip', dx < -4);
-  const apex = Math.max(from.bottom, to.bottom) + 46 + Math.min(60, Math.abs(dx) * 0.15);
+  const room = ($("#stairs")?.clientHeight || 999) - c.offsetHeight - 6;
+  const apex = Math.max(Math.max(from.bottom, to.bottom) + 18, Math.min(room, Math.max(from.bottom, to.bottom) + 46 + Math.min(60, Math.abs(dx) * 0.15)));
   c.getAnimations().forEach((x) => x.cancel());
   c.classList.remove('landing'); c.classList.add('jumping');
   c.animate([

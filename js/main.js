@@ -48,6 +48,7 @@ const actions = {
     saveDB(); refreshReihenPanel();
   },
   'set-op': (el) => { db.settings.op = el.dataset.op; saveDB(); refreshReihenPanel(); },
+  'game-op': (el) => { db.settings.op = el.dataset.op; saveDB(); renderGame(); },
   'coins-info': () => openCoinsInfo(),
   /* Übungen */
   'open-ex': (el) => { closeModal(true); openExercise(el.dataset.id); },
@@ -71,8 +72,6 @@ const actions = {
   'elf-level': (el) => { db.settings.elfLevel = +el.dataset.v; saveDB(); renderGame(); },
   'meteor-hit': (el) => meteorHit(el),
   'frog-jump': (el) => frogJump(el),
-  'frog-reihe': (el) => { game.frogReihe = +el.dataset.r; renderGame(); },
-  'frog-back': () => { if (game.frogBack) game.frogBack(); else { game.dir = -1; frogRound(); } },
   'game-start': () => startGameNow(),
   'g3-pick': (el) => game.pick?.(el),
   'mem-flip': (el) => memFlip(el),

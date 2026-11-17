@@ -3,12 +3,12 @@
 'use strict';
 
 const GAMES = [
-  { id: 'elfmeter', name: 'Elfmeter', desc: 'Du bist der Ball: ab ins richtige Tor-Eck!', color: 'green', art: '<span class="emo">⚽</span>', bestText: (n) => `${n} Tore`, three: true,
-    howto: 'Im Tor stehen Ergebnisse. Tippe auf das richtige – der Ball fliegt los, und du fliegst mit. Bei einer falschen Antwort hält der Torhüter. 10 Elfmeter.' },
+  { id: 'elfmeter', name: 'Elfmeter', desc: 'Schiess den Ball ins richtige Tor-Eck!', color: 'green', art: '<span class="emo">⚽</span>', bestText: (n) => `${n} Tore`, three: true,
+    howto: 'Im Tor stehen Ergebnisse. Tippe auf das richtige – der Ball fliegt ins Netz. Bei einer falschen Antwort geht der Schuss daneben. 10 Elfmeter.' },
   { id: 'meteor', name: 'Meteoriten', desc: 'Im Cockpit: Schiess den richtigen Meteoriten ab.', color: 'night', art: '<span class="emo">☄️</span>', bestText: (n) => `${n} Treffer`, three: true,
     howto: 'Du sitzt im Cockpit deiner Rakete. Meteoriten mit Zahlen rasen auf dich zu. Tippe den mit dem richtigen Ergebnis an, bevor er dich trifft. 3 Schutzschilde – es wird immer schneller.' },
-  { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Mit Froschaugen von Seerose zu Seerose.', color: 'lime', art: '<span class="emo">🐸</span>', bestText: (n) => `${n} Reihen`, three: true,
-    howto: 'Du bist der Frosch. Tippe auf die Seerose mit der nächsten Zahl der Reihe – und spring! Falsche Seerosen versinken.' },
+  { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf über den Teich bis ans andere Ufer.', color: 'lime', art: '<span class="emo">🐸</span>', bestText: (n) => `${n}/10 auf Anhieb`, three: true,
+    howto: 'Der Frosch will über den Teich. Vor ihm liegen Seerosen mit Zahlen: Tippe auf die mit dem richtigen Ergebnis – und hopp! Falsche Seerosen versinken. 10 Sprünge bis ans andere Ufer.' },
   { id: 'memory', name: 'Memory', desc: 'Finde zu jeder Rechnung das Ergebnis.', color: 'pink', art: '<span class="emo">🃏</span>', bestText: (ms) => `${Math.round(ms / 1000)} s`,
     howto: 'Tippe eine Rechnung und dann ihr Ergebnis an. Offen: alle Karten sichtbar. Verdeckt: wie das klassische Memory.' },
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? 60 Sekunden Blitzrunde.', color: 'sun', art: '<span class="emo">✅</span>', bestText: (n) => `${n} Punkte`,
@@ -26,7 +26,7 @@ function stopGame() {
   clearInterval(game.tick); game.tick = null;
   if (game.keyHandler) { document.removeEventListener('keydown', game.keyHandler); game.keyHandler = null; }
   if (game.stage3d) { game.stage3d.dispose(); game.stage3d = null; }
-  game.pick = null; game.frogBack = null; game.over = true;
+  game.pick = null; game.pickVal = null; game.frogBack = null; game.over = true;
 }
 function openGame(id) { if (GAME_BY_ID[id]) go('game', { game: id }); }
 function gamePicker(kinds = null) {
@@ -77,12 +77,15 @@ function gateOptionsHTML(id) {
   if (id === 'elfmeter') return seg('elf-level', db.settings.elfLevel === 2 ? 2 : 1, [[1, 'Training (3 Ecken)'], [2, 'Profi (4 Ecken, mit Zeit)']]);
   if (id === 'memory') return seg('mem-mode', db.settings.memOpen !== false, [[true, 'Offen'], [false, 'Verdeckt']]);
   if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
-  if (id === 'frog') {
-    const ps = practiceSettings();
-    if (!ps.reihen.includes(game.frogReihe)) game.frogReihe = weakestReihe();
-    return `<div class="gate-reihen">${ps.reihen.map((r) => `<button class="reihe r${((r - 1) % 10) + 1} ${r > 10 ? 'gross' : ''}" data-action="frog-reihe" data-r="${r}" aria-pressed="${r === game.frogReihe}"><b>${r}</b><small>er</small></button>`).join('')}</div>`;
-  }
   return '';
+}
+/** Was gerechnet wird: Reihen in Kurzform */
+function gateReihenText() {
+  const ps = practiceSettings();
+  const all = reihenFor(ps.big);
+  const r = ps.reihen;
+  const list = r.length === all.length ? `alle Reihen (1–${ps.big ? 20 : 10})` : r.length === 1 ? `${r[0]}er-Reihe` : `Reihen ${r.join(', ')}`;
+  return `${ps.big ? 'Grosses' : 'Kleines'} Einmaleins · ${list}`;
 }
 function renderGame() {
   stopGame();
@@ -98,6 +101,8 @@ function renderGame() {
       <span class="gate-art" aria-hidden="true">${g.art}</span>
       <h1>${esc(g.name)}</h1>
       <p class="gate-how">${esc(g.howto)}</p>
+      ${g.anyOp === false ? '' : opPickHTML('game-op', 'gate-ops')}
+      <p class="gate-reihen-text muted small">${esc(gateReihenText())}</p>
       ${opts ? `<div class="gate-opts">${opts}</div>` : ''}
       ${can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
         <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${c.c} ${c.c === 1 ? 'Münze' : 'Münzen'}.`}</p>`
@@ -123,7 +128,6 @@ async function startGameNow() {
 /* =========================================================
    ⚽ Elfmeter
    ========================================================= */
-const KEEPER_SVG = `<svg viewBox="0 0 80 96" aria-hidden="true"><g class="kp-arms"><path d="M14 40 2 22" stroke="#FFB020" stroke-width="9" stroke-linecap="round"/><path d="M66 40l12-18" stroke="#FFB020" stroke-width="9" stroke-linecap="round"/><circle cx="3" cy="19" r="7" fill="#22C55E"/><circle cx="77" cy="19" r="7" fill="#22C55E"/></g><rect x="20" y="34" width="40" height="34" rx="12" fill="#FFB020"/><path d="M33 40h14v4H33z" fill="#fff" opacity=".7"/><text x="40" y="61" font-size="14" font-weight="800" text-anchor="middle" fill="#7C4A00" font-family="system-ui">1</text><rect x="23" y="64" width="34" height="14" rx="5" fill="#1F2937"/><path d="M28 78v14M52 78v14" stroke="#F2C9A0" stroke-width="7" stroke-linecap="round"/><circle cx="40" cy="22" r="13" fill="#F2C9A0"/><path d="M27 20c0-9 6-14 13-14s13 5 13 14c-4-4-8-5-13-5s-9 1-13 5z" fill="#5B3A1E"/><circle cx="35" cy="23" r="1.8" fill="#1F2937"/><circle cx="45" cy="23" r="1.8" fill="#1F2937"/><path d="M36 28q4 3 8 0" stroke="#1F2937" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
 const BALL_SVG = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#fff" stroke="#1F2937" stroke-width="2"/><path d="M20 12l7 5-2.7 8h-8.6L13 17z" fill="#1F2937"/><path d="M20 12V3.5M27 17l8-3M24.3 25l5 7M15.7 25l-5 7M13 17l-8-3" stroke="#1F2937" stroke-width="2"/></svg>`;
 function startElfmeter() {
   const lvl = db.settings.elfLevel === 2 ? 2 : 1;
@@ -132,7 +136,7 @@ function startElfmeter() {
     <div class="scoreboard"><div class="shots" id="shots">${'<i></i>'.repeat(10)}</div><div class="score"><span>Tore</span><b id="goals">0</b></div></div>
     <div class="pitch" id="pitch">
       <div class="task-board" id="eboard"></div>
-      <div class="goal ${lvl === 2 ? 'four' : ''}" id="goal"><div class="net"></div><div class="targets" id="targets"></div><div class="keeper" id="keeper">${KEEPER_SVG}</div></div>
+      <div class="goal ${lvl === 2 ? 'four' : ''}" id="goal"><div class="net"></div><div class="targets" id="targets"></div></div>
       <div class="spot"></div>
       <div class="ball" id="ball">${BALL_SVG}</div>
       ${lvl === 2 ? '<div class="shot-clock" id="sclock"><i></i></div>' : ''}
@@ -151,10 +155,9 @@ function elfNext() {
   const opts = choicesFor(t, n);
   $('#eboard').innerHTML = `<span class="task small">${taskHTML(t)}</span>`;
   $('#targets').innerHTML = opts.map((o, i) => `<button class="target z${i}" data-action="elf-shoot" data-v="${o}" data-z="${i}">${o}</button>`).join('');
-  const ball = $('#ball'), keeper = $('#keeper');
+  const ball = $('#ball');
   ball.getAnimations().forEach((a) => a.cancel());
-  keeper.getAnimations().forEach((a) => a.cancel());
-  ball.className = 'ball'; keeper.className = 'keeper';
+  ball.className = 'ball';
   $('#goal').classList.remove('shake');
   $('#pmsg').className = 'pitch-msg';
   if (game.level === 2) {
@@ -174,23 +177,19 @@ function elfShoot(btn) {
   const ok = recordAnswer(t, v, performance.now() - t.shownAt);
   const targets = $$('.target');
   const right = targets.find((b) => Number(b.dataset.v) === t.answer);
-  const pitch = $('#pitch').getBoundingClientRect();
-  const ball = $('#ball'), keeper = $('#keeper');
+  const ball = $('#ball'), goal = $('#goal');
   const aim = btn || targets[rand(targets.length)];
-  const br = ball.getBoundingClientRect(), ar = aim.getBoundingClientRect();
-  const dx = ar.left + ar.width / 2 - (br.left + br.width / 2), dy = ar.top + ar.height / 2 - (br.top + br.height / 2);
+  const br = ball.getBoundingClientRect(), ar = aim.getBoundingClientRect(), gr = goal.getBoundingClientRect();
+  let dx = ar.left + ar.width / 2 - (br.left + br.width / 2), dy = ar.top + ar.height / 2 - (br.top + br.height / 2);
+  // Falsch: Der Schuss geht über die Latte bzw. neben den Pfosten
+  if (!ok) {
+    const side = Math.sign(dx) || (Math.random() < 0.5 ? -1 : 1);
+    dy = gr.top - (br.top + br.height / 2) - 34;
+    dx += side * Math.min(60, gr.width * 0.08);
+  }
   sfx.kick();
   const anim = !reduceMotion();
-  ball.animate([{ transform: 'translate(-50%, 0) scale(1) rotate(0)' }, { transform: `translate(calc(-50% + ${dx}px), ${dy}px) scale(.5) rotate(540deg)` }], { duration: anim ? 620 : 1, easing: 'cubic-bezier(.2,.75,.35,1)', fill: 'forwards' });
-  // Torhüter: hält bei falscher Antwort, springt sonst in die falsche Ecke
-  const kr = keeper.getBoundingClientRect();
-  const others = targets.filter((b) => b !== aim);
-  const diveTo = ok ? pick(others) : aim;
-  const dr = diveTo.getBoundingClientRect();
-  const kx = dr.left + dr.width / 2 - (kr.left + kr.width / 2);
-  const ky = Math.min(0, dr.top + dr.height / 2 - (kr.top + kr.height * 0.35));
-  const rot = Math.abs(kx) < 10 ? 0 : kx < 0 ? -62 : 62;
-  keeper.animate([{ transform: 'translate(-50%, 0) rotate(0)' }, { transform: `translate(calc(-50% + ${kx}px), ${ky}px) rotate(${rot}deg)` }], { duration: anim ? 480 : 1, delay: anim ? 90 : 0, easing: 'cubic-bezier(.3,.9,.4,1)', fill: 'forwards' });
+  ball.animate([{ transform: 'translate(-50%, 0) scale(1) rotate(0)' }, { transform: `translate(calc(-50% + ${dx}px), ${dy}px) scale(${ok ? 0.5 : 0.42}) rotate(540deg)` }], { duration: anim ? 620 : 1, easing: 'cubic-bezier(.2,.75,.35,1)', fill: 'forwards' });
   game.shots++;
   game.hist.push(ok);
   gLater(() => {
@@ -203,8 +202,8 @@ function elfShoot(btn) {
       msg.className = 'pitch-msg show good';
     } else {
       sfx.bad();
-      ball.classList.add('caught');
-      msg.innerHTML = `${btn ? 'Gehalten!' : 'Zu spät!'}<small>${esc(taskText(t, true))}</small>`;
+      ball.classList.add('missed');
+      msg.innerHTML = `${btn ? 'Daneben!' : 'Zu spät!'}<small>${esc(taskText(t, true))}</small>`;
       msg.className = 'pitch-msg show bad';
       right?.classList.add('right');
     }
@@ -213,7 +212,6 @@ function elfShoot(btn) {
     $$('#shots i').forEach((el, i) => { el.className = i < game.hist.length ? (game.hist[i] ? 'hit' : 'miss') : ''; });
     gLater(elfNext, ok ? 1300 : 2300);
   }, anim ? 600 : 50);
-  void pitch;
 }
 function elfEnd() {
   const st = game.goals >= 9 ? 3 : game.goals >= 7 ? 2 : game.goals >= 5 ? 1 : 0;
@@ -361,86 +359,87 @@ function meteorEnd() {
 }
 
 /* =========================================================
-   🐸 Frosch-Hüpfen
+   🐸 Frosch-Hüpfen (2D-Version, wenn kein WebGL da ist): 10 Sprünge über den Teich
    ========================================================= */
-function startFrog() {
-  const ps = practiceSettings();
-  const r = ps.reihen.includes(game.frogReihe) ? game.frogReihe : weakestReihe();
-  Object.assign(game, { frogReihe: r, k: 0, dir: 1, done: 0, errs: 0, locked: false, reihenDone: 0, roundErr: 0 });
-  $('#view').innerHTML = gameShell('frog', `
-    <div class="frog-top"><div class="chain" id="chain"></div></div>
-    <div class="pond" id="pond">
-      <div class="ripples"></div>
-      <div class="pads" id="pads"></div>
-      <div class="home-pad"><span class="pad-num" id="curnum">0</span><span class="frog" id="frog">🐸</span></div>
-    </div>
-    <p class="mode-hint">Hüpf auf die Seerose mit der nächsten Zahl der Reihe.</p>`,
-  '');
-  frogRound();
+const FROG_JUMPS = 10;
+function frogWayHTML() {
+  return `<div class="frog-way" id="fway" aria-label="Weg über den Teich">${'<i></i>'.repeat(FROG_JUMPS)}<span class="fw-shore">${icon('trophy')}</span></div>`;
 }
-function frogRound() {
-  game.k = game.dir === 1 ? 0 : 11; game.roundErr = 0;
+function frogWayUpdate() {
+  $$('#fway i').forEach((el, i) => { el.className = i < game.k ? 'on' : i === game.k ? 'cur' : ''; });
+}
+function startFrog() {
+  Object.assign(game, { picker: gamePicker(), k: 0, firstOk: 0, roundErr: 0, tries: 0, locked: false });
+  $('#view').innerHTML = gameShell('frog', `
+    <div class="frog-top"><div class="frog-task" id="ftask"></div>${frogWayHTML()}</div>
+    <div class="pond" id="pond">
+      <div class="ripples" id="ripples"></div>
+      <div class="pads" id="pads"></div>
+      <div class="home-pad" id="homepad"><span class="frog" id="frog">🐸</span></div>
+    </div>
+    <p class="mode-hint">Tippe auf die Seerose mit dem richtigen Ergebnis – der Frosch hüpft hinüber.</p>`,
+  '');
   frogStep();
 }
 function frogStep() {
-  const b = game.frogReihe;
-  const nextK = game.k + game.dir;
-  const cur = game.k >= 1 && game.k <= 10 ? game.k * b : (game.dir === 1 ? 0 : '');
-  $('#curnum').textContent = cur;
-  const seen = [];
-  for (let k = game.dir === 1 ? 1 : 10; game.dir === 1 ? k <= game.k : k >= game.k; k += game.dir) if (k >= 1 && k <= 10) seen.push(k * b);
-  const done = nextK < 1 || nextK > 10;
-  $('#chain').innerHTML = `<span class="chain-title">${b}er-Reihe ${game.dir === 1 ? 'vorwärts' : 'rückwärts'}</span><span class="chain-nums">${seen.map((x) => `<b>${x}</b>`).join('')}${done ? '' : '<b class="q">?</b>'}</span>`;
-  if (done) { frogReiheDone(); return; }
-  const target = nextK * b;
-  const cand = new Set([target]);
-  const near = shuffle([target + 1, target - 1, target + 2, target - 2, target + b, target - b, target + 10, target - 10]).filter((x) => x > 0 && x !== target && x !== cur);
-  for (const x of near) { if (cand.size >= 3) break; cand.add(x); }
-  game.task = { ...makeTask(nextK, b, 'mul'), shownAt: performance.now() };
+  frogWayUpdate();
+  if (game.k >= FROG_JUMPS) { frogDone(); return; }
+  const t = game.picker.next();
+  game.task = { ...t, shownAt: performance.now() };
+  game.tries = 0;
   game.locked = false;
-  $('#pads').innerHTML = shuffle([...cand]).map((v, i) => `<button class="lily p${i}" data-action="frog-jump" data-v="${v}"><span>${v}</span></button>`).join('');
+  $('#ftask').innerHTML = `<span class="task small">${taskHTML(t)}</span>`;
+  $('#pads').innerHTML = choicesFor(t, 3).map((v, i) => `<button class="lily p${i} grow" style="--d:${i * 70}ms" data-action="frog-jump" data-v="${v}"><span>${v}</span></button>`).join('');
 }
 function frogJump(btn) {
-  if (game.locked) return;
+  if (game.locked || btn.disabled) return;
   const t = game.task;
   const v = Number(btn.dataset.v);
-  if (v === t.answer) {
-    game.locked = true;
-    sfx.jump();
-    const frog = $('#frog'), fr = frog.getBoundingClientRect(), br = btn.getBoundingClientRect();
-    const dx = br.left + br.width / 2 - (fr.left + fr.width / 2), dy = br.top + br.height / 2 - (fr.top + fr.height / 2);
-    btn.classList.add('right');
-    frog.animate([{ transform: 'translate(0,0) scale(1)' }, { transform: `translate(${dx / 2}px, ${dy / 2 - 60}px) scale(1.35)` }, { transform: `translate(${dx}px, ${dy}px) scale(1)` }], { duration: reduceMotion() ? 1 : 520, easing: 'ease-in-out', fill: 'forwards' });
-    gLater(() => {
-      frog.getAnimations().forEach((a) => a.cancel());
-      game.k += game.dir;
-      game.done++;
-      frogStep();
-    }, 600);
-  } else {
-    // Hüpfen in der Reihe ist leichter als freies Rechnen: nur Fehler zählen fürs Gedächtnis
-    recordAnswer(t, v, performance.now() - t.shownAt);
-    game.errs++; game.roundErr++;
+  const first = game.tries === 0;
+  game.tries++;
+  if (first) recordAnswer(t, v, performance.now() - t.shownAt);
+  if (v !== t.answer) {
+    game.roundErr++;
     sfx.splash();
     btn.classList.add('sink');
     btn.disabled = true;
+    return;
   }
+  if (first) game.firstOk++;
+  game.locked = true;
+  sfx.jump();
+  const frog = $('#frog'), home = $('#homepad');
+  const fr = frog.getBoundingClientRect(), br = btn.getBoundingClientRect(), hr = home.getBoundingClientRect();
+  const dx = br.left + br.width / 2 - (fr.left + fr.width / 2), dy = br.top + br.height / 2 - (fr.top + fr.height / 2);
+  btn.classList.add('right');
+  $$('#pads .lily').forEach((b) => { if (b !== btn) { b.disabled = true; b.classList.add('sink'); } });
+  const fast = reduceMotion();
+  frog.animate([{ transform: 'translate(0,0) scale(1)' }, { transform: `translate(${dx / 2}px, ${dy / 2 - 70}px) scale(1.35)` }, { transform: `translate(${dx}px, ${dy}px) scale(1)` }], { duration: fast ? 1 : 520, easing: 'ease-in-out', fill: 'forwards' });
+  // Nachrutschen: Die neue Seerose wird zum neuen Platz des Froschs, davor tauchen neue Seerosen auf
+  gLater(() => {
+    const mx = hr.left + hr.width / 2 - (br.left + br.width / 2), my = hr.top + hr.height / 2 - (br.top + br.height / 2);
+    const opt = { duration: fast ? 1 : 480, easing: 'ease-in-out', fill: 'forwards' };
+    btn.animate([{ transform: 'translate(0,0)' }, { transform: `translate(${mx}px, ${my}px)` }], opt);
+    frog.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: `translate(${dx + mx}px, ${dy + my}px)` }], opt);
+    home.animate([{ transform: 'translateX(-50%)', opacity: 1 }, { transform: `translate(-50%, ${hr.height}px)`, opacity: 0 }], opt);
+    $('#ripples')?.animate([{ backgroundPosition: '0 0' }, { backgroundPosition: `0 ${-my}px` }], opt);
+    gLater(() => {
+      [frog, home].forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+      game.k++;
+      frogStep();
+    }, fast ? 20 : 500);
+  }, fast ? 20 : 560);
 }
-function frogReiheDone() {
-  game.reihenDone++;
+function frogDone() {
+  const st = game.roundErr === 0 ? 3 : game.roundErr <= 2 ? 2 : game.roundErr <= 5 ? 1 : 0;
+  const { rec, old } = saveBest('frog', game.firstOk);
   sfx.win();
-  const st = game.roundErr === 0 ? 3 : game.roundErr <= 2 ? 2 : 1;
-  if (st === 3) confetti();
-  const { rec } = saveBest('frog', game.reihenDone);
-  const b = game.frogReihe;
-  const ps = practiceSettings();
-  const nextR = ps.reihen[(ps.reihen.indexOf(b) + 1) % ps.reihen.length];
-  $('#pads').innerHTML = `<div class="frog-done">${stars(st)}<h2>${b}er-Reihe ${game.dir === 1 ? 'vorwärts' : 'rückwärts'} geschafft!</h2>
-    <p>${game.roundErr ? `${game.roundErr} ${game.roundErr === 1 ? 'Fehlsprung' : 'Fehlsprünge'}` : 'Ohne einen Fehlsprung!'}${rec ? ' · Neuer Rekord!' : ''}</p>
-    <div class="row center">
-      ${game.dir === 1 ? `<button class="btn primary" data-action="frog-back">${icon('left')} Jetzt rückwärts</button>` : ''}
-      <button class="btn ${game.dir === 1 ? 'secondary' : 'primary'}" data-action="frog-reihe" data-r="${nextR}">${nextR}er-Reihe ${icon('right')}</button>
-    </div></div>`;
+  if (st >= 2) confetti();
+  $('#view .game').innerHTML = gameResultHTML({
+    st, title: 'Am anderen Ufer angekommen!',
+    line: `${game.firstOk} von ${FROG_JUMPS} Sprüngen auf Anhieb${game.roundErr ? ` · ${game.roundErr} ${game.roundErr === 1 ? 'Fehlsprung' : 'Fehlsprünge'}` : ' – ohne einen Fehlsprung!'}`,
+    extra: rec && old != null ? '<p class="pill good">Neuer Rekord!</p>' : old != null ? `<p class="muted">Rekord: ${old} von ${FROG_JUMPS} auf Anhieb</p>` : '',
+  });
 }
 
 /* =========================================================
@@ -448,22 +447,30 @@ function frogReiheDone() {
    ========================================================= */
 function startMemory() {
   const open = db.settings.memOpen !== false;
-  const picker = gamePicker({ mul: true });
-  const pairs = [], prods = new Set(), facts = new Set();
-  for (let i = 0; i < 80 && pairs.length < 6; i++) {
+  const picker = gamePicker();
+  const pairs = [], answers = new Set(), facts = new Set();
+  for (let i = 0; i < 120 && pairs.length < 6; i++) {
     const t = picker.next();
-    if (prods.has(t.p) || facts.has(t.fact)) continue;
-    prods.add(t.p); facts.add(t.fact); pairs.push(t);
+    if (answers.has(t.answer) || facts.has(t.fact)) continue;
+    answers.add(t.answer); facts.add(t.fact); pairs.push(t);
   }
   const cards = shuffle(pairs.flatMap((t, i) => [{ id: i, kind: 'task', t }, { id: i, kind: 'res', t }]));
   Object.assign(game, { open, pairs, cards, sel: null, found: 0, moves: 0, errs: 0, combo: 0, t0: performance.now(), locked: false });
   $('#view').innerHTML = gameShell('memory', `
     <div class="mem-bar"><span>${icon('clock')} <b id="memt">0</b> s</span><span>Paare <b id="memf">0</b>/${pairs.length}</span>${open ? '' : '<span>Züge <b id="memm">0</b></span>'}<span class="mem-combo" id="memcombo"></span></div>
-    <div class="mem-grid ${open ? 'open' : ''}" id="memgrid">${cards.map((c, i) => `<button class="mem-card ${c.kind} deal" style="--d:${i * 45}ms" data-action="mem-flip" data-i="${i}" aria-label="${open ? (c.kind === 'task' ? taskText({ ...c.t, op: 'mul' }) : c.t.p) : 'Karte'}"><span class="mc-in"><span class="mc-back" aria-hidden="true">${BRAND_SVG('mcb' + i)}</span><span class="mc-face">${c.kind === 'task' ? `${c.t.a}<em>${SIGN()}</em>${c.t.b}` : c.t.p}</span></span></button>`).join('')}</div>
+    <div class="mem-grid ${open ? 'open' : ''}" id="memgrid">${cards.map((c, i) => `<button class="mem-card ${c.kind} deal" style="--d:${i * 45}ms" data-action="mem-flip" data-i="${i}" aria-label="${open ? (c.kind === 'task' ? taskText(c.t) : c.t.answer) : 'Karte'}"><span class="mc-in"><span class="mc-back" aria-hidden="true">${BRAND_SVG('mcb' + i)}</span><span class="mc-face ${c.kind === 'task' && c.t.op.startsWith('gap') ? 'long' : ''}">${c.kind === 'task' ? memTaskFace(c.t) : c.t.answer}</span></span></button>`).join('')}</div>
     <p class="mode-hint">${open ? 'Tippe eine Rechnung und dann ihr Ergebnis an.' : 'Decke zwei Karten auf: Rechnung und Ergebnis gehören zusammen.'}</p>`,
   '');
   game.tick = setInterval(() => { const el = $('#memt'); if (el) el.textContent = Math.floor((performance.now() - game.t0) / 1000); }, 250);
   pairs.forEach((t) => { t.shownAt = performance.now(); });
+}
+/** Vorderseite einer Rechnungs-Karte: 7 · 8, 56 : 8 oder ▢ · 8 = 56 */
+function memTaskFace(t) {
+  const S = `<em>${SIGN()}</em>`, gap = '<i class="mc-gap">▢</i>';
+  if (t.op === 'div') return `${t.p}<em>:</em>${t.b}`;
+  if (t.op === 'gapA') return `${gap}${S}${t.b}<em>=</em>${t.p}`;
+  if (t.op === 'gapB') return `${t.a}${S}${gap}<em>=</em>${t.p}`;
+  return `${t.a}${S}${t.b}`;
 }
 function memFlip(btn) {
   if (game.locked) return;
@@ -480,8 +487,8 @@ function memFlip(btn) {
   if ($('#memm')) $('#memm').textContent = game.moves;
   const match = c.id === d.id && c.kind !== d.kind;
   if (game.open) {
-    const task = c.kind === 'task' ? c.t : d.t, val = c.kind === 'res' ? c.t.p : d.t.p;
-    recordAnswer({ ...task, op: 'mul', answer: task.p }, val, performance.now() - (game.lastFound || game.t0));
+    const task = c.kind === 'task' ? c.t : d.t, val = c.kind === 'res' ? c.t.answer : d.t.answer;
+    recordAnswer(task, val, performance.now() - (game.lastFound || game.t0));
   }
   if (match) {
     c.done = d.done = true;

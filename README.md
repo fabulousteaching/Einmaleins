@@ -32,7 +32,7 @@ In einer Klasse legt die Lehrperson fest, was zur Auswahl steht (siehe unten).
 | --- | --- |
 | **Trainer** | Ergebnis mit dem grossen Zahlenfeld (oder der Tastatur) eintippen. Bei einem Fehler erscheinen die Lösung, ein Punktefeld und ein Rechenweg (z. B. 7 · 8 = 5 · 8 + 2 · 8, beim grossen Einmaleins 13 · 7 = 10 · 7 + 3 · 7). Dann tippt das Kind das richtige Ergebnis ab. |
 | **Auswählen** | Aus vier Antworten die richtige antippen. |
-| **Reihen-Treppe** | Eine Reihe hinaufsteigen (1 · 7, 2 · 7 …), danach dieselben Rechnungen gemischt. Bei jeder richtigen Antwort springt das Eichhörnchen eine Stufe höher. Vorgeschlagen wird die Reihe, die am meisten Mühe macht. |
+| **Reihen-Treppe** | Eine Reihe hinaufsteigen (1 · 7, 2 · 7 … 10 · 7) und wieder hinunter (10 · 7, 9 · 7 … 1 · 7). Bei jeder richtigen Antwort springt das Eichhörnchen eine Stufe weiter. Pro Stufe gibt es 3 Versuche: Ein falscher Versuch lässt Rechnung und Stufe kurz rot aufleuchten; nach dem dritten erscheint die Lösung, und es geht trotzdem weiter. Vorgeschlagen wird die Reihe, die am meisten Mühe macht. |
 | **Blitztest** | 20 Rechnungen auf Zeit, mit Sternen und Bestzeit. |
 
 Wie viele Rechnungen eine Runde im Trainer und beim Auswählen hat, legt die Lehrperson fest (10, 15, 20 oder 30; ohne Klasse 20).
@@ -41,7 +41,7 @@ Wie viele Rechnungen eine Runde im Trainer und beim Auswählen hat, legt die Leh
 
 Die Spiele kosten **1 Münze**. Münzen verdient man nur in den Übungen:
 
-- Jede richtige Antwort bringt Punkte: 1 Punkt, **1,5 Punkte**, wenn die Rechnung noch Mühe macht oder wackelt, und etwas extra für eine schnelle Antwort (unter 3 Sekunden). Beim Auswählen und beim Hinaufsteigen der Reihen-Treppe gibt es etwas weniger, weil es leichter ist.
+- Jede richtige Antwort bringt Punkte: 1 Punkt, **1,5 Punkte**, wenn die Rechnung noch Mühe macht oder wackelt, und etwas extra für eine schnelle Antwort (unter 3 Sekunden). Beim Auswählen und auf der Reihen-Treppe gibt es etwas weniger, weil es leichter ist (auf der Treppe nur, wenn es auf Anhieb stimmt).
 - Eine gute Runde gibt einen Bonus (alles richtig: 4 Punkte, mindestens 80 % richtig: 2 Punkte).
 - **Fair für alle:** Wie viele Punkte eine Münze kostet, hängt davon ab, wie sicher die geübten Rechnungen schon sitzen – **12 Punkte**, wenn noch vieles Mühe macht, bis **20 Punkte**, wenn fast alles sitzt. Starke Kinder müssen etwas mehr leisten, schwächere kommen schneller zu einer Münze. Und wer gezielt seine schwierigen Rechnungen übt, verdient mehr.
 - Die Münzen stehen oben rechts, mit einem kleinen Balken bis zur nächsten Münze. Antippen erklärt das System.
@@ -49,18 +49,18 @@ Die Spiele kosten **1 Münze**. Münzen verdient man nur in den Übungen:
 
 ## Spielen
 
-Vor jedem Spiel erscheint eine kurze Startkarte mit der Anleitung, den Einstellungen und dem Knopf „Spielen · 1 Münze“.
+Vor jedem Spiel erscheint eine kurze Startkarte mit der Anleitung, den Einstellungen und dem Knopf „Spielen · 1 Münze“. Dort wählt man auch, was gerechnet wird: **Mal**, **Geteilt**, **Lücken** oder **Gemischt** – das gilt für alle Spiele (gleiche Einstellung wie auf der Startseite).
 
 | Spiel | Was passiert |
 | --- | --- |
-| **Elfmeter** ⚽ (3D) | Man steht im Stadion vor dem Tor, im Tor stehen die Ergebnisse. Das richtige antippen – der Ball fliegt los und die Kamera fliegt mit ihm ins Netz. Sonst hält der Torhüter, und die richtige Lösung wird gezeigt. 10 Schüsse. Stufe „Profi“: 4 Ecken und 6 Sekunden pro Schuss. |
-| **Meteoriten** ☄️ (3D) | Man sitzt im Cockpit einer Rakete, Meteoriten mit Zahlen rasen heran. Den richtigen antippen, die Laser zerschiessen ihn. 3 Schutzschilde, es wird immer schneller. |
-| **Frosch-Hüpfen** 🐸 (3D) | Man ist der Frosch auf einer Seerose im Teich und springt die Reihe entlang (vorwärts, danach rückwärts). Falsche Seerosen versinken. |
-| **Memory** 🃏 | Rechnung und Ergebnis finden. „Offen“ (alle Karten sichtbar, zählt fürs Gedächtnis) oder „Verdeckt“. Mit Kombo-Zähler. |
+| **Elfmeter** ⚽ (3D) | Man steht im Stadion vor dem Tor (ohne Torhüter), im Tor stehen die Ergebnisse. Das richtige antippen – der Ball fliegt ins Netz, die Kamera geht ein paar Schritte mit. Bei einer falschen Antwort geht der Schuss an den Pfosten oder über die Latte, und die richtige Lösung wird gezeigt. 10 Schüsse. Stufe „Profi“: 4 Ecken und 6 Sekunden pro Schuss. |
+| **Meteoriten** ☄️ (3D) | Man sitzt im Cockpit einer Rakete (Frontscheibe, Armaturenbrett mit Zielrechnung, Schilden, Tempoanzeige und Laserkanonen). Meteoriten rasen heran, die Zahl steckt glühend im Stein. Den richtigen antippen, die Laser zerschiessen ihn. 3 Schutzschilde, es wird immer schneller. |
+| **Frosch-Hüpfen** 🐸 (3D) | Ein Frosch (von hinten zu sehen) will über einen Teich mit Ufer, Bäumen, Schilf, Fischen, Fliegen und einer Libelle. Vor ihm tauchen drei Seerosen auf, die Zahlen stehen darauf. Die richtige antippen – der Frosch springt, die Kamera rutscht nach, und vor ihm tauchen neue Seerosen auf. Falsche Seerosen versinken. Rechnungen aus allen gewählten Reihen, 10 Sprünge bis ans andere Ufer. |
+| **Memory** 🃏 | Rechnung und Ergebnis finden (auch 56 : 8 → 7 oder ▢ · 8 = 56 → 7). „Offen“ (alle Karten sichtbar, zählt fürs Gedächtnis) oder „Verdeckt“. Mit Kombo-Zähler. |
 | **Stimmt das?** ✅ | 60 Sekunden: Ist 7 · 8 = 54 richtig oder falsch? Karte antippen oder nach rechts (stimmt) / links (stimmt nicht) wischen. Bei einer falschen Rechnung erscheint **immer die richtige**. 5 richtige hintereinander geben 3 Sekunden dazu. |
 | **Duell zu zweit** ⚔️ | Zwei Kinder, ein Tablet (das obere Feld steht auf dem Kopf). Countdown, dann gilt: Wer zuerst richtig tippt, bekommt den Punkt und zieht am Seil. |
 
-Die 3D-Spiele brauchen WebGL (alle aktuellen Tablets und Browser). Fehlt es, startet automatisch die bisherige 2D-Version des Spiels.
+Die 3D-Spiele brauchen WebGL (alle aktuellen Tablets und Browser). Fehlt es, startet automatisch eine 2D-Version des Spiels. Auf dem Handy im Hochformat wird die Ansicht angepasst (weiterer Blickwinkel).
 
 ## Mein Stand und Übungsblatt
 
@@ -141,7 +141,7 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/core.js` | Speicher, Aufgaben, Gedächtnis (Auswahl der nächsten Aufgabe), Ablenker, Rechenhilfen, Töne |
 | `js/ui.js` | Rahmen, Startseite (Auswahl kleines/grosses Einmaleins, Reihen, Aufgabenart), Einmaleins-Tafel, Mein Stand, Einstellungen |
 | `js/coins.js` | Münzen: Punkte pro Antwort, faire Schwelle, Anzeige |
-| `js/modes.js` | Übungen: Trainer, Auswählen, Reihen-Treppe (mit Eichhörnchen), Blitztest |
+| `js/modes.js` | Übungen: Trainer, Auswählen, Reihen-Treppe (hinauf und hinunter, 3 Versuche, mit Eichhörnchen), Blitztest |
 | `js/games.js` | Spiele: Startkarte, Memory, Stimmt das?, Duell und die 2D-Versionen von Elfmeter, Meteoriten, Frosch-Hüpfen |
 | `js/games3d.js` | 3D-Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen (mit three.js) |
 | `js/sheets.js` | Übungsblätter: Auswahl der Rechnungen, Vektor-PDF und Vorschau |
