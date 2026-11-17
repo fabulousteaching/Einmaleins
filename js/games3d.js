@@ -246,6 +246,46 @@ function noise(dur = 0.8, { freq = 1200, q = 0.6, gain = 0.12, sweep = 0 } = {})
     src.start();
   } catch { /* */ }
 }
+/** Publikum jubelt (Tor!): anschwellendes Stimmengewirr aus vielen „Stimmen“, das langsam abklingt */
+let CHEER_BUF = null;
+/** Klang einmal berechnen (vor dem ersten Tor), damit es beim Jubel nicht ruckelt */
+function cheerBuffer(dur = 2.6) {
+  if (CHEER_BUF && audioCtx && CHEER_BUF.sampleRate === audioCtx.sampleRate) return CHEER_BUF;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  const sr = audioCtx.sampleRate, n = Math.floor(sr * dur);
+  const buf = audioCtx.createBuffer(2, n, sr);
+  for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      // viele Stimmen: Rauschen, dessen Lautstärke unregelmässig schwankt (Rufe), mit Hüllkurve: schnell lauter, dann ausklingen
+      const voices = Array.from({ length: 14 }, () => ({ f: 1.5 + Math.random() * 5, ph: Math.random() * 6 }));
+      let lp = 0;
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const env = Math.min(1, t / 0.25) * (t < dur * 0.35 ? 1 : Math.max(0, 1 - (t - dur * 0.35) / (dur * 0.65)) ** 1.4);
+        let mod = 0;
+        for (const v of voices) mod += 0.5 + 0.5 * Math.sin(2 * Math.PI * v.f * t + v.ph);
+        lp += ((Math.random() * 2 - 1) - lp) * 0.6; // etwas weicher
+        d[i] = lp * env * (0.45 + mod / voices.length * 0.9);
+      }
+  }
+  CHEER_BUF = buf;
+  return buf;
+}
+function crowdCheer(gain = 0.2) {
+  if (!db.settings.sound) return;
+  try {
+    const buf = cheerBuffer();
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const lo = audioCtx.createBiquadFilter(); lo.type = 'bandpass'; lo.frequency.value = 850; lo.Q.value = 0.6;
+    const hi = audioCtx.createBiquadFilter(); hi.type = 'bandpass'; hi.frequency.value = 2200; hi.Q.value = 0.9;
+    const gl = audioCtx.createGain(); gl.gain.value = gain;
+    const gh = audioCtx.createGain(); gh.gain.value = gain * 0.45;
+    src.connect(lo).connect(gl).connect(audioCtx.destination);
+    src.connect(hi).connect(gh).connect(audioCtx.destination);
+    src.start();
+  } catch { /* */ }
+}
 
 /* =========================================================
    ⚽ Elfmeter 3D – vor dem Tor im Stadion
@@ -317,6 +357,7 @@ async function startElfmeter3D() {
     <p class="mode-hint">Tippe auf die Zahl mit dem richtigen Ergebnis – der Ball fliegt los. Tasten 1–3 gehen auch.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 40, shadows: true, clear: 0x7fb6e6 });
+  if (db.settings.sound) setTimeout(() => { try { cheerBuffer(); } catch { /* */ } }, 400); // Jubel vorbereiten
   game.stage3d = st;
   const { scene, camera } = st;
   scene.fog = new T.Fog(0x9cc8ef, 40, 120);
@@ -506,8 +547,6 @@ async function startElfmeter3D() {
       if (age > 1.15) { off(); shards.forEach((s) => { scene.remove(s); s.geometry.dispose(); s.material.dispose(); }); tex.dispose(); }
     });
     burst(st, m.position.clone(), { n: 50, colors: wrong ? [0xff4d4d, 0xff9a9a, 0xffffff] : [0x3dff6e, 0xb6ffc8, 0xffffff], speed: 3, life: 0.6, size: 0.11, gravity: -4 });
-    tone([1900, 1400, 2400], 0.04, 'square', 0.035);
-    noise(0.22, { freq: 4200, gain: 0.07 });
   }
   function nextShot() {
     if (!runOn() || st.disposed) return;
@@ -567,7 +606,7 @@ async function startElfmeter3D() {
       netHit = { x: tx, y: ty, t: 0 };
       st.shake(0.1);
       burst(st, F.clone().setZ(-0.3), { n: 120, colors: [0xffc233, 0xff6b4a, 0x38bdf8, 0x22c55e, 0xffffff], speed: 5, life: 1.2, size: 0.12, gravity: -2 });
-      sfx.win(); noise(1.4, { freq: 900, q: 0.4, gain: 0.14 });
+      crowdCheer(); // Tor: das Publikum jubelt
       bigWord(host, 'TOR!', 'good');
       host.classList.remove('flash'); void host.offsetWidth; host.classList.add('flash');
       st.tween(420, (u, e) => { ball.position.z = F.z - 0.45 * e; ball.position.y = F.y * (1 - e) + 0.11 * e; });
@@ -667,7 +706,7 @@ async function startMeteor3D() {
   // Cockpit links: Schilde (Survive), Restzeit (Countdown) oder Stoppuhr (Speed)
   const left = run.mode === 'survive'
     ? `<span class="ck-col"><span class="ck-label">Schilde</span><span class="lives" id="lives">${'<i class="on"></i>'.repeat(RUN.lives)}</span></span><span class="ck-col ck-lvl" data-run="levelbox"><span class="ck-label">Level</span><b data-run="level">1</b><em class="run-levelup">schneller!</em></span>`
-    : `<span class="ck-col"><span class="ck-label">${run.mode === 'countdown' ? 'Restzeit' : 'Zeit'}</span><span class="ck-time"><b data-run="time">${run.mode === 'countdown' ? RUN.ms / 1000 : '0,0'}</b> s</span>${run.mode === 'countdown' ? '<span class="run-bar ck-bar"><i data-run="bar"></i></span>' : ''}</span>`;
+    : `<span class="ck-col"><span class="ck-label">${run.mode === 'countdown' ? 'Restzeit' : 'Zeit'}</span><span class="ck-time"><b data-run="time">${run.mode === 'countdown' ? RUN.ms / 1000 : '0,0'}</b> s</span>${run.mode === 'countdown' ? '<span class="run-bar ck-bar"><i data-run="bar"></i></span>' : ''}</span><span class="ck-col ck-lvl" data-run="levelbox"><span class="ck-label">Level</span><b data-run="level">1</b><em class="run-levelup">schneller!</em></span>`;
   game.onRunHud = (r) => $$('#lives i').forEach((el, i) => el.classList.toggle('on', i < r.lives));
   $('#view').innerHTML = gameShell('meteor', `
     <div class="g3 g3-space" id="g3">
@@ -762,8 +801,8 @@ async function startMeteor3D() {
     $('#mtask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
     const n = game.run.ok >= 12 ? 4 : 3;
     const opts = choicesFor(t, n);
-    // Zeit bis zum Einschlag: im Survive pro Level 10 % kürzer, sonst langsam schneller
-    const dur = game.run.mode === 'survive' ? surviveMs(10000, 2200) / 1000 : clamp(12 - game.run.ok * 0.35, 5, 12);
+    // Zeit bis zum Einschlag: in allen Modi alle 5 richtigen ein Level schneller (10 % weniger Zeit), wie in den anderen Spielen
+    const dur = surviveMs(10000, 2200) / 1000;
     if (gauge) gauge.style.setProperty('--spd', String(clamp((12 - dur) / 7, 0, 1)));
     game.wave = opts.map((v, i) => {
       const mesh = new T.Mesh(rockGeo(), new T.MeshStandardMaterial({ color: new T.Color().setHSL(0.07 + Math.random() * 0.04, 0.25, 0.3 + Math.random() * 0.08), roughness: 0.95, flatShading: true, emissive: 0x000000 }));
@@ -901,7 +940,7 @@ async function startMeteor3D() {
       removeMeteor(m);
       game.wave.forEach((x) => { if (!x.dead) { x.dead = true; x.label.material.opacity = 0.3; st.tween(350, (u) => { x.mesh.scale.setScalar(Math.max(0.01, 1 - u)); }).then(() => removeMeteor(x)); } });
       if (runRight()) return;
-      speed = 18 + Math.min(60, game.run.ok * 3);
+      speed = Math.min(80, 18 / SURVIVE.factor ** (surviveLevel() - 1)); // Sterne ziehen mit jedem Level schneller vorbei
       bigWord(host, `+1${game.run.streak >= 3 ? `<small>${game.run.streak}er-Serie!</small>` : ''}`, 'good small sky');
       gLater(spawnWave, 800);
     } else {

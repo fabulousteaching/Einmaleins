@@ -129,7 +129,8 @@ function runHudHTML(cls = '') {
   if (!r) return '';
   const m = r.mode;
   return `<div class="run-hud ${cls} m-${m}">
-    ${m === 'survive' ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span><span class="run-level" data-run="levelbox">Level <b data-run="level">1</b><em class="run-levelup" data-run="levelup">schneller!</em></span>` : ''}
+    ${m === 'survive' ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span>` : ''}
+    ${m === 'survive' || r.id === 'meteor' ? '<span class="run-level" data-run="levelbox">Level <b data-run="level">1</b><em class="run-levelup" data-run="levelup">schneller!</em></span>' : ''}
     ${m === 'countdown' ? `<span class="run-clock"><span class="run-bar"><i data-run="bar"></i></span><b data-run="time">${RUN.ms / 1000}</b><small>s</small></span>` : ''}
     ${m === 'speed' ? `<span class="run-clock">${icon('clock')}<b data-run="time">0,0</b><small>s</small></span>` : ''}
     <span class="run-ok" data-run="okbox">${icon('check')}<b data-run="ok">0</b>${m === 'speed' ? `<small>/${r.goal}</small>` : ''}</span>
@@ -158,7 +159,8 @@ function runRight() {
   runPop('[data-run="okbox"]', 'pop');
   if (r.mode === 'speed' && r.ok >= r.goal) { runFinish('done'); return true; }
   // Survive: alle 5 richtigen ein neues Level – ab jetzt bleibt etwas weniger Zeit
-  if (r.mode === 'survive' && r.ok % SURVIVE.step === 0) {
+  // (Meteoriten werden in allen Modi pro Level schneller)
+  if ((r.mode === 'survive' || r.id === 'meteor') && r.ok % SURVIVE.step === 0) {
     runPop('[data-run="levelbox"]', 'up');
     tone([660, 880, 1175], 0.07, 'triangle', 0.07);
   }
@@ -431,7 +433,7 @@ function elfShoot(btn) {
     const msg = $('#pmsg');
     let ended;
     if (ok) {
-      sfx.win();
+      if (typeof crowdCheer === 'function') crowdCheer(); else sfx.win(); // Tor: das Publikum jubelt
       $('#goal').classList.add('shake');
       msg.innerHTML = 'TOR!';
       msg.className = 'pitch-msg show good';
@@ -479,7 +481,7 @@ function meteorWave() {
   const opts = choicesFor(t, n);
   const W = space.clientWidth, H = space.clientHeight;
   const lane = W / n;
-  const dur = game.run.mode === 'survive' ? surviveMs(9000, 2000) / 1000 : clamp(11 - game.run.ok * 0.35, 4.2, 11); // Sekunden bis zum Boden
+  const dur = surviveMs(9000, 2000) / 1000; // Sekunden bis zum Boden: alle 5 richtigen 10 % schneller (in allen Modi)
   game.wave = opts.map((v, i) => {
     const el = document.createElement('button');
     el.className = 'meteor';
