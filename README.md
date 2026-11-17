@@ -58,7 +58,7 @@ Bei **Elfmeter, Meteoriten, Frosch-Hüpfen und Stimmt das?** wählt man zwischen
 | Modus | Ziel |
 | --- | --- |
 | **Countdown** ⏱ | Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht. |
-| **Survive** ❤️ | 3 Leben – so lange wie möglich durchhalten. Jede falsche Antwort kostet ein Leben, und es wird immer schneller (beim Elfmeter, Frosch und Stimmt das? mit einer Zeit pro Aufgabe, die immer kürzer wird). Die Leben sind immer zu sehen. Bei den Meteoriten fliegt beim letzten Leben ab und zu ein Ufo vorbei: Treffer = Extraleben. |
+| **Survive** ❤️ | 3 Leben – so lange wie möglich durchhalten. Jede falsche Antwort (oder eine zu späte) kostet ein Leben. Alle 5 richtigen Antworten kommt ein neues **Level**, und die Zeit pro Rechnung wird 10 % kürzer (bei den Meteoriten kommen sie 10 % schneller). So endet auch eine sehr gute Runde nach ein paar Minuten. Leben und Level sind immer zu sehen. Bei den Meteoriten fliegt beim letzten Leben ab und zu ein Ufo vorbei: Treffer = Extraleben. |
 | **Speed** ⚡ | 20 richtige Antworten so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr. |
 
 **Memory** gibt es nur als Speed: alle Paare so schnell wie möglich finden, ein falsches Paar kostet 3 Sekunden.

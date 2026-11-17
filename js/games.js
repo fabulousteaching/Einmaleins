@@ -81,7 +81,7 @@ const GAME_MODES = {
   countdown: { name: 'Countdown', icon: () => icon('clock'), short: '60 Sekunden',
     desc: () => 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.' },
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
-    desc: (id) => `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben, und es wird immer schneller.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
+    desc: (id) => `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
     desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' : '20 richtige Antworten – so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr.') },
 };
@@ -127,7 +127,7 @@ function runHudHTML(cls = '') {
   if (!r) return '';
   const m = r.mode;
   return `<div class="run-hud ${cls} m-${m}">
-    ${m === 'survive' ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span>` : ''}
+    ${m === 'survive' ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span><span class="run-level" data-run="levelbox">Level <b data-run="level">1</b><em class="run-levelup" data-run="levelup">schneller!</em></span>` : ''}
     ${m === 'countdown' ? `<span class="run-clock"><span class="run-bar"><i data-run="bar"></i></span><b data-run="time">${RUN.ms / 1000}</b><small>s</small></span>` : ''}
     ${m === 'speed' ? `<span class="run-clock">${icon('clock')}<b data-run="time">0,0</b><small>s</small></span>` : ''}
     <span class="run-ok" data-run="okbox">${icon('check')}<b data-run="ok">0</b>${m === 'speed' ? `<small>/${r.goal}</small>` : ''}</span>
@@ -143,6 +143,7 @@ function runHud() {
     $$('[data-run="bar"]').forEach((el) => { el.style.transform = `scaleX(${left / RUN.ms})`; el.parentNode.classList.toggle('low', left < 10000); });
   } else if (r.mode === 'speed') $$('[data-run="time"]').forEach((el) => { el.textContent = fmtSec(runElapsed()); });
   $$('[data-run="lives"]').forEach((el) => [...el.children].forEach((h, i) => h.classList.toggle('off', i >= r.lives)));
+  $$('[data-run="level"]').forEach((el) => { el.textContent = surviveLevel(); });
   game.onRunHud?.(r);
 }
 const runPop = (sel, cls) => $$(sel).forEach((el) => { el.classList.toggle(cls, false); void el.offsetWidth; el.classList.add(cls); });
@@ -154,6 +155,11 @@ function runRight() {
   runHud();
   runPop('[data-run="okbox"]', 'pop');
   if (r.mode === 'speed' && r.ok >= r.goal) { runFinish('done'); return true; }
+  // Survive: alle 5 richtigen ein neues Level – ab jetzt bleibt etwas weniger Zeit
+  if (r.mode === 'survive' && r.ok % SURVIVE.step === 0) {
+    runPop('[data-run="levelbox"]', 'up');
+    tone([660, 880, 1175], 0.07, 'triangle', 0.07);
+  }
   return false;
 }
 /** Falsche Antwort oder zu spät. Survive: kostet ein Leben. Liefert true, wenn die Runde damit fertig ist. */
@@ -180,8 +186,13 @@ function runGainLife() {
   runHud();
   $$('[data-run="lives"]').forEach((el) => { const h = el.children[r.lives - 1]; if (h) { h.classList.toggle('gain', false); void h.getBoundingClientRect(); h.classList.add('gain'); } });
 }
-/** Zeit pro Aufgabe im Survive: wird mit jeder richtigen Antwort etwas kürzer */
-const surviveMs = (start, min, step) => Math.max(min, start - (game.run?.ok || 0) * step);
+/* Survive: Alle 5 richtigen Antworten kommt ein neues Level, und die Zeit pro Rechnung wird 10 % kürzer.
+   Es gibt keine feste Untergrenze ausser der Zeit, die man mindestens zum Lesen und Tippen braucht –
+   so geht auch eine sehr gute Runde nach ein paar Minuten zu Ende. */
+const SURVIVE = { step: 5, factor: 0.9 };
+const surviveLevel = () => Math.floor((game.run?.ok || 0) / SURVIVE.step) + 1;
+/** Zeit für eine Rechnung im aktuellen Level (start: Level 1, min: kürzest mögliche Zeit) */
+const surviveMs = (start, min) => Math.max(min, start * SURVIVE.factor ** (surviveLevel() - 1));
 function taskClock(el, ms, onTimeout) {
   if (!el) return;
   el.getAnimations().forEach((a) => a.cancel());
@@ -241,7 +252,7 @@ function showRunResult(r) {
   const title = { time: 'Zeit ist um!', lives: 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : 'Geschafft!' }[r.why] || 'Fertig!';
   const line = lower
     ? `${r.id === 'memory' ? `${r.goal} Paare` : `${r.goal} richtige`} in <b>${fmtSec(score)} s</b>${r.wrong ? ` · ${r.wrong} falsch` : ' · ohne Fehler'}`
-    : `<b>${r.ok}</b> ${r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten'}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
+    : `<b>${r.ok}</b> ${r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten'}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${r.mode === 'survive' ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
   const wrongs = [...new Map(r.wrongs.map((t) => [t.key + t.op, t])).values()].slice(0, 8);
   $('#view').innerHTML = gameShell(r.id, `<div class="run-result">
       <div class="result">
@@ -387,7 +398,7 @@ function elfNext() {
   ball.className = 'ball';
   $('#goal').classList.remove('shake');
   $('#pmsg').className = 'pitch-msg';
-  if (game.run.mode === 'survive') taskClock($('#sclock i'), surviveMs(7000, 3000, 200), () => elfShoot(null));
+  if (game.run.mode === 'survive') taskClock($('#sclock i'), surviveMs(7000, 1800), () => elfShoot(null));
 }
 function elfShoot(btn) {
   if (game.locked || !runOn()) return;
@@ -466,7 +477,7 @@ function meteorWave() {
   const opts = choicesFor(t, n);
   const W = space.clientWidth, H = space.clientHeight;
   const lane = W / n;
-  const dur = clamp(11 - game.run.ok * 0.35, 4.2, 11); // Sekunden bis zum Boden
+  const dur = game.run.mode === 'survive' ? surviveMs(9000, 2000) / 1000 : clamp(11 - game.run.ok * 0.35, 4.2, 11); // Sekunden bis zum Boden
   game.wave = opts.map((v, i) => {
     const el = document.createElement('button');
     el.className = 'meteor';
@@ -624,7 +635,7 @@ function frogStep() {
   game.locked = false;
   $('#ftask').innerHTML = `<span class="task small">${taskHTML(t)}</span>`;
   $('#pads').innerHTML = choicesFor(t, 3).map((v, i) => `<button class="lily p${i} grow" style="--d:${i * 70}ms" data-action="frog-jump" data-v="${v}"><span>${v}</span></button>`).join('');
-  if (game.run.mode === 'survive') taskClock($('#fclock i'), surviveMs(8000, 3500, 200), () => frogTimeout());
+  if (game.run.mode === 'survive') taskClock($('#fclock i'), surviveMs(8000, 2200), () => frogTimeout());
 }
 function frogTimeout() {
   if (!runOn() || game.locked) return;
@@ -794,7 +805,7 @@ function tfNext() {
   };
   card.addEventListener('pointerup', up);
   card.addEventListener('pointercancel', up);
-  if (game.run.mode === 'survive') taskClock($('#tfclock i'), surviveMs(6000, 2500, 150), () => tfAnswer(null));
+  if (game.run.mode === 'survive') taskClock($('#tfclock i'), surviveMs(6000, 1300), () => tfAnswer(null));
 }
 function tfFloat(text, cls) {
   const deck = $('#tfdeck');

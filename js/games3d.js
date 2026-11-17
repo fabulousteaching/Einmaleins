@@ -519,7 +519,7 @@ async function startElfmeter3D() {
     targets = choicesFor(t, 3).map((v, i) => makeTarget(v, i));
     game.locked = false;
     t.shownAt = performance.now();
-    if (game.run.mode === 'survive') taskClock($('#sclock i'), surviveMs(7000, 3000, 200), () => shoot(null));
+    if (game.run.mode === 'survive') taskClock($('#sclock i'), surviveMs(7000, 1800), () => shoot(null));
   }
   async function shoot(m) {
     if (game.locked || !runOn()) return;
@@ -666,7 +666,7 @@ async function startMeteor3D() {
   const run = runStart('meteor', { onEnd: () => { game.waveDone = true; } });
   // Cockpit links: Schilde (Survive), Restzeit (Countdown) oder Stoppuhr (Speed)
   const left = run.mode === 'survive'
-    ? `<span class="ck-col"><span class="ck-label">Schilde</span><span class="lives" id="lives">${'<i class="on"></i>'.repeat(RUN.lives)}</span></span>`
+    ? `<span class="ck-col"><span class="ck-label">Schilde</span><span class="lives" id="lives">${'<i class="on"></i>'.repeat(RUN.lives)}</span></span><span class="ck-col ck-lvl" data-run="levelbox"><span class="ck-label">Level</span><b data-run="level">1</b><em class="run-levelup">schneller!</em></span>`
     : `<span class="ck-col"><span class="ck-label">${run.mode === 'countdown' ? 'Restzeit' : 'Zeit'}</span><span class="ck-time"><b data-run="time">${run.mode === 'countdown' ? RUN.ms / 1000 : '0,0'}</b> s</span>${run.mode === 'countdown' ? '<span class="run-bar ck-bar"><i data-run="bar"></i></span>' : ''}</span>`;
   game.onRunHud = (r) => $$('#lives i').forEach((el, i) => el.classList.toggle('on', i < r.lives));
   $('#view').innerHTML = gameShell('meteor', `
@@ -762,7 +762,8 @@ async function startMeteor3D() {
     $('#mtask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
     const n = game.run.ok >= 12 ? 4 : 3;
     const opts = choicesFor(t, n);
-    const dur = clamp(12 - game.run.ok * 0.35, 5, 12);
+    // Zeit bis zum Einschlag: im Survive pro Level 10 % kürzer, sonst langsam schneller
+    const dur = game.run.mode === 'survive' ? surviveMs(10000, 2200) / 1000 : clamp(12 - game.run.ok * 0.35, 5, 12);
     if (gauge) gauge.style.setProperty('--spd', String(clamp((12 - dur) / 7, 0, 1)));
     game.wave = opts.map((v, i) => {
       const mesh = new T.Mesh(rockGeo(), new T.MeshStandardMaterial({ color: new T.Color().setHSL(0.07 + Math.random() * 0.04, 0.25, 0.3 + Math.random() * 0.08), roughness: 0.95, flatShading: true, emissive: 0x000000 }));
@@ -1527,7 +1528,7 @@ async function startFrog3D() {
       return { obj: pad, stone: false, label, val: v };
     });
     game.locked = false;
-    if (game.run.mode === 'survive') taskClock($('#fclock i'), surviveMs(8000, 3500, 200), timeout);
+    if (game.run.mode === 'survive') taskClock($('#fclock i'), surviveMs(8000, 2200), timeout);
   }
   function timeout() {
     if (game.locked || !runOn()) return;
