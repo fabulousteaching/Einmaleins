@@ -453,10 +453,14 @@ create table if not exists public.einmaleins_scores (
   id bigint generated always as identity primary key,
   class_id uuid not null references public.einmaleins_classes (id) on delete cascade,
   student_id uuid not null references public.einmaleins_students (id) on delete cascade,
-  board text not null check (board ~ '^(elfmeter|meteor|frog|truefalse|memory):(countdown|survive|speed):(mul|div|gap|mix)$'),
+  board text not null,
   score integer not null check (score between 0 and 3600000),
   created_at timestamptz not null default now()
 );
+-- Prüfregel für den Namen der Liste: Spielname beliebig (nur Kleinbuchstaben), damit neue Spiele ohne SQL-Änderung gehen
+alter table public.einmaleins_scores drop constraint if exists einmaleins_scores_board_check;
+alter table public.einmaleins_scores add constraint einmaleins_scores_board_check
+  check (board ~ '^[a-z]{2,20}:(countdown|survive|speed):(mul|div|gap|mix)$');
 create index if not exists einmaleins_scores_board on public.einmaleins_scores (class_id, board);
 alter table public.einmaleins_scores enable row level security;
 revoke all on public.einmaleins_scores from anon, authenticated;
@@ -506,7 +510,7 @@ declare
 begin
   select s.* into st from public.einmaleins_sessions x join public.einmaleins_students s on s.id = x.student_id where x.token = p_token;
   if not found then raise exception 'session_invalid' using errcode = 'P0001'; end if;
-  if p_board !~ '^(elfmeter|meteor|frog|truefalse|memory):(countdown|survive|speed):(mul|div|gap|mix)$' then
+  if p_board !~ '^[a-z]{2,20}:(countdown|survive|speed):(mul|div|gap|mix)$' then
     raise exception 'board_invalid' using errcode = 'P0001';
   end if;
   if p_score is not null then

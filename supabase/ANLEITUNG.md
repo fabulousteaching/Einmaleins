@@ -16,7 +16,7 @@ Alle Übungen und Spiele funktionieren auch ohne diese Einrichtung. Es braucht s
 
 Hast du die Datei schon einmal ausgeführt, bevor es die Übernahme aus Vokaboom gab? Dann einfach nochmals ganz ausführen. Bis dahin zeigt Einmaleins bei „Aus Vokaboom übernehmen“ einen Hinweis.
 
-**Neu: Bestenlisten der Spiele.** Dafür braucht es eine zusätzliche Tabelle (`einmaleins_scores`). Hast du die Datei vor dieser Neuerung ausgeführt, führe sie einfach **nochmals ganz** aus. Bis dahin funktionieren alle Spiele, nur die Bestenliste wird nicht angezeigt (die Klassenübersicht zeigt dann einen Hinweis).
+**Neu: Bestenlisten der Spiele.** Dafür braucht es eine zusätzliche Tabelle (`einmaleins_scores`). Hast du die Datei vor dieser Neuerung ausgeführt, führe sie einfach **nochmals ganz** aus (auch nötig, damit das Spiel „Zielscheibe“ in der Bestenliste erscheint; weitere neue Spiele brauchen danach keine SQL-Änderung mehr). Bis dahin funktionieren alle Spiele, nur die Bestenliste wird nicht angezeigt (die Klassenübersicht zeigt dann einen Hinweis).
 
 ## 2. Adresse von Einmaleins erlauben
 

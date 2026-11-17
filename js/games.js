@@ -1,7 +1,7 @@
 /* Einmaleins – Spiele. Alle holen ihre Rechnungen aus demselben Gedächtnis wie die Übungen:
    Schwierige Rechnungen kommen auch hier in Abständen wieder, und die Antworten zählen mit.
 
-   Spielmodi (Elfmeter, Meteoriten, Frosch, Stimmt das?; Memory nur Speed):
+   Spielmodi (Elfmeter, Meteoriten, Frosch, Zielscheibe, Stimmt das?; Memory nur Speed):
    - Countdown: in 60 Sekunden möglichst viele richtige Antworten
    - Survive:   3 Leben, so lange wie möglich durchhalten
    - Speed:     20 richtige so schnell wie möglich; jede falsche verlangt eine Rechnung mehr
@@ -15,6 +15,8 @@ const GAMES = [
     howto: 'Du sitzt im Cockpit deiner Rakete. Meteoriten mit Zahlen rasen auf dich zu. Tippe den mit dem richtigen Ergebnis an, bevor er dich trifft.' },
   { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf über den Teich – hin und zurück.', color: 'lime', art: '<span class="emo">🐸</span>', three: true, modes: ['countdown', 'survive', 'speed'],
     howto: 'Der Frosch hüpft über den Teich. Tippe auf die Seerose mit dem richtigen Ergebnis – und hopp! Am Ufer springt er auf einen Stein und kehrt um. Falsche Seerosen versinken.' },
+  { id: 'target', name: 'Zielscheibe', desc: 'Spann die Armbrust und triff das richtige Feld.', color: 'wood', art: '<span class="emo">🎯</span>', modes: ['countdown', 'survive', 'speed'],
+    howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger irgendwo aufs Bild, ziele durch Ziehen und lass los – der Pfeil fliegt. Triff das Feld mit dem richtigen Ergebnis!' },
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
@@ -219,9 +221,9 @@ function runFinish(why) {
 /* ---------------- Ergebnis und Bestenliste ---------------- */
 // Sterne: [1, 2, 3 Sterne]; Speed in Sekunden (weniger ist besser)
 const STAR_LIMITS = {
-  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], truefalse: [12, 22, 32] },
-  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], truefalse: [10, 20, 35] },
-  speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], truefalse: [90, 60, 40], memory: [80, 50, 32] },
+  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32] },
+  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35] },
+  speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32] },
 };
 function runStars(r, score) {
   const l = STAR_LIMITS[r.mode]?.[r.id];
@@ -350,7 +352,7 @@ function renderGame() {
     </div>
   </section>`;
 }
-const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel() };
+const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel() };
 const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D() };
 async function startGameNow() {
   if (!payForGame()) { renderGame(); return; }
@@ -686,6 +688,231 @@ function frogJump(btn) {
       frogStep();
     }, fast ? 20 : 500);
   }, fast ? 20 : 560);
+}
+
+/* =========================================================
+   🎯 Zielscheibe: Armbrust spannen, zielen, das richtige Feld treffen
+   Finger aufs Bild legen, durch Ziehen zielen, loslassen = Schuss. Vier Felder mit Zahlen.
+   ========================================================= */
+const TG_QUADS = ['tl', 'tr', 'bl', 'br'];
+const TG_POS = { tl: [56, 64], tr: [144, 64], bl: [56, 144], br: [144, 144] };
+const TG_TARGET_SVG = `<svg viewBox="0 0 200 200" aria-hidden="true">
+  <defs>
+    <radialGradient id="tgStraw" cx="45%" cy="40%" r="65%"><stop offset="0" stop-color="#F0C873"/><stop offset=".75" stop-color="#C98B3F"/><stop offset="1" stop-color="#9A6428"/></radialGradient>
+    <pattern id="tgStrawLines" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><path d="M0 3h6" stroke="#8A5A22" stroke-width="1" opacity=".35"/></pattern>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="url(#tgStraw)"/>
+  <circle cx="100" cy="100" r="98" fill="url(#tgStrawLines)"/>
+  <circle cx="100" cy="100" r="98" fill="none" stroke="#6B4320" stroke-width="4"/>
+  ${TG_QUADS.map((q) => {
+    const d = { tl: 'M100,100 L12,100 A88,88 0 0 1 100,12 Z', tr: 'M100,100 L100,12 A88,88 0 0 1 188,100 Z', bl: 'M100,100 L100,188 A88,88 0 0 1 12,100 Z', br: 'M100,100 L188,100 A88,88 0 0 1 100,188 Z' }[q];
+    const [x, y] = TG_POS[q];
+    return `<g class="tg-q q-${q}" data-q="${q}"><path class="fill" d="${d}"/><circle class="badge" cx="${x}" cy="${y - 7}" r="24"/><text class="tg-num" id="tgn-${q}" x="${x}" y="${y + 2}" text-anchor="middle">?</text></g>`;
+  }).join('')}
+  <circle cx="100" cy="100" r="66" fill="none" stroke="#3B2415" stroke-opacity=".18" stroke-width="2"/>
+  <circle cx="100" cy="100" r="44" fill="none" stroke="#3B2415" stroke-opacity=".18" stroke-width="2"/>
+  <line x1="100" y1="12" x2="100" y2="188" stroke="#4A2E17" stroke-width="3"/>
+  <line x1="12" y1="100" x2="188" y2="100" stroke="#4A2E17" stroke-width="3"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#4A2E17" stroke-width="3"/>
+  <circle cx="100" cy="100" r="9" fill="#E8553A" stroke="#4A2E17" stroke-width="2.5"/>
+</svg>`;
+const TG_STAND_SVG = `<svg viewBox="0 0 120 80" aria-hidden="true"><ellipse cx="60" cy="72" rx="50" ry="7" fill="rgba(0,0,0,.22)"/><path d="M34 6 16 70M86 6l18 64M44 6l-4 64M76 6l4 64" stroke="#5B3A22" stroke-width="7" stroke-linecap="round"/><path d="M18 60h84" stroke="#6B4320" stroke-width="6" stroke-linecap="round"/></svg>`;
+const TG_BOW_SVG = `<svg viewBox="0 0 400 300" aria-hidden="true">
+  <defs><linearGradient id="tgWood" x1="0" x2="1"><stop offset="0" stop-color="#6B4320"/><stop offset=".5" stop-color="#A86F3A"/><stop offset="1" stop-color="#6B4320"/></linearGradient>
+    <linearGradient id="tgSteel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D5DCE3"/><stop offset="1" stop-color="#7C8794"/></linearGradient></defs>
+  <path d="M168 118 182 300h36l14-182Z" fill="url(#tgWood)" stroke="#4A2E17" stroke-width="5"/>
+  <path d="M186 222q14 26 28 0" fill="none" stroke="#4A2E17" stroke-width="7" stroke-linecap="round"/>
+  <rect x="196" y="202" width="8" height="18" rx="2" fill="#4A2E17"/>
+  <path d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="#3E4A57" stroke-width="16" stroke-linecap="round"/>
+  <path d="M40 82C90 20 150 55 200 60c50-5 110-40 160 22" fill="none" stroke="url(#tgSteel)" stroke-width="8" stroke-linecap="round"/>
+  <rect x="148" y="50" width="104" height="16" rx="5" fill="#4A2E17"/><rect x="148" y="50" width="104" height="6" rx="3" fill="#C99A5B"/>
+  <polyline id="tgString" points="40,82 200,82 360,82" fill="none" stroke="#F3E9D6" stroke-width="3.4"/>
+  <g id="tgBolt"><line x1="200" y1="82" x2="200" y2="-30" stroke="#4A3117" stroke-width="5" stroke-linecap="round"/><path d="M200-40l-10 24h20Z" fill="#9AA3AD"/><path d="M200 78l-11 15 11-4 11 4z" fill="#E8553A"/></g>
+</svg>`;
+const TG_ARROW_SVG = `<svg viewBox="0 0 20 140" aria-hidden="true"><line x1="10" y1="140" x2="10" y2="12" stroke="#4A3117" stroke-width="5" stroke-linecap="round"/><path d="M10 0 2 26h16Z" fill="#9AA3AD"/><path d="M10 136l-9 12 9-3 9 3z" fill="#E8553A"/></svg>`;
+const TG_STUCK_SVG = `<svg viewBox="0 0 60 60" aria-hidden="true"><line x1="6" y1="6" x2="40" y2="44" stroke="#4A3117" stroke-width="4.5" stroke-linecap="round"/><path d="M40 44l2 14 6-10 10-2z" fill="#E8553A"/><circle cx="6" cy="6" r="3.5" fill="#3B2415"/></svg>`;
+const TG_CLOUD = (style) => `<svg class="tg-cloud" style="${style}" viewBox="0 0 100 40" aria-hidden="true"><path d="M10 32a12 12 0 0 1 4-23 15 15 0 0 1 28-4 13 13 0 0 1 20 10 10 10 0 0 1-2 17z" fill="#fff"/></svg>`;
+
+function startTarget() {
+  Object.assign(game, { picker: gamePicker(), locked: true, tries: 0, tg: { vals: {}, aim: null } });
+  const r = runStart('target', { onEnd: () => { game.locked = true; } });
+  $('#view').innerHTML = gameShell('target', `
+    <div class="tg-stage" id="tgstage">
+      <div class="tg-sky"><span class="tg-sun"></span>${TG_CLOUD('left:6%;top:12%;width:16%;--d:70s')}${TG_CLOUD('left:62%;top:20%;width:20%;--d:95s')}${TG_CLOUD('left:34%;top:6%;width:11%;--d:120s')}</div>
+      <svg class="tg-hills" viewBox="0 0 400 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40C40 18 80 22 120 32s70 2 110-10 90-4 120 14 40 6 50 0V60H0z" fill="#8CC56B"/><path d="M0 50c50-14 100-8 150 0s110 6 170-6 70 2 80 4V60H0z" fill="#6FAF4F"/></svg>
+      <div class="tg-meadow"><span class="tg-fence"></span></div>
+      <div class="tg-hud">${runHudHTML('wood')}</div>
+      <div class="tg-sign" id="tgsign"><span class="task" id="tgtask"></span></div>
+      ${r.mode === 'survive' ? '<div class="tg-clock" id="tgclock"><i></i></div>' : ''}
+      <div class="tg-stand">${TG_STAND_SVG}</div>
+      <div class="tg-target" id="tgtarget">${TG_TARGET_SVG}</div>
+      <div class="tg-arrows" id="tgarrows"></div>
+      <div class="tg-reticle" id="tgret"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="34" fill="none" stroke="#fff" stroke-width="5" opacity=".9"/><circle cx="50" cy="50" r="34" fill="none" stroke="#E8553A" stroke-width="2.4"/><path d="M50 4v20M50 76v20M4 50h20M76 50h20" stroke="#fff" stroke-width="4"/><circle cx="50" cy="50" r="3" fill="#E8553A"/></svg></div>
+      <div class="tg-bow" id="tgbow">${TG_BOW_SVG}</div>
+      <div class="tg-flight" id="tgflight">${TG_ARROW_SVG}</div>
+      <div class="tg-toast" id="tgtoast"></div>
+      <p class="tg-help" id="tghelp">Finger aufs Bild · ziehen = zielen · loslassen = schiessen</p>
+    </div>
+    <p class="mode-hint">Lege den Finger irgendwo auf das Bild, ziele durch Ziehen und lass los, um zu schiessen. Tasten 1–4 gehen auch.</p>`);
+  tgBind();
+  setGameKeys((e) => { if (/^[1-4]$/.test(e.key)) tgShootQuad(['tl', 'tr', 'bl', 'br'][+e.key - 1]); });
+  game.pickVal = (v) => { const q = TG_QUADS.find((k) => game.tg.vals[k] === Number(v)); if (q) tgShootQuad(q); };
+  tgNext();
+}
+function tgNext() {
+  if (!runOn()) return;
+  const t = game.picker.next();
+  game.task = { ...t, shownAt: performance.now() };
+  game.tries = 0;
+  const vals = choicesFor(t, 4);
+  TG_QUADS.forEach((q, i) => {
+    game.tg.vals[q] = vals[i];
+    const n = $(`#tgn-${q}`);
+    if (n) { n.textContent = vals[i]; n.setAttribute('font-size', String(vals[i]).length > 2 ? 22 : 27); }
+  });
+  $$('.tg-q').forEach((g) => g.classList.remove('correct', 'wrong'));
+  $$('#tgarrows .tg-stuck').forEach((a) => { a.classList.add('gone'); setTimeout(() => a.remove(), 400); });
+  $('#tgtask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
+  const sign = $('#tgsign');
+  sign.classList.remove('drop'); void sign.offsetWidth; sign.classList.add('drop');
+  game.locked = false;
+  if (game.run.mode === 'survive') taskClock($('#tgclock i'), surviveMs(8000, 2200), tgTimeout);
+}
+function tgTimeout() {
+  if (game.locked || !runOn()) return;
+  game.locked = true;
+  const t = game.task;
+  if (game.tries === 0) recordAnswer(t, '', performance.now() - t.shownAt);
+  sfx.bad();
+  tgToast(`Zu spät! ${taskText(t, true)}`, 'bad');
+  const q = TG_QUADS.find((k) => game.tg.vals[k] === t.answer);
+  $(`.tg-q.q-${q}`)?.classList.add('correct');
+  if (!runWrong(t)) gLater(tgNext, 1300);
+}
+function tgToast(text, cls) {
+  const el = $('#tgtoast');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `tg-toast show ${cls}`;
+  clearTimeout(game.tgToastT);
+  game.tgToastT = gLater(() => el.classList.remove('show'), 1000);
+}
+/** Ziehen zum Zielen (wie beim Original): Die Bewegung des Fingers verschiebt das Fadenkreuz doppelt so weit */
+function tgBind() {
+  const stage = $('#tgstage');
+  const SENS = 2;
+  const g = game.tg;
+  const center = () => { const r = $('#tgtarget').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; };
+  stage.addEventListener('pointerdown', (e) => {
+    if (game.locked || !runOn() || e.button > 0) return;
+    if (e.target.closest('button')) return;
+    const c = center();
+    g.aim = { id: e.pointerId, x0: e.clientX, y0: e.clientY, cx: c.x, cy: c.y, maxR: c.w * 0.62, dx: 0, dy: 0 };
+    try { stage.setPointerCapture(e.pointerId); } catch { /* */ }
+    $('#tghelp')?.classList.add('hide');
+    tgReticle(c.x, c.y, true);
+    e.preventDefault();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    const a = g.aim;
+    if (!a || e.pointerId !== a.id) return;
+    let dx = (e.clientX - a.x0) * SENS, dy = (e.clientY - a.y0) * SENS;
+    const d = Math.hypot(dx, dy);
+    if (d > a.maxR) { dx *= a.maxR / d; dy *= a.maxR / d; }
+    a.dx = dx; a.dy = dy;
+    tgReticle(a.cx + dx, a.cy + dy, true);
+    tgBow(dx / a.maxR, dy / a.maxR, Math.max(0, (e.clientY - a.y0) / (stage.clientHeight * 0.35)));
+  });
+  const up = (e) => {
+    const a = g.aim;
+    if (!a || e.pointerId !== a.id) return;
+    g.aim = null;
+    tgReticle(0, 0, false);
+    tgBow(0, 0, 0);
+    if (game.locked || !runOn()) return;
+    tgFire(a.cx + a.dx, a.cy + a.dy);
+  };
+  stage.addEventListener('pointerup', up);
+  stage.addEventListener('pointercancel', (e) => { if (g.aim && e.pointerId === g.aim.id) { g.aim = null; tgReticle(0, 0, false); tgBow(0, 0, 0); } });
+}
+function tgLocal(x, y) { const r = $('#tgstage').getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; }
+function tgReticle(x, y, on) {
+  const el = $('#tgret');
+  if (!el) return;
+  el.classList.toggle('on', on);
+  if (on) { const p = tgLocal(x, y); el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; }
+}
+function tgBow(nx, ny, pull) {
+  const rig = $('#tgbow');
+  if (!rig) return;
+  nx = clamp(nx, -1, 1); ny = clamp(ny, -1, 1); pull = clamp(pull, 0, 1);
+  rig.style.transform = `translateX(-50%) perspective(900px) translate(${nx * 14}px, ${ny * 12}px) rotateZ(${nx * 8}deg) rotateX(${-ny * 7}deg)`;
+  $('#tgString')?.setAttribute('points', `40,82 200,${82 + pull * 120} 360,82`);
+  $('#tgBolt')?.setAttribute('transform', `translate(0,${pull * 120})`);
+}
+/** Schuss per Taste oder Test: genau in die Mitte eines Feldes */
+function tgShootQuad(q) {
+  if (game.locked || !runOn()) return;
+  const r = $('#tgtarget').getBoundingClientRect();
+  const [x, y] = TG_POS[q];
+  tgFire(r.left + (x / 200) * r.width, r.top + (y / 200) * r.height);
+}
+function tgFire(x, y) {
+  game.locked = true;
+  const stage = $('#tgstage'), fl = $('#tgflight'), bow = $('#tgbow').getBoundingClientRect();
+  const from = tgLocal(bow.left + bow.width / 2, bow.top + bow.height * 0.27), to = tgLocal(x, y);
+  tone([220, 160], 0.06, 'triangle', 0.08); // Sehne
+  noise(0.15, { freq: 1800, gain: 0.05 });
+  const ang = (Math.atan2(to.x - from.x, -(to.y - from.y)) * 180) / Math.PI;
+  const fast = reduceMotion();
+  fl.style.opacity = '1';
+  fl.animate([
+    { left: `${from.x}px`, top: `${from.y}px`, transform: 'translate(-50%, 0) scale(1.25) rotate(0deg)' },
+    { left: `${to.x}px`, top: `${to.y}px`, transform: `translate(-50%, 0) scale(.5) rotate(${ang}deg)` },
+  ], { duration: fast ? 1 : 300, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' });
+  void stage;
+  gLater(() => { fl.style.opacity = '0'; fl.getAnimations().forEach((a) => a.cancel()); tgHit(x, y); }, fast ? 20 : 310);
+}
+function tgHit(x, y) {
+  if (!runOn()) return;
+  const r = $('#tgtarget').getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const dx = x - cx, dy = y - cy;
+  const p = tgLocal(x, y);
+  // Pfeil bleibt stecken (auch daneben im Stroh) und zittert kurz
+  const stuck = document.createElement('span');
+  stuck.className = 'tg-stuck';
+  stuck.style.left = `${p.x}px`; stuck.style.top = `${p.y}px`;
+  stuck.innerHTML = TG_STUCK_SVG;
+  $('#tgarrows')?.appendChild(stuck);
+  noise(0.12, { freq: 300, gain: 0.12 }); // Einschlag
+  if (Math.hypot(dx, dy) > r.width * 0.44) { // daneben
+    tgToast('Daneben – nochmal!', 'bad');
+    stuck.classList.add('miss');
+    game.locked = false;
+    return;
+  }
+  const q = (dy < 0 ? 't' : 'b') + (dx < 0 ? 'l' : 'r');
+  const t = game.task, v = game.tg.vals[q];
+  const first = game.tries === 0;
+  game.tries++;
+  if (first) recordAnswer(t, v, performance.now() - t.shownAt);
+  const g = $(`.tg-q.q-${q}`);
+  if (v === t.answer) {
+    taskClockStop($('#tgclock i'));
+    g?.classList.add('correct');
+    sfx.good();
+    tgToast('Treffer! ✓', 'good');
+    if (first && runRight()) return;
+    gLater(tgNext, 650);
+  } else {
+    g?.classList.add('wrong');
+    sfx.bad();
+    tgToast('Falsches Feld – nochmal!', 'bad');
+    // falsch: zählt (Survive: jedes Mal ein Leben, sonst nur der erste Versuch)
+    if ((first || game.run.mode === 'survive') && runWrong(t)) return;
+    gLater(() => { g?.classList.remove('wrong'); if (runOn()) game.locked = false; }, 650);
+  }
 }
 
 /* =========================================================
