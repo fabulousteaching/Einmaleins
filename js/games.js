@@ -856,10 +856,6 @@ function tgDraw(to, ms) {
   const g = game.tg;
   cancelAnimationFrame(g.drawRaf);
   const from = g.pull || 0;
-  if (to > from) { // Spann-Geräusch: Holz knarrt, Sehne knirscht
-    noise(ms / 1000, { freq: 380, q: 2, gain: 0.05, sweep: 260 });
-    tone([140, 170], ms / 2000, 'sawtooth', 0.015);
-  }
   const t0 = performance.now(), dur = reduceMotion() ? 1 : ms * Math.abs(to - from);
   return new Promise((resolve) => {
     const step = (now) => {
@@ -918,8 +914,6 @@ function tgFire(x, y) {
   game.locked = true;
   const stage = $('#tgstage'), fl = $('#tgflight'), bow = $('#tgbow').getBoundingClientRect();
   const from = tgLocal(bow.left + bow.width / 2, bow.top + bow.height * 0.27), to = tgLocal(x, y);
-  tone([220, 160], 0.06, 'triangle', 0.08); // Sehne
-  noise(0.15, { freq: 1800, gain: 0.05 });
   const ang = (Math.atan2(to.x - from.x, -(to.y - from.y)) * 180) / Math.PI;
   const fast = reduceMotion();
   fl.style.opacity = '1';
@@ -942,7 +936,6 @@ function tgHit(x, y) {
   stuck.style.left = `${p.x}px`; stuck.style.top = `${p.y}px`;
   stuck.innerHTML = TG_STUCK_SVG;
   $('#tgarrows')?.appendChild(stuck);
-  noise(0.12, { freq: 300, gain: 0.12 }); // Einschlag
   if (Math.hypot(dx, dy) > r.width * 0.44) { // daneben
     tgToast('Daneben – nochmal!', 'bad');
     stuck.classList.add('miss');
