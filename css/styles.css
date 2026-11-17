@@ -1286,9 +1286,3 @@ td.hard-chips { display: table-cell; }
 .tg-bow.kick svg { animation: tg-kick .28s ease-out; }
 @keyframes tg-tense { from { transform: translate(-.6px, 0); } to { transform: translate(.6px, -.4px); } }
 @keyframes tg-kick { 0% { transform: translateY(14px) scale(1.02); } 60% { transform: translateY(-3px); } 100% { transform: none; } }
-/* Zielscheibe: Zielen wie mit einer Schleuder */
-.tg-path { position: absolute; inset: 0; z-index: 5; width: 100%; height: 100%; pointer-events: none; overflow: visible; opacity: 0; transition: opacity .15s; }
-.tg-path.on { opacity: 1; }
-.tg-path path { fill: none; stroke: rgba(255, 255, 255, .85); stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
-.tg-reticle { transform: translate(-50%, -50%) scale(var(--sc, 1)); }
-.tg-toast.info { background: #1F4E79; color: #fff; }
