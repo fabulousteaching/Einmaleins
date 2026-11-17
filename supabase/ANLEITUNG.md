@@ -37,7 +37,7 @@ Fertig. Oben rechts **Anmelden → Ich bin Lehrperson**.
   - Löschen in Einmaleins: „Nur in Einmaleins“ (das Kind bleibt in Vokaboom und wird nicht automatisch wieder geholt; „… hier gelöschte wieder holen“ holt es zurück) oder „Auch in Vokaboom“.
 - Neue Kinder bekommen einen Benutzernamen, den es in keinem der beiden Tools gibt.
 - Jedes Kind bekommt einen **Benutzernamen** (z. B. `Baum34`, nie doppelt vergeben) und ein **Bilder-Passwort** aus 3 Bildern – genau wie bei Vokaboom.
-- **Reihen**: welche Reihen und Aufgabenarten die Klasse übt.
+- **Reihen**: kleines oder grosses Einmaleins, welche Reihen und Aufgabenarten die Klasse übt und wie viele Rechnungen eine Runde hat. Diese Einstellungen sind Teil der Klasse; dafür muss das SQL-Skript nicht nochmals ausgeführt werden.
 - **Kärtchen**: als PDF herunterladen (10 pro A4-Seite), ausdrucken, ausschneiden. Die Kärtchen haben kein Logo und sind in Einmaleins und Vokaboom gleich. Kinder, die in beiden Tools sind, bekommen zwei QR-Codes („ABC Vokabeln“ für Vokaboom, „1×1 Rechnen“ für Einmaleins). Ältere Vokaboom-Kärtchen gelten weiterhin.
 - **Kind anmelden**: QR-Code auf dem Kärtchen scannen – oder **Anmelden → Ich bin ein Kind**, Benutzernamen eintippen und die 3 Bilder der Reihe nach antippen. Nach 8 falschen Versuchen ist 5 Minuten Pause. Auf einem Gerät, auf dem eine Lehrperson angemeldet ist, geht das Kinder-Login erst nach dem Abmelden.
 - **Kärtchen verloren?** Beim Kind auf das Symbol mit den gekreuzten Pfeilen tippen: Es bekommt neue Bilder, das alte Kärtchen gilt nicht mehr.
@@ -49,7 +49,7 @@ Laufen Vokaboom und Einmaleins beide unter fabulousteaching.ch (`vokaboom.fabulo
 ## Was gespeichert wird
 
 - Von Lehrpersonen: die E-Mail-Adresse (für die Anmeldung), die Klassen mit ihren Einstellungen.
-- Von Kindern: Vorname, erster Buchstabe des Nachnamens, Benutzername, Bilder-Passwort und der Übungsstand (pro Rechnung: wie oft geübt, wie oft falsch, Zeit, die letzten falschen Antworten; Übungstage; Bestleistungen in den Spielen). Keine E-Mail-Adressen.
+- Von Kindern: Vorname, erster Buchstabe des Nachnamens, Benutzername, Bilder-Passwort und der Übungsstand (pro Rechnung: wie oft geübt, wie oft falsch, Zeit, die letzten falschen Antworten; Übungstage; Bestleistungen in den Spielen; Münzen). Keine E-Mail-Adressen.
 - Ohne Anmeldung bleibt alles im Browser des Geräts.
 - Gemeinsames Anmelden: Die Sitzung der Lehrperson und der Anmelde-Schlüssel eines Kindes liegen in Cookies der Domain fabulousteaching.ch (nur für Vokaboom und Einmaleins, keine Werbung oder Statistik).
 - Die Zugriffsregeln sorgen dafür, dass jede Lehrperson nur ihre eigenen Klassen und Kinder sieht. Kinder können nur ihren eigenen Übungsstand lesen und speichern.

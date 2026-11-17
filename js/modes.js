@@ -11,7 +11,6 @@ const EX_ART = {
 const EXERCISES = [
   { id: 'trainer', name: 'Trainer', desc: 'Ergebnis eintippen. Was Mühe macht, kommt wieder.', color: 'teal', art: EX_ART.trainer },
   { id: 'choice', name: 'Auswählen', desc: 'Aus vier Antworten die richtige antippen.', color: 'coral', art: EX_ART.choice },
-  { id: 'inverse', name: 'Geteilt & Lücken', desc: '56 : 8 = ?  und  ? · 8 = 56', color: 'blue', art: EX_ART.inverse },
   { id: 'reihen', name: 'Reihen-Treppe', desc: 'Eine Reihe hinauf, dann gemischt.', color: 'purple', art: EX_ART.reihen },
   { id: 'blitz', name: 'Blitztest', desc: '20 Rechnungen auf Zeit. Schaffst du 3 Sterne?', color: 'sun', art: EX_ART.blitz, bestText: (ms) => `${(ms / 1000).toFixed(1).replace('.', ',')} s` },
 ];
@@ -63,29 +62,20 @@ function openExercise(id) {
   go('ex', { mode: id });
 }
 
-function inverseKinds() {
-  const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
-  const o = cls?.ops;
-  if (!o) return { div: true, gap: true };
-  const k = { div: !!o.div, gap: !!o.gap };
-  return k.div || k.gap ? k : { div: true, gap: true };
-}
-
 function renderExercise() {
   stopExercise();
   const m = ui.mode;
   Object.assign(ex, { mode: m, i: 0, right: 0, wrong: 0, mistakes: [], phase: 'ask', task: null, t0: performance.now() });
   if (m === 'reihen') { renderReihenStart(); return; }
-  ex.total = m === 'blitz' ? 20 : (db.settings.roundLen || 20);
   const ps = practiceSettings();
-  const kinds = m === 'inverse' ? inverseKinds() : m === 'blitz' ? { mul: ps.ops.mul || (!ps.ops.div && !ps.ops.gap), div: ps.ops.div, gap: false } : null;
-  ex.picker = createPicker(buildPool(ps, kinds));
+  ex.total = m === 'blitz' ? 20 : ps.roundLen; // Anzahl Rechnungen pro Runde legt die Lehrperson fest
+  ex.picker = createPicker(buildPool(ps));
   const info = EXERCISE_BY_ID[m];
   $('#view').innerHTML = `<section class="mode ex-${m} c-${info.color}">
     <div class="mode-bar">
       <h1 class="mode-title">${esc(info.name)}</h1>
       <div class="mode-controls">
-        ${m === 'blitz' ? `<span class="timer" id="timer">${icon('clock')} <b>0,0</b> s</span>` : `<div class="seg small" aria-label="Länge der Runde">${[10, 20, 30].map((n) => `<button class="seg-btn" data-action="round-len" data-n="${n}" aria-pressed="${ex.total === n}">${n}</button>`).join('')}</div>`}
+        ${m === 'blitz' ? `<span class="timer" id="timer">${icon('clock')} <b>0,0</b> s</span>` : ''}${exCoinHTML()}
       </div>
     </div>
     <div class="progress" aria-hidden="true"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
@@ -148,7 +138,9 @@ function submitInput(v) {
   if (ex.phase !== 'ask') return;
   if (ex.mode === 'reihen') { ex.phase = 'done'; reiheAnswer(v); return; }
   const ms = performance.now() - t.shownAt;
+  const before = statOf(t.key) ? { ...statOf(t.key) } : null;
   const ok = recordAnswer(t, v, ms);
+  if (ok) earnPoints(pointsFor(before, ms, true), $('#tcard'));
   const card = $('#tcard'), fb = $('#fb');
   if (ok) {
     ex.right++;
@@ -212,7 +204,9 @@ function exChoose(btn) {
   const t = ex.task;
   const v = btn.dataset.v;
   const ms = performance.now() - t.shownAt;
+  const before = statOf(t.key) ? { ...statOf(t.key) } : null;
   const ok = recordAnswer(t, v, ms);
+  if (ok) earnPoints(pointsFor(before, ms, true, 0.75), $('#tcard')); // Auswählen ist leichter
   ex.phase = 'done';
   $$('.choice').forEach((b) => { b.disabled = true; if (Number(b.dataset.v) === t.answer) b.classList.add('right'); });
   $('#slot .slot-val').textContent = t.answer;
@@ -259,6 +253,9 @@ function finishExercise() {
     saveDB();
   }
   if (st >= 2) { sfx.win(); confetti(); }
+  // Bonus für eine gute Runde: ab 80 % richtig 2 Punkte, alles richtig 4 Punkte
+  const bonus = ex.total >= 10 ? (ex.right === ex.total ? 4 : acc >= 0.8 ? 2 : 0) : 0;
+  if (bonus) setTimeout(() => earnPoints(bonus, $('.result h2')), 700);
   const titles = ['Weiter üben!', 'Gut gemacht!', 'Sehr gut!', 'Hervorragend!'];
   const host = m === 'reihen' ? $('.reihe-layout') : $('#stage');
   host.innerHTML = `<div class="result">
@@ -266,6 +263,7 @@ function finishExercise() {
     <h2>${titles[st]}</h2>
     <p class="result-line">${ex.right} von ${ex.total} richtig.</p>
     ${extra}
+    ${bonus && !gamesFree() ? `<p class="pill good bonus-pill">${COIN_SVG} +${bonus} Bonuspunkte für eine gute Runde</p>` : ''}
     ${ex.mistakes.length ? `<div class="mistakes"><p class="label">Diese Rechnungen kommen bald wieder</p><ul>${[...new Map(ex.mistakes.map((x) => [x.t.key + x.t.op, x])).values()].map((x) => `<li><span class="m-task">${esc(taskText(x.t, true))}</span>${x.given ? `<span class="m-given">du: ${esc(x.given)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
     <div class="row center">
       <button class="btn primary big" data-action="ex-again">${icon('flip')} Nochmals</button>
@@ -304,7 +302,7 @@ function renderReihenStart() {
 function startReihe() {
   stopExercise();
   Object.assign(ex, { mode: 'reihen', step: 0, stage: 'up', right: 0, wrong: 0, mistakes: [], i: 0, total: 20, t0: performance.now() });
-  ex.order = shuffle(ALL_REIHEN);
+  ex.order = shuffle(REIHEN_KLEIN);
   const b = ex.reihe;
   $('#view').innerHTML = `<section class="mode ex-reihen c-purple">
     <div class="mode-bar"><h1 class="mode-title">${b}er-Reihe</h1>
@@ -312,10 +310,11 @@ function startReihe() {
     <div class="progress" aria-hidden="true"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
     <div class="progress-label"><span id="plabel"></span><span class="tally"><b class="ok">${icon('check')}<span id="t-ok">0</span></b><b class="bad">${icon('x')}<span id="t-bad">0</span></b></span></div>
     <div class="reihe-layout">
-      <div class="stairs" id="stairs" aria-hidden="true">${ALL_REIHEN.map((a) => `<div class="stair" data-a="${a}" style="--a:${a}"><span class="st-q">${a}${SIGN()}${b}</span><b class="st-v"></b></div>`).join('')}<span class="climber" id="climber">🐿️</span></div>
+      <div class="stairs" id="stairs" aria-hidden="true"><span class="st-sun"></span><span class="st-hill h1"></span><span class="st-hill h2"></span>${REIHEN_KLEIN.map((a) => `<div class="stair" data-a="${a}" style="--a:${a}"><span class="st-q">${a}${SIGN()}${b}</span><b class="st-v"></b></div>`).join('')}<span class="climber" id="climber">${SQUIRREL_SVG}</span></div>
       <div class="reihe-input"><div id="stage" class="stage"></div></div>
     </div>
   </section>`;
+  moveClimber(0, false);
   nextReiheTask();
 }
 function nextReiheTask() {
@@ -334,7 +333,10 @@ function reiheAnswer(v) {
   const t = ex.task;
   const ok = Number(v) === t.answer;
   // Die Treppe hinauf ist leichter (immer + die Reihe): nur Fehler zählen fürs Gedächtnis. Gemischt zählt alles.
-  if (ex.stage === 'mix' || !ok) recordAnswer(t, v, performance.now() - t.shownAt);
+  const ms = performance.now() - t.shownAt;
+  const before = statOf(t.key) ? { ...statOf(t.key) } : null;
+  if (ex.stage === 'mix' || !ok) recordAnswer(t, v, ms);
+  if (ok) earnPoints(pointsFor(before, ms, true, ex.stage === 'mix' ? 1 : 0.5), $('#tcard'));
   const st = $(`.stair[data-a="${t.a}"]`);
   if (ok) {
     ex.right++; sfx.jump();
@@ -356,7 +358,45 @@ function reiheAnswer(v) {
     nextReiheTask();
   }, ok ? 550 : 1500);
 }
-function moveClimber(a) {
-  const c = $('#climber');
-  if (c) c.style.setProperty('--a', a);
+/* Eichhörnchen: schaut nach rechts, springt mit Beinbewegung von Stufe zu Stufe */
+const SQUIRREL_SVG = `<svg viewBox="0 0 120 100" aria-hidden="true"><defs><linearGradient id="sqf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8873F"/><stop offset="1" stop-color="#B9581F"/></linearGradient></defs>
+<g class="sq-tail"><path d="M48 70C20 76 6 52 14 30C21 12 45 9 51 24C55 35 46 43 38 38" fill="none" stroke="#C4642A" stroke-width="22" stroke-linecap="round"/><path d="M47 66C26 69 15 51 21 34C26 21 42 19 45 28" fill="none" stroke="#EE9C5E" stroke-width="8" stroke-linecap="round" opacity=".8"/></g>
+<g class="sq-leg-back"><path d="M58 76q-3 9-13 11" fill="none" stroke="#A04C1B" stroke-width="9" stroke-linecap="round"/><ellipse cx="42" cy="88" rx="9" ry="4.2" fill="#8A3F15"/></g>
+<ellipse class="sq-body" cx="68" cy="66" rx="23" ry="17" fill="url(#sqf)" transform="rotate(-14 68 66)"/>
+<ellipse cx="78" cy="71" rx="10" ry="10" fill="#F6D7B0"/>
+<g class="sq-leg-front"><path d="M83 75q3 7 10 9" fill="none" stroke="#A04C1B" stroke-width="6.5" stroke-linecap="round"/><ellipse cx="95" cy="85" rx="5.5" ry="3.2" fill="#8A3F15"/></g>
+<g class="sq-head"><path d="M79 36l1-15 10 11z" fill="#B9581F"/><path d="M81 33l1-8 5 6z" fill="#F2B8A0"/><circle cx="89" cy="46" r="15.5" fill="url(#sqf)"/><circle cx="97" cy="52" r="7" fill="#F6D7B0"/><circle cx="93" cy="42.5" r="3.4" fill="#1F1A17"/><circle cx="94.2" cy="41.3" r="1.1" fill="#fff"/><circle cx="104.5" cy="48" r="2.6" fill="#3B2314"/><path d="M98 55q3 2 6-1" fill="none" stroke="#7A3A16" stroke-width="1.4" stroke-linecap="round"/></g>
+<g class="sq-acorn"><ellipse cx="96" cy="68" rx="5" ry="6" fill="#B07A3A"/><path d="M90.5 64.5q5.5-5 11 0z" fill="#6B4423"/></g></svg>`;
+/** Wo steht das Eichhörnchen auf Stufe a (0 = am Boden davor)? */
+function climberPos(a) {
+  const stairs = $('#stairs'), c = $('#climber');
+  if (!stairs || !c) return null;
+  const st = $(`.stair[data-a="${Math.max(1, a)}"]`);
+  const w = c.offsetWidth;
+  if (!a) return { left: st.offsetLeft - w * 0.95, bottom: 12 };
+  return { left: st.offsetLeft + st.offsetWidth / 2 - w * 0.55, bottom: stairs.clientHeight - st.offsetTop - 4 };
 }
+function moveClimber(a, jump = true) {
+  const c = $('#climber');
+  const to = climberPos(a);
+  if (!c || !to) return;
+  const from = { left: parseFloat(c.style.left) || to.left, bottom: parseFloat(c.style.bottom) || to.bottom };
+  c.style.left = `${to.left}px`; c.style.bottom = `${to.bottom}px`;
+  c.dataset.a = a;
+  if (!jump || reduceMotion()) return;
+  const dx = to.left - from.left;
+  c.classList.toggle('flip', dx < -4);
+  const apex = Math.max(from.bottom, to.bottom) + 46 + Math.min(60, Math.abs(dx) * 0.15);
+  c.getAnimations().forEach((x) => x.cancel());
+  c.classList.remove('landing'); c.classList.add('jumping');
+  c.animate([
+    { left: `${from.left}px`, bottom: `${from.bottom}px` },
+    { left: `${from.left + dx * 0.12}px`, bottom: `${from.bottom - 4}px`, offset: 0.12 },
+    { left: `${from.left + dx * 0.5}px`, bottom: `${apex}px`, offset: 0.5, easing: 'ease-in' },
+    { left: `${to.left}px`, bottom: `${to.bottom}px` },
+  ], { duration: 620, easing: 'ease-out' }).finished.then(() => {
+    c.classList.remove('jumping'); void c.offsetWidth; c.classList.add('landing');
+    setTimeout(() => c.classList.remove('landing'), 260);
+  }).catch(() => {});
+}
+window.addEventListener('resize', () => { const c = $('#climber'); if (c) moveClimber(+c.dataset.a || 0, false); });

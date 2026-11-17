@@ -174,7 +174,7 @@ function planSheet(prog, reihen, opts) {
   });
   const focus = focusFacts.slice(0, 8);
   let rs = reihen?.length ? reihen : [...new Set(Object.keys(prog.f).map((k) => taskKeyParts(k)?.b).filter(Boolean))];
-  if (!rs.length) rs = [...ALL_REIHEN];
+  if (!rs.length) rs = [...REIHEN_KLEIN];
   // Zum Auffüllen: Rechnungen aus den Reihen, ohne die ganz einfachen (mal 1), mal 10 nur selten
   let fillPool = [];
   const trivial = rs.every((b) => b === 1 || b === 10);

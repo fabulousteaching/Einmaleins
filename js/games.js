@@ -3,12 +3,18 @@
 'use strict';
 
 const GAMES = [
-  { id: 'elfmeter', name: 'Elfmeter', desc: 'Schiess ins Tor-Eck mit dem richtigen Ergebnis.', color: 'green', art: '<span class="emo">⚽</span>', bestText: (n) => `${n} Tore` },
-  { id: 'meteor', name: 'Meteoriten', desc: 'Schiess den richtigen Meteoriten ab, bevor er landet.', color: 'night', art: '<span class="emo">☄️</span>', bestText: (n) => `${n} Treffer` },
-  { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf die Reihe entlang von Seerose zu Seerose.', color: 'lime', art: '<span class="emo">🐸</span>', bestText: (n) => `${n} Reihen` },
-  { id: 'memory', name: 'Memory', desc: 'Finde zu jeder Rechnung das Ergebnis.', color: 'pink', art: '<span class="emo">🃏</span>', bestText: (ms) => `${Math.round(ms / 1000)} s` },
-  { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? 60 Sekunden Blitzrunde.', color: 'sun', art: '<span class="emo">✅</span>', bestText: (n) => `${n} Punkte` },
-  { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>' },
+  { id: 'elfmeter', name: 'Elfmeter', desc: 'Du bist der Ball: ab ins richtige Tor-Eck!', color: 'green', art: '<span class="emo">⚽</span>', bestText: (n) => `${n} Tore`, three: true,
+    howto: 'Im Tor stehen Ergebnisse. Tippe auf das richtige – der Ball fliegt los, und du fliegst mit. Bei einer falschen Antwort hält der Torhüter. 10 Elfmeter.' },
+  { id: 'meteor', name: 'Meteoriten', desc: 'Im Cockpit: Schiess den richtigen Meteoriten ab.', color: 'night', art: '<span class="emo">☄️</span>', bestText: (n) => `${n} Treffer`, three: true,
+    howto: 'Du sitzt im Cockpit deiner Rakete. Meteoriten mit Zahlen rasen auf dich zu. Tippe den mit dem richtigen Ergebnis an, bevor er dich trifft. 3 Schutzschilde – es wird immer schneller.' },
+  { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Mit Froschaugen von Seerose zu Seerose.', color: 'lime', art: '<span class="emo">🐸</span>', bestText: (n) => `${n} Reihen`, three: true,
+    howto: 'Du bist der Frosch. Tippe auf die Seerose mit der nächsten Zahl der Reihe – und spring! Falsche Seerosen versinken.' },
+  { id: 'memory', name: 'Memory', desc: 'Finde zu jeder Rechnung das Ergebnis.', color: 'pink', art: '<span class="emo">🃏</span>', bestText: (ms) => `${Math.round(ms / 1000)} s`,
+    howto: 'Tippe eine Rechnung und dann ihr Ergebnis an. Offen: alle Karten sichtbar. Verdeckt: wie das klassische Memory.' },
+  { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? 60 Sekunden Blitzrunde.', color: 'sun', art: '<span class="emo">✅</span>', bestText: (n) => `${n} Punkte`,
+    howto: 'Stimmt die Rechnung oder nicht? Du hast 60 Sekunden. Alle 5 richtigen hintereinander gibt es 3 Sekunden dazu. Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
+  { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>',
+    howto: 'Legt das Tablet zwischen euch. Wer zuerst das richtige Ergebnis antippt, bekommt den Punkt. Falsch getippt = kurz gesperrt.' },
 ];
 const GAME_BY_ID = Object.fromEntries(GAMES.map((g) => [g.id, g]));
 
@@ -19,6 +25,8 @@ function stopGame() {
   cancelAnimationFrame(game.raf); game.raf = 0;
   clearInterval(game.tick); game.tick = null;
   if (game.keyHandler) { document.removeEventListener('keydown', game.keyHandler); game.keyHandler = null; }
+  if (game.stage3d) { game.stage3d.dispose(); game.stage3d = null; }
+  game.pick = null; game.frogBack = null; game.over = true;
 }
 function openGame(id) { if (GAME_BY_ID[id]) go('game', { game: id }); }
 function gamePicker(kinds = null) {
@@ -40,6 +48,21 @@ function gameResultHTML({ st, title, line, extra = '', again = 'game-again' }) {
   return `<div class="result">${stars(st)}<h2>${title}</h2><p class="result-line">${line}</p>${extra}
     <div class="row center"><button class="btn primary big" data-action="${again}">${icon('flip')} Nochmals</button><button class="btn ghost big" data-action="home">Anderes Spiel</button></div></div>`;
 }
+/** Funken um ein Element (z. B. gefundenes Memory-Paar) */
+function sparkle(el, n = 10) {
+  if (reduceMotion() || !el) return;
+  const r = el.getBoundingClientRect();
+  const cols = ['#FFC233', '#FF6B4A', '#22C55E', '#38BDF8', '#F472B6'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('i');
+    s.className = 'spark';
+    s.style.background = cols[i % cols.length];
+    document.body.appendChild(s);
+    const a = (i / n) * Math.PI * 2, d = 40 + Math.random() * 40;
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    s.animate([{ transform: `translate(${x}px, ${y}px) scale(1)`, opacity: 1 }, { transform: `translate(${x + Math.cos(a) * d}px, ${y + Math.sin(a) * d}px) scale(.2)`, opacity: 0 }], { duration: 600, easing: 'ease-out' }).finished.then(() => s.remove());
+  }
+}
 function gameShell(id, inner, controls = '') {
   const g = GAME_BY_ID[id];
   return `<section class="mode game game-${id} c-${g.color}">
@@ -48,10 +71,53 @@ function gameShell(id, inner, controls = '') {
   </section>`;
 }
 
+/* ---------------- Startkarte: Einstellungen und Münze ---------------- */
+function gateOptionsHTML(id) {
+  const seg = (action, cur, list) => `<div class="seg">${list.map(([v, t]) => `<button class="seg-btn" data-action="${action}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
+  if (id === 'elfmeter') return seg('elf-level', db.settings.elfLevel === 2 ? 2 : 1, [[1, 'Training (3 Ecken)'], [2, 'Profi (4 Ecken, mit Zeit)']]);
+  if (id === 'memory') return seg('mem-mode', db.settings.memOpen !== false, [[true, 'Offen'], [false, 'Verdeckt']]);
+  if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
+  if (id === 'frog') {
+    const ps = practiceSettings();
+    if (!ps.reihen.includes(game.frogReihe)) game.frogReihe = weakestReihe();
+    return `<div class="gate-reihen">${ps.reihen.map((r) => `<button class="reihe r${((r - 1) % 10) + 1} ${r > 10 ? 'gross' : ''}" data-action="frog-reihe" data-r="${r}" aria-pressed="${r === game.frogReihe}"><b>${r}</b><small>er</small></button>`).join('')}</div>`;
+  }
+  return '';
+}
 function renderGame() {
   stopGame();
   game.id = ui.game;
-  ({ elfmeter: startElfmeter, meteor: startMeteor, frog: startFrog, memory: startMemory, truefalse: startTrueFalse, duel: startDuel })[ui.game]?.();
+  game.over = false;
+  const g = GAME_BY_ID[ui.game];
+  if (!g) return;
+  const c = coinsOf();
+  const free = gamesFree(), can = canPlay();
+  const opts = gateOptionsHTML(g.id);
+  $('#view').innerHTML = `<section class="mode game gate c-${g.color}">
+    <div class="gate-card">
+      <span class="gate-art" aria-hidden="true">${g.art}</span>
+      <h1>${esc(g.name)}</h1>
+      <p class="gate-how">${esc(g.howto)}</p>
+      ${opts ? `<div class="gate-opts">${opts}</div>` : ''}
+      ${can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
+        <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${c.c} ${c.c === 1 ? 'Münze' : 'Münzen'}.`}</p>`
+    : `<div class="gate-need">${COIN_SVG}<p><b>Dir fehlt noch eine Münze.</b><br>Münzen verdienst du beim Üben: für jede richtige Antwort gibt es Punkte. ${coinThreshold()} Punkte = 1 Münze.</p></div>
+        <button class="btn primary big" data-action="open-ex" data-id="trainer">${icon('keypad')} Zum Trainer</button>`}
+      <button class="btn ghost" data-action="home">Zurück</button>
+    </div>
+  </section>`;
+}
+const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel() };
+const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D() };
+async function startGameNow() {
+  if (!payForGame()) { renderGame(); return; }
+  const id = ui.game;
+  game.over = false;
+  if (START_3D[id] && webglOK()) {
+    $('#view').innerHTML = `<section class="mode game gate"><div class="gate-card"><span class="spinner big"></span><p>Die 3D-Welt wird geladen …</p></div></section>`;
+    try { await START_3D[id](); return; } catch (e) { console.warn('3D nicht möglich, 2D-Version', e); stopGame(); game.over = false; }
+  }
+  START_2D[id]?.();
 }
 
 /* =========================================================
@@ -73,7 +139,7 @@ function startElfmeter() {
       <div class="pitch-msg" id="pmsg"></div>
     </div>
     <p class="mode-hint">Tippe auf das Tor-Eck mit dem richtigen Ergebnis.${lvl === 2 ? ' Profi: Du hast 6 Sekunden pro Schuss.' : ''}</p>`,
-  `<div class="seg small">${[[1, 'Training'], [2, 'Profi']].map(([v, t]) => `<button class="seg-btn" data-action="elf-level" data-v="${v}" aria-pressed="${lvl === v}">${t}</button>`).join('')}</div>`);
+  '');
   setGameKeys((e) => { if (/^[1-4]$/.test(e.key)) { const b = $$('.target')[+e.key - 1]; if (b) elfShoot(b); } });
   elfNext();
 }
@@ -309,7 +375,7 @@ function startFrog() {
       <div class="home-pad"><span class="pad-num" id="curnum">0</span><span class="frog" id="frog">🐸</span></div>
     </div>
     <p class="mode-hint">Hüpf auf die Seerose mit der nächsten Zahl der Reihe.</p>`,
-  `<div class="seg small" aria-label="Reihe">${ps.reihen.map((x) => `<button class="seg-btn" data-action="frog-reihe" data-r="${x}" aria-pressed="${x === r}">${x}er</button>`).join('')}</div>`);
+  '');
   frogRound();
 }
 function frogRound() {
@@ -390,12 +456,12 @@ function startMemory() {
     prods.add(t.p); facts.add(t.fact); pairs.push(t);
   }
   const cards = shuffle(pairs.flatMap((t, i) => [{ id: i, kind: 'task', t }, { id: i, kind: 'res', t }]));
-  Object.assign(game, { open, pairs, cards, sel: null, found: 0, moves: 0, errs: 0, t0: performance.now(), locked: false });
+  Object.assign(game, { open, pairs, cards, sel: null, found: 0, moves: 0, errs: 0, combo: 0, t0: performance.now(), locked: false });
   $('#view').innerHTML = gameShell('memory', `
-    <div class="mem-bar"><span>${icon('clock')} <b id="memt">0</b> s</span><span>Paare <b id="memf">0</b>/${pairs.length}</span>${open ? '' : '<span>Züge <b id="memm">0</b></span>'}</div>
-    <div class="mem-grid ${open ? 'open' : ''}" id="memgrid">${cards.map((c, i) => `<button class="mem-card ${c.kind}" data-action="mem-flip" data-i="${i}" aria-label="${open ? (c.kind === 'task' ? taskText({ ...c.t, op: 'mul' }) : c.t.p) : 'Karte'}"><span class="mc-in"><span class="mc-back" aria-hidden="true">${BRAND_SVG('mcb' + i)}</span><span class="mc-face">${c.kind === 'task' ? `${c.t.a}<em>${SIGN()}</em>${c.t.b}` : c.t.p}</span></span></button>`).join('')}</div>
+    <div class="mem-bar"><span>${icon('clock')} <b id="memt">0</b> s</span><span>Paare <b id="memf">0</b>/${pairs.length}</span>${open ? '' : '<span>Züge <b id="memm">0</b></span>'}<span class="mem-combo" id="memcombo"></span></div>
+    <div class="mem-grid ${open ? 'open' : ''}" id="memgrid">${cards.map((c, i) => `<button class="mem-card ${c.kind} deal" style="--d:${i * 45}ms" data-action="mem-flip" data-i="${i}" aria-label="${open ? (c.kind === 'task' ? taskText({ ...c.t, op: 'mul' }) : c.t.p) : 'Karte'}"><span class="mc-in"><span class="mc-back" aria-hidden="true">${BRAND_SVG('mcb' + i)}</span><span class="mc-face">${c.kind === 'task' ? `${c.t.a}<em>${SIGN()}</em>${c.t.b}` : c.t.p}</span></span></button>`).join('')}</div>
     <p class="mode-hint">${open ? 'Tippe eine Rechnung und dann ihr Ergebnis an.' : 'Decke zwei Karten auf: Rechnung und Ergebnis gehören zusammen.'}</p>`,
-  `<div class="seg small">${[[true, 'Offen'], [false, 'Verdeckt']].map(([v, t]) => `<button class="seg-btn" data-action="mem-mode" data-v="${v}" aria-pressed="${open === v}">${t}</button>`).join('')}</div>`);
+  '');
   game.tick = setInterval(() => { const el = $('#memt'); if (el) el.textContent = Math.floor((performance.now() - game.t0) / 1000); }, 250);
   pairs.forEach((t) => { t.shownAt = performance.now(); });
 }
@@ -420,13 +486,17 @@ function memFlip(btn) {
   if (match) {
     c.done = d.done = true;
     game.found++;
+    game.combo++;
     game.lastFound = performance.now();
     sfx.good();
-    [btn, other].forEach((b) => { b.classList.remove('sel'); b.classList.add('done'); });
+    [btn, other].forEach((b) => { b.classList.remove('sel'); b.classList.add('done'); sparkle(b); });
     $('#memf').textContent = game.found;
+    const cb = $('#memcombo');
+    if (cb && game.combo >= 2) { cb.textContent = `${game.combo}er-Kombo!`; cb.classList.remove('show'); void cb.offsetWidth; cb.classList.add('show'); tone([660 + game.combo * 80], 0.08, 'triangle', 0.08); }
     if (game.found === game.pairs.length) gLater(memoryEnd, 700);
   } else {
     game.errs++;
+    game.combo = 0;
     sfx.bad();
     game.locked = true;
     [btn, other].forEach((b) => b.classList.add('nope'));
@@ -450,15 +520,16 @@ function memoryEnd() {
    ✅ Stimmt das? (60 Sekunden)
    ========================================================= */
 function startTrueFalse() {
-  Object.assign(game, { picker: gamePicker(), score: 0, streak: 0, left: 60000, last: performance.now(), paused: false, stmt: null, over: false, wrongs: [] });
+  Object.assign(game, { picker: gamePicker(), score: 0, streak: 0, best: 0, left: 60000, last: performance.now(), paused: false, stmt: null, over: false, wrongs: [] });
   $('#view').innerHTML = gameShell('truefalse', `
     <div class="tf-top"><div class="tf-time"><i id="tfbar"></i></div><span class="tf-score">Punkte <b id="tfs">0</b></span></div>
-    <div class="task-card tf-card" id="tcard"><div class="task" id="tftask"></div><div class="tf-bonus" id="tfbonus"></div></div>
+    <div class="tf-streak" id="tfstreak" aria-label="Serie">${'<i></i>'.repeat(5)}<span id="tfbonus" class="tf-bonus"></span></div>
+    <div class="tf-deck" id="tfdeck"></div>
     <div class="tf-btns">
       <button class="tf-btn no" data-action="tf-answer" data-v="0">${icon('x')}<span>Stimmt nicht</span></button>
       <button class="tf-btn yes" data-action="tf-answer" data-v="1">${icon('check')}<span>Stimmt</span></button>
     </div>
-    <p class="mode-hint keys">Pfeiltasten: ← stimmt nicht, → stimmt. Alle 5 richtigen hintereinander gibt es 3 Sekunden dazu.</p>`);
+    <p class="mode-hint">Wische die Karte nach rechts (stimmt) oder links (stimmt nicht) – oder tippe auf die Knöpfe. Pfeiltasten gehen auch.</p>`);
   setGameKeys((e) => { if (e.key === 'ArrowLeft') tfAnswer(false); if (e.key === 'ArrowRight') tfAnswer(true); });
   tfNext();
   const loop = (now) => {
@@ -473,13 +544,47 @@ function startTrueFalse() {
   game.raf = requestAnimationFrame(loop);
 }
 function tfNext() {
+  if (game.over) return;
   const t = game.picker.next();
   const truth = Math.random() < 0.5;
   const shown = truth ? t.answer : distractors(t, 1)[0];
   game.stmt = { t, shown, truth: shown === t.answer };
   game.locked = false;
-  $('#tcard').className = 'task-card tf-card';
-  $('#tftask').innerHTML = taskHTML(t, `<span class="num shown">${shown}</span>`);
+  const deck = $('#tfdeck');
+  if (!deck) return;
+  const card = document.createElement('div');
+  card.className = 'tf-card task-card in';
+  card.innerHTML = `<div class="task">${taskHTML(t, `<span class="num shown">${shown}</span>`)}</div><div class="tf-note"></div>`;
+  deck.appendChild(card);
+  game.card = card;
+  // Wischen: Karte ziehen, beim Loslassen entscheidet die Richtung
+  let x0 = null, dx = 0;
+  card.addEventListener('pointerdown', (e) => { if (game.locked) return; x0 = e.clientX; dx = 0; card.setPointerCapture(e.pointerId); card.classList.add('drag'); });
+  card.addEventListener('pointermove', (e) => {
+    if (x0 == null) return;
+    dx = e.clientX - x0;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    card.classList.toggle('lean-yes', dx > 40);
+    card.classList.toggle('lean-no', dx < -40);
+  });
+  const up = () => {
+    if (x0 == null) return;
+    x0 = null;
+    card.classList.remove('drag', 'lean-yes', 'lean-no');
+    if (Math.abs(dx) > 70) tfAnswer(dx > 0);
+    else card.style.transform = '';
+  };
+  card.addEventListener('pointerup', up);
+  card.addEventListener('pointercancel', up);
+}
+function tfFloat(text, cls) {
+  const deck = $('#tfdeck');
+  if (!deck) return;
+  const f = document.createElement('span');
+  f.className = `tf-float ${cls}`;
+  f.textContent = text;
+  deck.appendChild(f);
+  setTimeout(() => f.remove(), 900);
 }
 function tfAnswer(says) {
   if (game.locked || game.over || !game.stmt) return;
@@ -488,22 +593,40 @@ function tfAnswer(says) {
   const ok = says === truth;
   // fürs Gedächtnis: richtig erkannt = gewusst; „stimmt“ bei falschem Ergebnis = diese Verwechslung
   recordAnswer(t, ok ? t.answer : (says ? shown : ''), performance.now() - t.shownAt);
+  const card = game.card;
+  const leave = (delay) => gLater(() => {
+    card.classList.add(says ? 'out-yes' : 'out-no');
+    card.style.transform = '';
+    setTimeout(() => card.remove(), 450);
+    tfNext();
+  }, delay);
   if (ok) {
-    game.score++; game.streak++;
+    game.score++; game.streak++; game.best = Math.max(game.best, game.streak);
     sfx.good();
-    $('#tcard').classList.add('good');
-    if (game.streak % 5 === 0) { game.left += 3000; const b = $('#tfbonus'); b.textContent = '+3 s'; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); }
+    card.classList.add('good');
+    tfFloat('+1', 'good');
+    if (game.streak % 5 === 0) { game.left += 3000; const b = $('#tfbonus'); b.textContent = '+3 s'; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); tone([880, 1175], 0.08, 'triangle', 0.1); }
     $('#tfs').textContent = game.score;
-    gLater(tfNext, 280);
   } else {
     game.streak = 0;
     sfx.bad();
     game.wrongs.push(t);
-    $('#tcard').classList.add('bad');
-    game.paused = true;
-    $('#tftask').innerHTML = `<span class="tf-sol">${esc(taskText(t, true))}</span>`;
-    gLater(() => { game.paused = false; tfNext(); }, 1500);
+    card.classList.add('bad');
   }
+  const lit = game.streak % 5 || (game.streak ? 5 : 0);
+  $$('#tfstreak i').forEach((el, i) => el.classList.toggle('on', i < lit));
+  // Ist die Rechnung falsch, zeigen wir immer die richtige – auch wenn das Kind es richtig erkannt hat
+  if (!truth || !ok) {
+    game.paused = true;
+    const note = card.querySelector('.tf-note');
+    note.innerHTML = truth
+      ? `<span class="tf-sol">Stimmt doch: <b>${esc(taskText(t, true))}</b></span>`
+      : `<span class="tf-sol">${ok ? 'Gut erkannt!' : 'Leider falsch.'} Richtig ist <b>${esc(taskText(t, true))}</b></span>`;
+    card.querySelector('.num.shown')?.classList.add(truth ? 'is-true' : 'strike');
+    const wait = ok ? 1150 : 1800;
+    gLater(() => { game.paused = false; }, wait);
+    leave(wait);
+  } else leave(170);
 }
 function tfEnd() {
   game.over = true;
@@ -513,7 +636,7 @@ function tfEnd() {
   const { rec, old } = saveBest('truefalse', s);
   if (st >= 2 || rec) { sfx.win(); confetti(); }
   $('#view .game').innerHTML = gameResultHTML({
-    st, title: 'Zeit ist um!', line: `${s} Punkte.`,
+    st, title: 'Zeit ist um!', line: `${s} Punkte · längste Serie: ${game.best}`,
     extra: (rec && old != null ? '<p class="pill good">Neuer Rekord!</p>' : old != null ? `<p class="muted">Rekord: ${old}</p>` : '')
       + (game.wrongs.length ? `<div class="mistakes"><p class="label">Merk dir</p><ul>${[...new Map(game.wrongs.map((t) => [t.key + t.op, t])).values()].map((t) => `<li><span class="m-task">${esc(taskText(t, true))}</span></li>`).join('')}</ul></div>` : ''),
   });
@@ -531,10 +654,25 @@ function startDuel() {
       <div class="dh-opts" id="do${p}"></div>
     </div>`;
   $('#view').innerHTML = gameShell('duel', `
-    <div class="duel" id="duel">${half(0)}<div class="duel-mid"><span>VS</span></div>${half(1)}</div>
+    <div class="duel" id="duel">${half(0)}<div class="duel-mid"><span class="rope" aria-hidden="true"><i id="ropeknot"></i></span><span class="vs">VS</span></div>${half(1)}
+      <div class="duel-count" id="duelcount"></div></div>
     <p class="mode-hint">Legt das Tablet zwischen euch. Wer zuerst richtig tippt, bekommt den Punkt. Falsch getippt = kurz gesperrt.</p>`,
-  `<div class="seg small">${[5, 10, 15].map((n) => `<button class="seg-btn" data-action="duel-goal" data-n="${n}" aria-pressed="${goal === n}">bis ${n}</button>`).join('')}</div>`);
-  duelNext();
+  '');
+  // Countdown 3 – 2 – 1 – Los!
+  game.roundDone = true;
+  const cd = $('#duelcount');
+  ['3', '2', '1', 'Los!'].forEach((x, i) => gLater(() => {
+    cd.textContent = x; cd.classList.remove('show'); void cd.offsetWidth; cd.classList.add('show');
+    tone([i < 3 ? 520 : 880], 0.12, 'triangle', 0.1);
+    if (i === 3) { gLater(() => { cd.textContent = ''; }, 500); duelNext(); }
+  }, i * 650));
+}
+/** Seilziehen: Der Knoten wandert zum Kind, das vorne liegt */
+function duelRope() {
+  const k = $('#ropeknot');
+  if (!k) return;
+  const diff = (game.pts[1] - game.pts[0]) / game.goal;
+  k.style.setProperty('--pos', `${50 + clamp(diff, -1, 1) * 45}%`);
 }
 function duelNext() {
   const t = game.picker.next();
@@ -557,6 +695,9 @@ function duelTap(btn) {
     btn.classList.add('right');
     $(`#dh${p}`).classList.add('win');
     $(`#dp${p}`).textContent = game.pts[p];
+    $(`#dp${p}`).classList.remove('pop'); void $(`#dp${p}`).offsetWidth; $(`#dp${p}`).classList.add('pop');
+    sparkle(btn, 12);
+    duelRope();
     $$(`#do${1 - p} .choice`).forEach((b) => { if (Number(b.dataset.v) === t.answer) b.classList.add('right'); });
     if (game.pts[p] >= game.goal) { game.over = true; gLater(() => duelEnd(p), 900); return; }
     gLater(duelNext, 1000);

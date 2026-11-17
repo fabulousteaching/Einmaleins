@@ -15,7 +15,7 @@ const KID_KEY = 'einmaleins.kid';
 const KID_DB_KEY = 'einmaleins.kiddb';
 const kid = { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', busy: false, again: false, status: 'ok', sso: false, vb: false };
 const isKid = () => !!kid.token;
-const kidClassSettings = () => (isKid() ? kid.settings || { reihen: ALL_REIHEN, ops: { mul: true, div: true, gap: true }, choose: true } : null);
+const kidClassSettings = () => (isKid() ? kid.settings || cleanClassSettings({}) : null);
 const kidName = (k = kid) => `${k.first || k.first_name || ''}${(k.initial ?? k.last_initial) ? ` ${k.initial ?? k.last_initial}.` : ''}`;
 const displayUser = (u) => String(u || '').charAt(0).toUpperCase() + String(u || '').slice(1);
 const kidSvgURL = (svg) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -63,6 +63,9 @@ function mergeProg(a, b) {
   Object.entries(A.f).forEach(([k, s]) => { const r = B.f[k]; if (!r || s.n > r.n || (s.n === r.n && s.t > r.t)) out.f[k] = s; });
   Object.entries(A.days).forEach(([d, n]) => { out.days[d] = Math.max(n, B.days[d] || 0); });
   Object.entries(A.best).forEach(([k, v]) => { const o = B.best[k]; out.best[k] = o == null ? v : LOWER_BETTER.has(k) ? Math.min(v, o) : Math.max(v, o); });
+  // Münzen: es gilt der Stand mit mehr Aktivität (verdient + ausgegeben), damit nichts verloren geht
+  const act = (c) => (c ? c.earned + c.spent + c.p / 100 : -1);
+  if (act(A.coins) > act(B.coins)) out.coins = { ...A.coins };
   return out;
 }
 
@@ -315,11 +318,13 @@ const currentClass = () => classById(ui.classId);
 const studentsOf = (cid) => klass.students[cid] || [];
 function cleanClassSettings(s) {
   const o = s && typeof s === 'object' ? s : {};
-  const reihen = Array.isArray(o.reihen) ? o.reihen.map(Number).filter((r) => ALL_REIHEN.includes(r)) : [];
+  const big = !!o.big; // grosses Einmaleins (Reihen bis 20)
+  const reihen = Array.isArray(o.reihen) ? o.reihen.map(Number).filter((r) => reihenFor(big).includes(r)) : [];
   const ops = o.ops && typeof o.ops === 'object' ? { mul: o.ops.mul !== false, div: !!o.ops.div, gap: !!o.ops.gap } : { mul: true, div: true, gap: true };
+  const roundLen = [10, 15, 20, 30].includes(+o.roundLen) ? +o.roundLen : 20; // Rechnungen pro Runde
   // vbSkip: Kinder aus der verbundenen Vokaboom-Klasse, die nur in Einmaleins gelöscht wurden (nicht wieder holen)
   const vbSkip = Array.isArray(o.vbSkip) ? o.vbSkip.filter((x) => typeof x === 'string').slice(0, 200) : [];
-  return { reihen: reihen.length ? reihen : [...ALL_REIHEN], ops, choose: o.choose !== false, ...(vbSkip.length ? { vbSkip } : {}) };
+  return { big, reihen: reihen.length ? reihen : [...reihenFor(big)], ops, choose: o.choose !== false, roundLen, ...(vbSkip.length ? { vbSkip } : {}) };
 }
 
 async function loadClasses() {
@@ -424,7 +429,7 @@ async function importVokaboomClass(vid) {
   if (existing) { openClass(existing.id, 'kids'); return; }
   try {
     const c = await cloudClient();
-    const settings = { reihen: [...ALL_REIHEN], ops: { mul: true, div: true, gap: true }, choose: true };
+    const settings = cleanClassSettings({});
     const { data, error } = await c.from('einmaleins_classes').insert({ name: v.name.slice(0, 60), settings }).select('id').single();
     if (error) throw error;
     const r = await syncVokaboom(data.id, vid, true);
@@ -497,7 +502,7 @@ function renderClasses() {
             <span class="lib-confirm"><button class="btn small danger" data-action="class-delete-yes" data-id="${c.id}">Löschen</button><button class="btn small ghost" data-action="class-delete-no">Behalten</button></span></li>`;
         }
         const n = studentsOf(c.id).length;
-        const r = c.settings.reihen.length === 10 ? 'alle Reihen' : `${c.settings.reihen.length === 1 ? 'Reihe' : 'Reihen'} ${c.settings.reihen.join(', ')}`;
+        const r = `${c.settings.big ? 'Grosses' : 'Kleines'} Einmaleins · ${c.settings.reihen.length === reihenFor(c.settings.big).length ? 'alle Reihen' : `${c.settings.reihen.length === 1 ? 'Reihe' : 'Reihen'} ${c.settings.reihen.join(', ')}`}`;
         return `<li class="lib-item"><button class="lib-open" data-action="class-open" data-id="${c.id}">
             <span class="class-badge" aria-hidden="true">${esc(c.name.slice(0, 3))}</span>
             <span class="lib-text"><strong>${esc(c.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'} · ${esc(r)}${c.vokaboom_class && vbClassById(c.vokaboom_class) ? ' <span class="vb-tag">mit Vokaboom verbunden</span>' : ''}</small></span></button>
@@ -522,7 +527,7 @@ function renderClasses() {
     if (!name) { $('#new-class').focus(); return; }
     try {
       const c = await cloudClient();
-      const settings = { reihen: [...ALL_REIHEN], ops: { mul: true, div: true, gap: true }, choose: true };
+      const settings = cleanClassSettings({});
       const { data, error } = await c.from('einmaleins_classes').insert({ name, settings }).select('id,name,settings,created_at').single();
       if (error) throw error;
       klass.list.push({ ...data, settings: cleanClassSettings(data.settings) });
@@ -782,15 +787,23 @@ async function renameClass() {
 /* ---------- Reihen und Aufgabenarten der Klasse ---------- */
 function classSettingsHTML(c) {
   const s = c.settings;
-  const op = (k, t) => `<button type="button" class="op-chip" data-action="cls-op" data-op="${k}" aria-pressed="${!!s.ops[k]}">${t}</button>`;
+  const op = (k, sym, t) => `<button type="button" class="op-btn" data-action="cls-op" data-op="${k}" role="checkbox" aria-checked="${!!s.ops[k]}"><span class="op-sym" aria-hidden="true">${sym}</span><span>${t}</span></button>`;
   return `<div class="panel cls-settings">
     <h2>Was übt die Klasse?</h2>
+    <div class="size-pick" role="radiogroup" aria-label="Welches Einmaleins?">
+      ${[[false, 'Kleines Einmaleins', 'Reihen 1 bis 10'], [true, 'Grosses Einmaleins', 'Reihen 1 bis 20 (mit dem kleinen)']].map(([big, t, sub]) => `<button type="button" class="size-btn ${big ? 'big' : ''}" data-action="cls-size" data-big="${big}" role="radio" aria-checked="${s.big === big}"><b>${t}</b><small>${sub}</small></button>`).join('')}
+    </div>
+    <h3>Reihen</h3>
     <p class="hint">Die Kinder bekommen in allen Übungen und Spielen nur Rechnungen aus diesen Reihen.</p>
-    <div class="reihen">${ALL_REIHEN.map((r) => `<button type="button" class="reihe r${r}" data-action="cls-reihe" data-r="${r}" aria-pressed="${s.reihen.includes(r)}"><b>${r}</b><small>er</small></button>`).join('')}</div>
-    <div class="quick-pick"><button class="chip" data-action="cls-quick" data-q="all">Alle</button><button class="chip" data-action="cls-quick" data-q="core">Kernaufgaben 1 2 5 10</button><button class="chip" data-action="cls-quick" data-q="hard">6 7 8 9</button></div>
+    <div class="reihen ${s.big ? 'big' : ''}">${reihenFor(s.big).map((r) => `<button type="button" class="reihe r${((r - 1) % 10) + 1} ${r > 10 ? 'gross' : ''}" data-action="cls-reihe" data-r="${r}" aria-pressed="${s.reihen.includes(r)}"><b>${r}</b><small>er</small></button>`).join('')}</div>
+    <div class="quick-pick"><button class="chip" data-action="cls-quick" data-q="all">Alle</button>${s.big ? '<button class="chip" data-action="cls-quick" data-q="gross">Nur 11–20</button>' : '<button class="chip" data-action="cls-quick" data-q="core">Kernaufgaben 1 2 5 10</button>'}</div>
     <h3>Aufgabenarten</h3>
-    <div class="ops-row">${op('mul', `Malrechnungen 7 ${SIGN()} 8`)}${op('div', 'Geteilt 56 : 8')}${op('gap', `Lücken ▢ ${SIGN()} 8 = 56`)}</div>
-    <label class="switch"><input type="checkbox" id="cls-choose" ${s.choose ? 'checked' : ''}><span>Kinder dürfen innerhalb dieser Auswahl selbst Reihen wählen<br><small class="muted">Aus: Die Kinder üben immer genau diese Reihen und Aufgabenarten.</small></span></label>
+    <div class="op-pick">${op('mul', SIGN(), 'Mal')}${op('div', ':', 'Geteilt')}${op('gap', '▢', 'Lücken')}</div>
+    <p class="hint">Sind mehrere erlaubt, können die Kinder auch „Gemischt“ wählen. Tauschaufgaben (3 ${SIGN()} 7 und 7 ${SIGN()} 3) sind immer dabei.</p>
+    <h3>Rechnungen pro Runde</h3>
+    <div class="seg" role="radiogroup" aria-label="Rechnungen pro Runde">${[10, 15, 20, 30].map((n) => `<button type="button" class="seg-btn" data-action="cls-round" data-n="${n}" aria-pressed="${s.roundLen === n}">${n}</button>`).join('')}</div>
+    <p class="hint">Gilt für Trainer und Auswählen. Der Blitztest hat immer 20 Rechnungen.</p>
+    <label class="switch"><input type="checkbox" id="cls-choose" ${s.choose ? 'checked' : ''}><span>Kinder dürfen innerhalb dieser Auswahl selbst Reihen und Aufgabenarten wählen<br><small class="muted">Aus: Die Kinder üben immer genau diese Reihen und alle erlaubten Aufgabenarten gemischt.</small></span></label>
   </div>`;
 }
 let clsSaveT = null;
@@ -815,7 +828,12 @@ function classSettingAction(kind, el) {
     if (set.has(r)) { if (set.size > 1) set.delete(r); } else set.add(r);
     s.reihen = [...set].sort((a, b) => a - b);
   } else if (kind === 'quick') {
-    s.reihen = el.dataset.q === 'core' ? [1, 2, 5, 10] : el.dataset.q === 'hard' ? [6, 7, 8, 9] : [...ALL_REIHEN];
+    s.reihen = el.dataset.q === 'core' ? [1, 2, 5, 10] : el.dataset.q === 'gross' ? REIHEN_GROSS.filter((r) => r > 10) : [...reihenFor(s.big)];
+  } else if (kind === 'size') {
+    s.big = el.dataset.big === 'true';
+    s.reihen = s.big ? [...REIHEN_GROSS] : (s.reihen.filter((r) => r <= 10).length ? s.reihen.filter((r) => r <= 10) : [...REIHEN_KLEIN]);
+  } else if (kind === 'round') {
+    s.roundLen = +el.dataset.n;
   } else if (kind === 'op') {
     const k = el.dataset.op;
     s.ops[k] = !s.ops[k];
@@ -1104,10 +1122,11 @@ function classOverviewHTML(c, kids) {
       <div class="stats-head"><h2>${kidWordImg(sel.st.username, 'kid-mini')} ${esc(kidName(sel.st))}</h2>
         <div class="row"><button class="btn small primary" data-action="sheet-kid" data-id="${sel.st.id}">${icon('print')} Übungsblatt</button><button class="icon-btn subtle" data-action="stats-kid" data-id="" aria-label="Schliessen">${icon('x')}</button></div></div>
       ${sel.all?.n ? statTilesHTML(sel.sum, total) : '<p class="empty">Noch nicht geübt.</p>'}
+      ${p.coins?.earned ? `<p class="small kd-coins">${COIN_SVG}<span><b>${p.coins.c}</b> ${p.coins.c === 1 ? 'Münze' : 'Münzen'} · ${p.coins.earned} verdient · ${p.coins.spent} für Spiele ausgegeben</span></p>` : ''}
       <div class="kd-grid">
-        <div><h3>Einmaleins-Tafel</h3>${tafelHTML(p, { mode: 'mul', id: 'kid' })}${legendHTML()}</div>
-        <div><h3>Die Reihen</h3>${reihenBarsHTML(p)}<h3>Häufigste Fehler</h3>${focusListHTML(p)}
-          ${Object.keys(p.f).some((k) => k.includes(':')) ? `<h3>Geteilt</h3>${tafelHTML(p, { mode: 'div', compact: true, id: 'kid' })}` : ''}</div>
+        <div><h3>Einmaleins-Tafel</h3>${tafelHTML(p, { mode: 'mul', id: 'kid', big: c.settings.big })}${legendHTML()}</div>
+        <div><h3>Die Reihen</h3>${reihenBarsHTML(p, c.settings.big)}<h3>Häufigste Fehler</h3>${focusListHTML(p)}
+          ${Object.keys(p.f).some((k) => k.includes(':')) ? `<h3>Geteilt</h3>${tafelHTML(p, { mode: 'div', compact: true, id: 'kid', big: c.settings.big })}` : ''}</div>
       </div>
     </div>`;
   }
@@ -1126,11 +1145,14 @@ function classOverviewHTML(c, kids) {
       (s.e || []).forEach((x) => { o.errs[x] = (o.errs[x] || 0) + 1; });
     });
   });
-  const heat = `<div class="tafel-wrap"><table class="tafel heat" aria-label="Einmaleins-Tafel der Klasse"><thead><tr><th class="corner">${SIGN()}</th>${ALL_REIHEN.map((b) => `<th scope="col">${b}</th>`).join('')}</tr></thead><tbody>${ALL_REIHEN.map((a) => `<tr><th scope="row">${a}</th>${ALL_REIHEN.map((b) => {
-    const o = cell[`${a}x${b}`];
-    const d = o ? o.d / o.kids : null;
+  // Zeilen = Reihen, Spalten = mal 1–10; ein Feld fasst Rechnung und Tauschaufgabe zusammen
+  const heat = `<div class="tafel-wrap ${c.settings.big ? 'big' : ''}"><table class="tafel heat" aria-label="Einmaleins-Tafel der Klasse"><thead><tr><th class="corner">${SIGN()}</th>${REIHEN_KLEIN.map((a) => `<th scope="col">${a}</th>`).join('')}</tr></thead><tbody>${reihenFor(c.settings.big).map((b) => `<tr><th scope="row">${b}</th>${REIHEN_KLEIN.map((a) => {
+    const os = [...new Set([`${a}x${b}`, `${b}x${a}`])].map((k) => cell[k]).filter(Boolean);
+    const kidsN = Math.max(0, ...os.map((o) => o.kids));
+    const d = os.length ? os.reduce((x, o) => x + o.d, 0) / os.reduce((x, o) => x + o.kids, 0) : null;
+    const weak = Math.max(0, ...os.map((o) => o.weak)), hard = Math.max(0, ...os.map((o) => o.weak + o.shaky));
     const lv = d == null ? 'none' : d >= 0.45 ? 'weak' : d >= 0.28 ? 'shaky' : d >= 0.14 ? 'ok' : 'top';
-    return `<td><span class="tf lv-${lv}" title="${a} ${SIGN()} ${b} = ${a * b}${o ? `: ${o.weak + o.shaky} von ${o.kids} Kindern haben Mühe` : ': noch nicht geübt'}"><span>${a * b}</span>${o && o.weak ? `<em>${o.weak}</em>` : ''}</span></td>`;
+    return `<td><span class="tf lv-${lv}" title="${a} ${SIGN()} ${b} = ${a * b}${os.length ? `: ${hard} von ${kidsN} Kindern haben Mühe` : ': noch nicht geübt'}"><span>${a * b}</span>${weak ? `<em>${weak}</em>` : ''}</span></td>`;
   }).join('')}</tr>`).join('')}</tbody></table></div>`;
   const hardest = Object.entries(cell).filter(([, o]) => o.weak + o.shaky > 0).sort((x, y) => (y[1].weak * 2 + y[1].shaky) - (x[1].weak * 2 + x[1].shaky) || y[1].d / y[1].kids - x[1].d / x[1].kids).slice(0, 12);
 
@@ -1221,6 +1243,8 @@ const classActions = {
   'cls-reihe': (el) => classSettingAction('reihe', el),
   'cls-quick': (el) => classSettingAction('quick', el),
   'cls-op': (el) => classSettingAction('op', el),
+  'cls-size': (el) => classSettingAction('size', el),
+  'cls-round': (el) => classSettingAction('round', el),
   'kid-import': () => {
     const c = currentClass(), ta = $('#kid-import');
     const list = (ta?.value || '').split(/\r?\n/).map(parseKidLine).filter(Boolean);

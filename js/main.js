@@ -5,7 +5,7 @@ function refreshReihenPanel() {
   const p = $('.reihen-panel');
   if (!p) { render(); return; }
   p.outerHTML = reihenPanelHTML();
-  $('#tausch-cb')?.addEventListener('change', (e) => { db.settings.tausch = e.target.checked; saveDB(); });
+  updateCoinUI();
 }
 
 const actions = {
@@ -25,6 +25,14 @@ const actions = {
     db.prog = emptyProg(); saveNow(); closeModal(true); go('home'); toast('Übungsstand gelöscht.');
   },
   /* Reihen und Aufgabenarten */
+  'set-size': (el) => {
+    const big = el.dataset.big === 'true';
+    if (db.settings.big === big) return;
+    db.settings.big = big;
+    // grosses Einmaleins: alle Reihen 1–20 (das kleine ist inbegriffen); zurück zum kleinen: nur Reihen bis 10
+    db.settings.reihen = big ? [...REIHEN_GROSS] : (db.settings.reihen.filter((r) => r <= 10).length ? db.settings.reihen.filter((r) => r <= 10) : [...REIHEN_KLEIN]);
+    saveDB(); render();
+  },
   'toggle-reihe': (el) => {
     const r = +el.dataset.r;
     const cur = new Set(practiceSettings().reihen);
@@ -33,20 +41,16 @@ const actions = {
     saveDB(); refreshReihenPanel();
   },
   'reihen-quick': (el) => {
-    const q = el.dataset.q;
-    db.settings.reihen = q === 'core' ? [1, 2, 5, 10] : q === 'hard' ? [6, 7, 8, 9] : [...ALL_REIHEN];
+    const ps = practiceSettings();
+    const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
+    const allowed = cls?.reihen?.length ? cls.reihen : reihenFor(ps.big);
+    db.settings.reihen = el.dataset.q === 'none' ? [allowed.find((r) => r >= 2) || allowed[0]] : [...allowed];
     saveDB(); refreshReihenPanel();
   },
-  'toggle-op': (el) => {
-    const k = el.dataset.op;
-    const ops = { ...practiceSettings().ops };
-    ops[k] = !ops[k];
-    if (!ops.mul && !ops.div && !ops.gap) { toast('Mindestens eine Aufgabenart muss dabei sein.'); return; }
-    db.settings.ops = ops;
-    saveDB(); refreshReihenPanel();
-  },
+  'set-op': (el) => { db.settings.op = el.dataset.op; saveDB(); refreshReihenPanel(); },
+  'coins-info': () => openCoinsInfo(),
   /* Übungen */
-  'open-ex': (el) => openExercise(el.dataset.id),
+  'open-ex': (el) => { closeModal(true); openExercise(el.dataset.id); },
   'open-game': (el) => openGame(el.dataset.id),
   stand: () => go('stand'),
   'stand-mode': (el) => { ui.standMode = el.dataset.mode; render(); },
@@ -55,7 +59,6 @@ const actions = {
   'my-sheet-pdf': () => downloadMySheet(),
   'my-sheet-new': () => renderMySheetPreview(),
   pad: (el) => { padPress(el.dataset.k); },
-  'round-len': (el) => { db.settings.roundLen = +el.dataset.n; saveDB(); renderExercise(); },
   'ex-hint': () => showExHint(),
   'ex-skip': () => { if (ex.phase === 'fix' || ex.phase === 'done') { ex.i++; nextExTask(); } },
   'ex-choice': (el) => exChoose(el),
@@ -69,12 +72,14 @@ const actions = {
   'meteor-hit': (el) => meteorHit(el),
   'frog-jump': (el) => frogJump(el),
   'frog-reihe': (el) => { game.frogReihe = +el.dataset.r; renderGame(); },
-  'frog-back': () => { game.dir = -1; frogRound(); },
+  'frog-back': () => { if (game.frogBack) game.frogBack(); else { game.dir = -1; frogRound(); } },
+  'game-start': () => startGameNow(),
+  'g3-pick': (el) => game.pick?.(el),
   'mem-flip': (el) => memFlip(el),
   'mem-mode': (el) => { db.settings.memOpen = el.dataset.v === 'true'; saveDB(); renderGame(); },
   'tf-answer': (el) => tfAnswer(el.dataset.v === '1'),
   'duel-tap': (el) => duelTap(el),
-  'duel-goal': (el) => { db.settings.duelGoal = +el.dataset.n; saveDB(); renderGame(); },
+  'duel-goal': (el) => { db.settings.duelGoal = +el.dataset.v; saveDB(); renderGame(); },
   /* Konto */
   'login-choose': () => openLoginChooser(),
   login: (el) => openLogin(el.dataset.mode || 'login'),
@@ -85,7 +90,7 @@ const actions = {
 };
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
-const FAST = new Set(['meteor-hit', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice']);
+const FAST = new Set(['meteor-hit', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
 let lastFast = { el: null, t: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;

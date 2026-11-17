@@ -54,6 +54,7 @@ function renderShell() {
         </button>
         <nav class="crumbs" id="crumbs" aria-label="Wo du gerade bist"></nav>
         <div class="topbar-actions">
+          <span id="coin-slot">${coinPillHTML()}</span>
           <span id="account-slot">${accountButtonHTML()}</span>
           <button class="icon-btn" data-action="settings" aria-label="Einstellungen" title="Einstellungen">${icon('sliders')}</button>
         </div>
@@ -210,48 +211,44 @@ function startHeroFlip() {
 }
 function stopHeroFlip() { clearInterval(heroTimer); heroTimer = null; }
 
+const OP_INFO = { mul: ['Mal', () => SIGN()], div: ['Geteilt', () => ':'], gap: ['Lücken', () => '▢'], mix: ['Gemischt', () => '⤨'] };
 function reihenPanelHTML() {
   const ps = practiceSettings();
   const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
-  const allowed = cls?.reihen?.length ? cls.reihen : ALL_REIHEN;
+  const allowed = cls ? (cls.reihen?.length ? cls.reihen : reihenFor(ps.big)) : reihenFor(ps.big);
   const locked = cls && cls.choose === false;
-  const cOps = cls?.ops || { mul: true, div: true, gap: true };
-  const opBtn = (k, label, ex) => (cls && !cOps[k] ? '' : `<button type="button" class="op-chip" data-action="toggle-op" data-op="${k}" aria-pressed="${!!ps.ops[k]}" ${locked ? 'disabled' : ''}>${ps.ops[k] ? icon('check') : ''}<span>${label}</span><code>${ex}</code></button>`);
+  const modes = ps.avail.length > 1 ? [...ps.avail, 'mix'] : ps.avail;
+  const all = allowed.every((r) => ps.reihen.includes(r));
   return `<div class="panel reihen-panel">
+    ${cls ? '' : `<div class="size-pick" role="radiogroup" aria-label="Welches Einmaleins?">
+      ${[[false, 'Kleines Einmaleins', 'Reihen 1 bis 10'], [true, 'Grosses Einmaleins', 'Reihen 1 bis 20']].map(([big, t, sub]) => `<button type="button" class="size-btn ${big ? 'big' : ''}" data-action="set-size" data-big="${big}" role="radio" aria-checked="${ps.big === big}"><b>${t}</b><small>${sub}</small></button>`).join('')}
+    </div>`}
     <div class="rp-head">
-      <h2>Welche Reihen übst du?</h2>
-      ${locked ? '<p class="hint">Deine Lehrperson hat die Reihen ausgewählt.</p>' : `<div class="quick-pick">
-        <button type="button" class="chip" data-action="reihen-quick" data-q="all">Alle</button>
-        <button type="button" class="chip" data-action="reihen-quick" data-q="core">Kernaufgaben 1 2 5 10</button>
-        <button type="button" class="chip" data-action="reihen-quick" data-q="hard">Knacknüsse 6 7 8 9</button>
-      </div>`}
+      <h2>${cls ? `${ps.big ? 'Grosses' : 'Kleines'} Einmaleins – deine Reihen` : 'Welche Reihen?'}</h2>
+      ${locked ? '<p class="hint">Deine Lehrperson hat die Reihen ausgewählt.</p>' : `<button type="button" class="chip" data-action="reihen-quick" data-q="${all ? 'none' : 'all'}">${all ? 'Nur eine' : 'Alle'}</button>`}
     </div>
-    <div class="reihen" role="group" aria-label="Reihen">
-      ${ALL_REIHEN.map((r) => {
+    <div class="reihen ${ps.big ? 'big' : ''}" role="group" aria-label="Reihen">
+      ${reihenFor(ps.big).map((r) => {
         const ok = allowed.includes(r);
-        return `<button type="button" class="reihe r${r}" data-action="toggle-reihe" data-r="${r}" aria-pressed="${ps.reihen.includes(r)}" ${!ok || locked ? 'disabled' : ''} aria-label="${r}er-Reihe"><b>${r}</b><small>er</small></button>`;
+        return `<button type="button" class="reihe r${((r - 1) % 10) + 1} ${r > 10 ? 'gross' : ''}" data-action="toggle-reihe" data-r="${r}" aria-pressed="${ps.reihen.includes(r)}" ${!ok || locked ? 'disabled' : ''} aria-label="${r}er-Reihe"><b>${r}</b><small>er</small></button>`;
       }).join('')}
     </div>
-    <div class="ops-row">
-      ${opBtn('mul', 'Mal', `3 ${SIGN()} 7`)}${opBtn('div', 'Geteilt', '21 : 7')}${opBtn('gap', 'Lücken', `▢ ${SIGN()} 7 = 21`)}
-      ${locked ? '' : `<label class="switch small"><input type="checkbox" id="tausch-cb" ${ps.tausch ? 'checked' : ''}><span>Tauschaufgaben mischen (3 ${SIGN()} 7 und 7 ${SIGN()} 3)</span></label>`}
-    </div>
+    ${modes.length > 1 ? `<div class="op-pick" role="radiogroup" aria-label="Was rechnest du?">
+      ${modes.map((k) => `<button type="button" class="op-btn op-${k}" data-action="set-op" data-op="${k}" role="radio" aria-checked="${ps.op === k}" ${locked ? 'disabled' : ''}><span class="op-sym" aria-hidden="true">${k === 'mix' ? icon('shuffle') : OP_INFO[k][1]()}</span><span>${OP_INFO[k][0]}</span></button>`).join('')}
+    </div>` : ''}
   </div>`;
 }
 
 function tileHTML(item, kind) {
   const best = db.prog.best[`${kind}:${item.id}`];
-  return `<button class="tile c-${item.color}" data-action="${kind === 'ex' ? 'open-ex' : 'open-game'}" data-id="${item.id}">
+  const game = kind === 'game';
+  const locked = game && !canPlay();
+  return `<button class="tile c-${item.color} ${locked ? 'locked' : ''}" data-action="${game ? 'open-game' : 'open-ex'}" data-id="${item.id}">
     <span class="tile-art" aria-hidden="true">${item.art}</span>
     <span class="tile-text"><strong>${esc(item.name)}</strong><small>${esc(item.desc)}</small></span>
-    ${best != null ? `<span class="tile-best" title="Bestleistung">${icon('trophy')} ${esc(item.bestText ? item.bestText(best) : best)}</span>` : ''}
+    ${best != null || game ? `<span class="tile-foot">${best != null ? `<span class="tile-best" title="Bestleistung">${icon('trophy')} ${esc(item.bestText ? item.bestText(best) : best)}</span>` : '<span></span>'}
+      ${game && !gamesFree() ? `<span class="tile-cost" title="Kostet ${GAME_COST} Münze">${COIN_SVG}${GAME_COST}</span>` : ''}</span>` : ''}
   </button>`;
-}
-
-/** Mit Klassen-Login: „Geteilt & Lücken“ nur, wenn die Lehrperson eine der beiden Arten erlaubt */
-function exerciseAllowed(x) {
-  const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
-  return !(x.id === 'inverse' && cls && !cls.ops?.div && !cls.ops?.gap);
 }
 function viewHome() {
   const kidHead = isKid() ? kidHelloHTML() : '';
@@ -259,7 +256,7 @@ function viewHome() {
   return `<section class="home">
     ${kidHead || `<div class="hero">
       <div class="hero-text">
-        <p class="eyebrow">Das kleine Einmaleins üben</p>
+        <p class="eyebrow">Das kleine und das grosse Einmaleins üben</p>
         <h1>Üben, spielen und <mark>sicher rechnen</mark> – bis das Einmaleins im Schlaf sitzt.</h1>
         <p class="lead">Einmaleins merkt sich, welche Rechnungen dir noch Mühe machen, und bringt sie in klugen Abständen wieder – nie stur hintereinander.</p>
         ${cloud.uid ? `<div class="row"><button class="btn primary" data-action="classes">${icon('users')} Meine Klassen & Übersicht</button></div>` : ''}
@@ -268,14 +265,14 @@ function viewHome() {
     </div>`}
     ${reihenPanelHTML()}
     <div class="section-head"><h2>Üben</h2><p class="hint">Diese Übungen passen sich dir an.</p></div>
-    <div class="tiles">${EXERCISES.filter(exerciseAllowed).map((x) => tileHTML(x, 'ex')).join('')}</div>
-    <div class="section-head"><h2>Spielen</h2><p class="hint">Auch hier kommen deine schwierigen Rechnungen wieder.</p></div>
+    <div class="tiles">${EXERCISES.map((x) => tileHTML(x, 'ex')).join('')}</div>
+    <div class="section-head"><h2>Spielen</h2><p class="hint">${gamesFree() ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Jedes Spiel kostet ${GAME_COST} Münze. Münzen verdienst du beim Üben.`}</p></div>
     <div class="tiles games">${GAMES.map((x) => tileHTML(x, 'game')).join('')}</div>
     <div class="home-grid">
       <div class="panel stand-panel">
         <div class="stats-head"><h2>Mein Stand</h2><button class="btn small secondary" data-action="stand">${icon('chart')} Alles ansehen</button></div>
         ${sum.n ? statTilesHTML(sum) : '<p class="empty">Noch nichts geübt. Leg los – hier siehst du danach, welche Rechnungen schon sitzen.</p>'}
-        ${tafelHTML(db.prog, { mode: 'mul', compact: true })}
+        ${tafelHTML(db.prog, { mode: 'mul', compact: true, big: practiceSettings().big })}
         ${legendHTML()}
       </div>
       <div class="panel focus-panel">
@@ -290,11 +287,10 @@ function viewHome() {
 }
 function bindHome() {
   startHeroFlip();
-  $('#tausch-cb')?.addEventListener('change', (e) => { db.settings.tausch = e.target.checked; saveDB(); });
   bindTafel();
 }
 
-function statTilesHTML(sum, total = 100) {
+function statTilesHTML(sum, total = practiceSettings().big ? 300 : 100) {
   const secs = sum.ms ? (sum.ms / 1000).toFixed(1).replace('.', ',') : '–';
   return `<div class="stat-tiles">
     <div class="stat-tile"><b>${sum.n}</b><small>Rechnungen gelöst</small></div>
@@ -317,47 +313,64 @@ function focusListHTML(prog) {
   }).join('')}</ul>`;
 }
 
-/* ---------------- Einmaleins-Tafel (10 × 10) ---------------- */
-function tafelHTML(prog, { mode = 'mul', compact = false, id = '' } = {}) {
-  const rows = ALL_REIHEN.map((a) => `<tr><th scope="row">${a}</th>${ALL_REIHEN.map((b) => {
-    const key = mode === 'div' ? `${a * b}:${b}` : `${a}x${b}`;
-    const s = prog.f[key];
-    const lv = levelOf(s);
+/* ---------------- Einmaleins-Tafel ----------------
+   Zeilen = Reihen (1–10 bzw. 1–20), Spalten = mal 1 bis 10. Ein Feld fasst die Rechnung und ihre
+   Tauschaufgabe zusammen (3 · 7 und 7 · 3) und zeigt den schwächeren der beiden Stände. */
+const LV_ORDER = ['weak', 'shaky', 'ok', 'top'];
+function cellKeys(a, b, mode) {
+  return mode === 'div' ? [`${a * b}:${b}`, `${a * b}:${a}`] : [`${a}x${b}`, `${b}x${a}`];
+}
+function mergedLevel(prog, keys) {
+  const lvs = [...new Set(keys)].map((k) => levelOf(prog.f[k])).filter((l) => l !== 'none');
+  if (!lvs.length) return 'none';
+  return LV_ORDER.find((l) => lvs.includes(l));
+}
+function tafelHTML(prog, { mode = 'mul', compact = false, id = '', big = false } = {}) {
+  const rows = reihenFor(big).map((b) => `<tr><th scope="row">${b}</th>${REIHEN_KLEIN.map((a) => {
+    const keys = cellKeys(a, b, mode);
+    const lv = mergedLevel(prog, keys);
     const label = mode === 'div' ? `${a * b} : ${b} = ${a}` : `${a} ${SIGN()} ${b} = ${a * b}`;
-    return `<td><button class="tf lv-${lv}" data-action="tafel-cell" data-key="${key}" ${id ? `data-tafel="${id}"` : ''} title="${label}: ${LEVEL_NAMES[lv]}" aria-label="${label}, ${LEVEL_NAMES[lv]}">${compact ? '' : `<span>${mode === 'div' ? a : a * b}</span>`}</button></td>`;
+    return `<td><button class="tf lv-${lv}" data-action="tafel-cell" data-key="${keys.join(',')}" ${id ? `data-tafel="${id}"` : ''} title="${label}: ${LEVEL_NAMES[lv]}" aria-label="${label}, ${LEVEL_NAMES[lv]}">${compact ? '' : `<span>${mode === 'div' ? a : a * b}</span>`}</button></td>`;
   }).join('')}</tr>`).join('');
-  return `<div class="tafel-wrap ${compact ? 'compact' : ''}"><table class="tafel" aria-label="Einmaleins-Tafel">
-    <thead><tr><th class="corner">${mode === 'div' ? ':' : SIGN()}</th>${ALL_REIHEN.map((b) => `<th scope="col">${b}</th>`).join('')}</tr></thead>
+  return `<div class="tafel-wrap ${compact ? 'compact' : ''} ${big ? 'big' : ''}"><table class="tafel" aria-label="Einmaleins-Tafel">
+    <thead><tr><th class="corner">${mode === 'div' ? ':' : SIGN()}</th>${REIHEN_KLEIN.map((a) => `<th scope="col">${a}</th>`).join('')}</tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 let tafelProg = null; // für Klick auf ein Feld (eigener Stand oder der eines Kindes)
 function bindTafel(prog = db.prog) { tafelProg = prog; }
-function openFactInfo(key, prog = tafelProg || db.prog) {
-  const k = taskKeyParts(key);
+function openFactInfo(keyList, prog = tafelProg || db.prog) {
+  const keys = [...new Set(String(keyList).split(','))];
+  const k = taskKeyParts(keys[0]);
   if (!k) return;
-  const s = prog.f[key];
+  const stats = keys.map((x) => prog.f[x]).filter((x) => x?.n);
+  const n = stats.reduce((x, y) => x + y.n, 0), w = stats.reduce((x, y) => x + y.w, 0);
+  const msS = stats.filter((x) => x.ms);
+  const ms = msS.length ? msS.reduce((x, y) => x + y.ms, 0) / msS.length : 0;
+  const errs = typicalErrors({ e: stats.flatMap((x) => x.e || []) });
+  const hist = stats.map((x) => x.h || '').join('').slice(-12);
   const t = makeTask(k.a, k.b, k.op);
-  const lv = levelOf(s);
-  const errs = typicalErrors(s);
-  openModal(`${modalHead(esc(fullText(t)))}
+  const lv = mergedLevel(prog, keys);
+  const title = keys.length > 1 ? `${fullText(t)}` : fullText(t);
+  const swap = keys.length > 1 ? (k.op === 'div' ? `${t.p} : ${t.answer} = ${t.b}` : `${t.b} ${SIGN()} ${t.a} = ${t.p}`) : '';
+  openModal(`${modalHead(esc(title))}
+    ${swap ? `<p class="muted">und die Tauschaufgabe ${esc(swap)}</p>` : ''}
     <p class="fact-level lv-${lv}"><i></i>${LEVEL_NAMES[lv]}</p>
-    ${s?.n ? `<div class="stat-tiles small">
-      <div class="stat-tile"><b>${s.n}</b><small>mal geübt</small></div>
-      <div class="stat-tile"><b>${s.w}</b><small>mal falsch</small></div>
-      <div class="stat-tile"><b>${s.ms ? (s.ms / 1000).toFixed(1).replace('.', ',') + ' s' : '–'}</b><small>Zeit</small></div>
+    ${n ? `<div class="stat-tiles small">
+      <div class="stat-tile"><b>${n}</b><small>mal geübt</small></div>
+      <div class="stat-tile"><b>${w}</b><small>mal falsch</small></div>
+      <div class="stat-tile"><b>${ms ? (ms / 1000).toFixed(1).replace('.', ',') + ' s' : '–'}</b><small>Zeit</small></div>
     </div>
     ${errs.length ? `<p>Häufige falsche Antworten: <strong>${errs.join(', ')}</strong></p>` : ''}
-    ${s.h ? `<p class="hist" aria-label="Letzte Versuche">${[...s.h].map((x) => `<i class="${x === '1' ? 'ok' : 'bad'}"></i>`).join('')}</p>` : ''}` : '<p class="muted">Noch nicht geübt.</p>'}
-    <div class="help-box">${dotFieldSVG(k.op === 'div' ? k.a : k.a, k.b, { size: 14 })}<p>${esc(strategyText(t))}</p></div>`, { label: fullText(t) });
+    ${hist ? `<p class="hist" aria-label="Letzte Versuche">${[...hist].map((x) => `<i class="${x === '1' ? 'ok' : 'bad'}"></i>`).join('')}</p>` : ''}` : '<p class="muted">Noch nicht geübt.</p>'}
+    <div class="help-box">${dotFieldSVG(k.a, k.b, { size: k.a > 10 || k.b > 10 ? 10 : 14 })}<p>${esc(strategyText(t))}</p></div>`, { label: title });
 }
 
 /* ---------------- Mein Stand (ganze Seite) ---------------- */
-function reihenBarsHTML(prog) {
-  return `<ul class="reihen-bars">${ALL_REIHEN.map((b) => {
-    let sure = 0, seen = 0, weak = 0;
+function reihenBarsHTML(prog, big = practiceSettings().big) {
+  return `<ul class="reihen-bars">${reihenFor(big).map((b) => {
+    let sure = 0, weak = 0;
     for (let a = 1; a <= 10; a++) {
-      const lv = levelOf(prog.f[`${a}x${b}`]);
-      if (lv !== 'none') seen++;
+      const lv = mergedLevel(prog, cellKeys(a, b, 'mul'));
       if (lv === 'ok' || lv === 'top') sure++;
       if (lv === 'weak') weak++;
     }
@@ -378,8 +391,8 @@ function renderStand() {
       <div class="panel">
         <div class="stats-head"><h2>Einmaleins-Tafel</h2>
           <div class="seg small" role="tablist">${[['mul', `Mal ${SIGN()}`], ['div', 'Geteilt :']].map(([k, t]) => `<button class="seg-btn" data-action="stand-mode" data-mode="${k}" aria-pressed="${ui.standMode === k}">${t}</button>`).join('')}</div></div>
-        <p class="hint">${ui.standMode === 'div' ? 'Zeile = Ergebnis, Spalte = geteilt durch.' : 'Zeile × Spalte. Tippe auf ein Feld für Details und eine Rechenhilfe.'}</p>
-        ${tafelHTML(prog, { mode: ui.standMode })}
+        <p class="hint">${ui.standMode === 'div' ? 'Zeile = geteilt durch, Spalte = Ergebnis.' : 'Zeile = Reihe, Spalte = mal 1 bis 10 (mit Tauschaufgabe).'} Tippe auf ein Feld für Details und eine Rechenhilfe.</p>
+        ${tafelHTML(prog, { mode: ui.standMode, big: practiceSettings().big })}
         ${legendHTML()}
       </div>
       <div class="side-col">

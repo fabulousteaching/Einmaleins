@@ -1,6 +1,6 @@
 # Einmaleins
 
-Das kleine Einmaleins üben, festigen und automatisieren – am Tablet, am Computer und auf Papier.
+Das kleine und das grosse Einmaleins üben, festigen und automatisieren – am Tablet, am Computer und auf Papier.
 Alle Übungen und Spiele gehen **ohne Anmeldung**. Mit Anmeldung gibt es Klassen, Kinder-Logins, eine Übersicht für die Lehrperson und persönliche Übungsblätter für jedes Kind.
 
 ## Das Gedächtnis: schwierige Rechnungen kommen wieder
@@ -15,32 +15,56 @@ Einmaleins merkt sich für jede Rechnung, wie oft sie geübt wurde, wie oft sie 
 - Wer am nächsten Tag weiterübt, bekommt die Rechnungen, die noch Mühe machen, gleich zu Beginn nochmals.
 - Bei den Auswahl-Spielen sind die falschen Antworten bewusst die typischen Verwechslungen (Nachbaraufgaben, ±1, vertauschte Ziffern) – und die eigenen früheren Fehler des Kindes.
 
+## Was geübt wird
+
+Oben auf der Startseite, bewusst einfach gehalten:
+
+- **Kleines Einmaleins** (Reihen 1 bis 10) oder **Grosses Einmaleins** (Reihen 1 bis 20, das kleine ist inbegriffen). Beim grossen Einmaleins rechnet man jede Reihe bis mal 10, also z. B. 1 · 17 bis 10 · 17.
+- **Reihen** antippen (oder „Alle“ / „Nur eine“).
+- **Aufgabenart** mit einem Symbol: **Mal** (·), **Geteilt** (:), **Lücken** (▢ · 8 = 56) oder **Gemischt**.
+- **Tauschaufgaben** sind immer automatisch dabei (7 · 8 und 8 · 7, beim Teilen 56 : 8 und 56 : 7).
+
+In einer Klasse legt die Lehrperson fest, was zur Auswahl steht (siehe unten).
+
 ## Üben
 
 | Übung | Was passiert |
 | --- | --- |
-| **Trainer** | Ergebnis mit dem grossen Zahlenfeld (oder der Tastatur) eintippen. Bei einem Fehler erscheinen die Lösung, ein Punktefeld und ein Rechenweg über die Kernaufgaben (z. B. 7 · 8 = 5 · 8 + 2 · 8). Dann tippt das Kind das richtige Ergebnis ab. Runden mit 10, 20 oder 30 Rechnungen. |
+| **Trainer** | Ergebnis mit dem grossen Zahlenfeld (oder der Tastatur) eintippen. Bei einem Fehler erscheinen die Lösung, ein Punktefeld und ein Rechenweg (z. B. 7 · 8 = 5 · 8 + 2 · 8, beim grossen Einmaleins 13 · 7 = 10 · 7 + 3 · 7). Dann tippt das Kind das richtige Ergebnis ab. |
 | **Auswählen** | Aus vier Antworten die richtige antippen. |
-| **Geteilt & Lücken** | 56 : 8 = ? und ? · 8 = 56 / 7 · ? = 56 |
-| **Reihen-Treppe** | Eine Reihe hinaufsteigen (1 · 7, 2 · 7 …), danach dieselben Rechnungen gemischt. Vorgeschlagen wird die Reihe, die am meisten Mühe macht. |
+| **Reihen-Treppe** | Eine Reihe hinaufsteigen (1 · 7, 2 · 7 …), danach dieselben Rechnungen gemischt. Bei jeder richtigen Antwort springt das Eichhörnchen eine Stufe höher. Vorgeschlagen wird die Reihe, die am meisten Mühe macht. |
 | **Blitztest** | 20 Rechnungen auf Zeit, mit Sternen und Bestzeit. |
+
+Wie viele Rechnungen eine Runde im Trainer und beim Auswählen hat, legt die Lehrperson fest (10, 15, 20 oder 30; ohne Klasse 20).
+
+## Münzen: erst üben, dann spielen
+
+Die Spiele kosten **1 Münze**. Münzen verdient man nur in den Übungen:
+
+- Jede richtige Antwort bringt Punkte: 1 Punkt, **1,5 Punkte**, wenn die Rechnung noch Mühe macht oder wackelt, und etwas extra für eine schnelle Antwort (unter 3 Sekunden). Beim Auswählen und beim Hinaufsteigen der Reihen-Treppe gibt es etwas weniger, weil es leichter ist.
+- Eine gute Runde gibt einen Bonus (alles richtig: 4 Punkte, mindestens 80 % richtig: 2 Punkte).
+- **Fair für alle:** Wie viele Punkte eine Münze kostet, hängt davon ab, wie sicher die geübten Rechnungen schon sitzen – **12 Punkte**, wenn noch vieles Mühe macht, bis **20 Punkte**, wenn fast alles sitzt. Starke Kinder müssen etwas mehr leisten, schwächere kommen schneller zu einer Münze. Und wer gezielt seine schwierigen Rechnungen übt, verdient mehr.
+- Die Münzen stehen oben rechts, mit einem kleinen Balken bis zur nächsten Münze. Antippen erklärt das System.
+- Lehrpersonen spielen gratis (zum Ausprobieren). In der Übersicht sehen sie pro Kind, wie viele Münzen es verdient und ausgegeben hat.
 
 ## Spielen
 
+Vor jedem Spiel erscheint eine kurze Startkarte mit der Anleitung, den Einstellungen und dem Knopf „Spielen · 1 Münze“.
+
 | Spiel | Was passiert |
 | --- | --- |
-| **Elfmeter** ⚽ | Im Tor stehen 3 Ergebnisse. Wer das richtige Eck antippt, schiesst ins Tor; sonst hält der Torhüter. 10 Schüsse. Stufe „Profi“: 4 Ecken und 6 Sekunden pro Schuss. |
-| **Meteoriten** ☄️ | Meteoriten mit Zahlen fallen auf die Erde. Den richtigen mit dem Laser abschiessen, bevor er landet. 3 Schutzschilde, es wird immer schneller. |
-| **Frosch-Hüpfen** 🐸 | Der Frosch hüpft die Reihe entlang von Seerose zu Seerose (vorwärts, danach rückwärts). |
-| **Memory** 🃏 | Rechnung und Ergebnis finden. „Offen“ (alle Karten sichtbar, zählt fürs Gedächtnis) oder „Verdeckt“. |
-| **Stimmt das?** ✅ | 60 Sekunden: Ist 7 · 8 = 54 richtig oder falsch? 5 richtige hintereinander geben 3 Sekunden dazu. |
-| **Duell zu zweit** ⚔️ | Zwei Kinder, ein Tablet (das obere Feld steht auf dem Kopf). Wer zuerst richtig tippt, bekommt den Punkt. |
+| **Elfmeter** ⚽ (3D) | Man steht im Stadion vor dem Tor, im Tor stehen die Ergebnisse. Das richtige antippen – der Ball fliegt los und die Kamera fliegt mit ihm ins Netz. Sonst hält der Torhüter, und die richtige Lösung wird gezeigt. 10 Schüsse. Stufe „Profi“: 4 Ecken und 6 Sekunden pro Schuss. |
+| **Meteoriten** ☄️ (3D) | Man sitzt im Cockpit einer Rakete, Meteoriten mit Zahlen rasen heran. Den richtigen antippen, die Laser zerschiessen ihn. 3 Schutzschilde, es wird immer schneller. |
+| **Frosch-Hüpfen** 🐸 (3D) | Man ist der Frosch auf einer Seerose im Teich und springt die Reihe entlang (vorwärts, danach rückwärts). Falsche Seerosen versinken. |
+| **Memory** 🃏 | Rechnung und Ergebnis finden. „Offen“ (alle Karten sichtbar, zählt fürs Gedächtnis) oder „Verdeckt“. Mit Kombo-Zähler. |
+| **Stimmt das?** ✅ | 60 Sekunden: Ist 7 · 8 = 54 richtig oder falsch? Karte antippen oder nach rechts (stimmt) / links (stimmt nicht) wischen. Bei einer falschen Rechnung erscheint **immer die richtige**. 5 richtige hintereinander geben 3 Sekunden dazu. |
+| **Duell zu zweit** ⚔️ | Zwei Kinder, ein Tablet (das obere Feld steht auf dem Kopf). Countdown, dann gilt: Wer zuerst richtig tippt, bekommt den Punkt und zieht am Seil. |
 
-Oben auf der Startseite wählt man die **Reihen** (1er bis 10er, „Kernaufgaben 1 2 5 10“, „Knacknüsse 6 7 8 9“), die **Aufgabenarten** (Mal, Geteilt, Lücken) und ob Tauschaufgaben gemischt werden.
+Die 3D-Spiele brauchen WebGL (alle aktuellen Tablets und Browser). Fehlt es, startet automatisch die bisherige 2D-Version des Spiels.
 
 ## Mein Stand und Übungsblatt
 
-- **Einmaleins-Tafel**: 10 × 10 Felder, eingefärbt von „macht noch Mühe“ (rot) bis „sitzt sicher“ (grün). Antippen zeigt Details und eine Rechenhilfe. Auch für Geteilt-Aufgaben.
+- **Einmaleins-Tafel**: eine Zeile pro Reihe (10 Zeilen, beim grossen Einmaleins 20), mal 1 bis mal 10. Eine Rechnung und ihre Tauschaufgabe teilen sich ein Feld. Eingefärbt von „macht noch Mühe“ (rot) bis „sitzt sicher“ (grün). Antippen zeigt Details und eine Rechenhilfe. Auch für Geteilt-Aufgaben.
 - **Die Reihen**: wie viele Rechnungen jeder Reihe gut sitzen.
 - **Das üben wir noch**: die schwierigsten Rechnungen mit den häufigsten falschen Antworten.
 - **Mein Übungsblatt (PDF)**: ein A4-Blatt aus den eigenen schwierigen Rechnungen – auch ohne Anmeldung, z. B. für zu Hause.
@@ -58,11 +82,11 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
    - In einer Einmaleins-Klasse unter „Kinder → Mit Vokaboom verbinden“: mit einer bestehenden Vokaboom-Klasse verbinden oder die Klasse in Vokaboom neu anlegen.
    - Danach hat jedes Kind in beiden Tools **denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen**. Neue Kinder, egal in welchem Tool angelegt, bekommen automatisch dasselbe Login im anderen. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen). Neue Bilder gelten in beiden Tools.
    - Löschen: Bei verbundenen Kindern fragt Einmaleins „Nur in Einmaleins“ oder „Auch in Vokaboom“. Nur hier gelöschte Kinder holt der automatische Abgleich nicht zurück.
-4. **Reihen**: festlegen, welche Reihen und Aufgabenarten die Klasse übt, und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen.
+4. **Reihen**: **Kleines** oder **Grosses Einmaleins**, welche Reihen und Aufgabenarten die Klasse übt, wie viele **Rechnungen pro Runde** (10, 15, 20 oder 30) und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen. Ohne eigene Wahl üben die Kinder alle erlaubten Aufgabenarten gemischt.
 5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo** und sehen in Einmaleins und Vokaboom gleich aus: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Einmaleins, bei Kindern, die auch in Vokaboom sind, zusätzlich **ABC Vokabeln**. QR-Code scannen = angemeldet.
 6. **Übersicht**:
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
-   - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen und die häufigsten Fehler mit den typischen falschen Antworten
+   - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen, die häufigsten Fehler mit den typischen falschen Antworten und seine Münzen
    - die Klasse auf einen Blick (Tafel mit der Zahl der Kinder, die mit einer Rechnung Mühe haben) und die schwierigsten Rechnungen der Klasse
    - **Übungsblätter**: pro Kind ein persönliches PDF aus seinen häufigsten Fehlern – oder alle Blätter der Klasse in einem PDF. Wahlweise mit Lückenaufgaben, Geteilt-Aufgaben, Reihe und Lösungsblatt. Jedes Mal neu gemischt.
 
@@ -115,14 +139,17 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `css/styles.css` | Gestaltung |
 | `js/config.js` | Supabase-Adresse und öffentlicher Schlüssel (dasselbe Projekt wie Vokaboom) |
 | `js/core.js` | Speicher, Aufgaben, Gedächtnis (Auswahl der nächsten Aufgabe), Ablenker, Rechenhilfen, Töne |
-| `js/ui.js` | Rahmen, Startseite, Einmaleins-Tafel, Mein Stand, Einstellungen |
-| `js/modes.js` | Übungen: Trainer, Auswählen, Geteilt & Lücken, Reihen-Treppe, Blitztest |
-| `js/games.js` | Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen, Memory, Stimmt das?, Duell |
+| `js/ui.js` | Rahmen, Startseite (Auswahl kleines/grosses Einmaleins, Reihen, Aufgabenart), Einmaleins-Tafel, Mein Stand, Einstellungen |
+| `js/coins.js` | Münzen: Punkte pro Antwort, faire Schwelle, Anzeige |
+| `js/modes.js` | Übungen: Trainer, Auswählen, Reihen-Treppe (mit Eichhörnchen), Blitztest |
+| `js/games.js` | Spiele: Startkarte, Memory, Stimmt das?, Duell und die 2D-Versionen von Elfmeter, Meteoriten, Frosch-Hüpfen |
+| `js/games3d.js` | 3D-Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen (mit three.js) |
 | `js/sheets.js` | Übungsblätter: Auswahl der Rechnungen, Vektor-PDF und Vorschau |
 | `js/sso.js` | Gemeinsames Anmelden mit Vokaboom (Cookies auf fabulousteaching.ch, in beiden Repositories gleich) |
 | `js/cloud.js` | Anmeldung der Lehrperson |
 | `js/classes.js` | Klassen, Kinder-Login, Login-Kärtchen, Übersicht |
 | `js/main.js` | Aktionen und Start |
 | `js/kid-pics.js` | Bildchen für Kinder-Logins ([Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT-Lizenz) |
+| `js/vendor/three.module.min.js` | 3D-Grafik ([three.js](https://threejs.org) r170, MIT-Lizenz, siehe `three.LICENSE`); wird erst beim Start eines 3D-Spiels geladen |
 | `js/vendor/qrcode.js` | QR-Codes ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT-Lizenz, Kazuhiko Arase) |
 | `supabase/` | Tabellen und Zugriffsregeln (`einmaleins.sql`) und Anleitung |

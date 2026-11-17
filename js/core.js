@@ -42,17 +42,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /* ---------------- Speicher ---------------- */
 const MAIN_STORE_KEY = 'einmaleins.db';
 let STORE_KEY = MAIN_STORE_KEY;
-const ALL_REIHEN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+// Kleines Einmaleins: Reihen 1–10. Grosses Einmaleins: Reihen 1–20 (das kleine ist inbegriffen), jeweils mal 1 bis 10.
+const REIHEN_KLEIN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const REIHEN_GROSS = Array.from({ length: 20 }, (_, i) => i + 1);
+const ALL_REIHEN = REIHEN_GROSS;
+const reihenFor = (big) => (big ? REIHEN_GROSS : REIHEN_KLEIN);
+const OP_MODES = ['mul', 'div', 'gap', 'mix'];
 const DEFAULT_SETTINGS = {
-  reihen: [...ALL_REIHEN],
-  ops: { mul: true, div: false, gap: false },
-  tausch: true,          // Tauschaufgaben (7 · 3 und 3 · 7) mischen
+  big: false,            // grosses Einmaleins
+  reihen: [...REIHEN_KLEIN],
+  op: 'mul',             // mul, div, gap oder mix (gemischt). Tauschaufgaben sind immer dabei.
   sign: '·',             // Malzeichen: · (wie im Schweizer Zahlenbuch) oder ×
   autoCheck: true,       // prüfen, sobald genug Ziffern getippt sind
   sound: true,
   theme: 'auto',
 };
-const emptyProg = () => ({ v: 1, q: 0, f: {}, days: {}, best: {}, time: 0, at: 0 });
+const emptyProg = () => ({ v: 1, q: 0, f: {}, days: {}, best: {}, time: 0, at: 0, coins: { c: 0, p: 0, earned: 0, spent: 0 } });
 let db = { settings: structuredClone(DEFAULT_SETTINGS), prog: emptyProg() };
 
 function cleanProg(p) {
@@ -63,6 +68,10 @@ function cleanProg(p) {
   out.at = Number.isFinite(p.at) ? p.at : 0;
   if (p.days && typeof p.days === 'object') Object.entries(p.days).forEach(([k, v]) => { if (/^\d{4}-\d\d-\d\d$/.test(k) && Number.isFinite(v)) out.days[k] = v; });
   if (p.best && typeof p.best === 'object') Object.entries(p.best).forEach(([k, v]) => { if (Number.isFinite(v)) out.best[k] = v; });
+  if (p.coins && typeof p.coins === 'object') {
+    const n = (x) => (Number.isFinite(+x) && +x > 0 ? +x : 0);
+    out.coins = { c: Math.floor(n(p.coins.c)), p: n(p.coins.p), earned: Math.floor(n(p.coins.earned)), spent: Math.floor(n(p.coins.spent)) };
+  }
   if (p.f && typeof p.f === 'object') {
     Object.entries(p.f).forEach(([k, s]) => {
       if (!/^\d{1,3}[x:]\d{1,2}$/.test(k) || !s || typeof s !== 'object') return;
@@ -80,12 +89,20 @@ function loadDB() {
     const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
     if (d && typeof d === 'object') {
       db.settings = { ...structuredClone(DEFAULT_SETTINGS), ...(d.settings || {}) };
-      db.settings.ops = { ...DEFAULT_SETTINGS.ops, ...(d.settings?.ops || {}) };
+      // ältere Version: mehrere Aufgabenarten als Häkchen → eine Wahl
+      if (d.settings?.ops && !d.settings.op) {
+        const on = ['mul', 'div', 'gap'].filter((k) => d.settings.ops[k]);
+        db.settings.op = on.length === 1 ? on[0] : on.length ? 'mix' : 'mul';
+      }
+      delete db.settings.ops; delete db.settings.tausch; delete db.settings.roundLen;
       db.prog = cleanProg(d.prog);
     }
   } catch { /* */ }
-  if (!Array.isArray(db.settings.reihen) || !db.settings.reihen.length) db.settings.reihen = [...ALL_REIHEN];
-  db.settings.reihen = db.settings.reihen.filter((r) => ALL_REIHEN.includes(r));
+  if (!OP_MODES.includes(db.settings.op)) db.settings.op = 'mul';
+  db.settings.big = !!db.settings.big;
+  if (!Array.isArray(db.settings.reihen)) db.settings.reihen = [];
+  db.settings.reihen = db.settings.reihen.filter((r) => reihenFor(db.settings.big).includes(r));
+  if (!db.settings.reihen.length) db.settings.reihen = [...reihenFor(db.settings.big)];
   applyTheme();
 }
 function saveNow() {
@@ -102,22 +119,33 @@ function applyTheme() {
 }
 
 /* ---------------- Einstellungen für das Üben ---------------- */
-/** Was gerade geübt wird. Mit Klassen-Login gibt die Lehrperson den Rahmen vor. */
+/**
+ * Was gerade geübt wird. Mit Klassen-Login gibt die Lehrperson den Rahmen vor
+ * (kleines/grosses Einmaleins, erlaubte Reihen und Aufgabenarten, Anzahl Rechnungen pro Runde).
+ */
 function practiceSettings() {
   const s = db.settings;
   const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
-  let reihen = s.reihen.filter((r) => ALL_REIHEN.includes(r));
-  let ops = { ...s.ops };
+  let big = !!s.big, reihen = [...s.reihen], op = s.op;
+  let allowed = { mul: true, div: true, gap: true };
   if (cls) {
-    const allowed = cls.reihen?.length ? cls.reihen : ALL_REIHEN;
-    reihen = cls.choose === false ? [...allowed] : reihen.filter((r) => allowed.includes(r));
-    if (!reihen.length) reihen = [...allowed];
-    const cOps = cls.ops || { mul: true };
-    ops = cls.choose === false ? { ...cOps } : { mul: ops.mul && cOps.mul !== false, div: ops.div && !!cOps.div, gap: ops.gap && !!cOps.gap };
+    big = !!cls.big;
+    const own = (cls.reihen?.length ? cls.reihen : reihenFor(big)).filter((r) => reihenFor(big).includes(r));
+    reihen = cls.choose === false ? [...own] : reihen.filter((r) => own.includes(r));
+    if (!reihen.length) reihen = [...own];
+    allowed = { mul: cls.ops?.mul !== false, div: !!cls.ops?.div, gap: !!cls.ops?.gap };
+    if (cls.choose === false) op = 'mix';
   }
-  if (!reihen.length) reihen = [...ALL_REIHEN];
-  if (!ops.mul && !ops.div && !ops.gap) ops.mul = true;
-  return { reihen: reihen.sort((a, b) => a - b), ops, tausch: s.tausch !== false };
+  reihen = reihen.filter((r) => reihenFor(big).includes(r));
+  if (!reihen.length) reihen = [...reihenFor(big)];
+  let avail = ['mul', 'div', 'gap'].filter((k) => allowed[k]);
+  if (!avail.length) avail = ['mul'];
+  const on = op === 'mix' ? avail : avail.includes(op) ? [op] : [avail[0]];
+  const ops = { mul: on.includes('mul'), div: on.includes('div'), gap: on.includes('gap') };
+  return {
+    big, reihen: reihen.sort((a, b) => a - b), ops, tausch: true,
+    op: on.length > 1 ? 'mix' : on[0], avail, roundLen: cls?.roundLen || 20,
+  };
 }
 
 /* ---------------- Aufgaben ---------------- */
@@ -175,7 +203,7 @@ function buildPool(ps = practiceSettings(), kinds = null) {
   for (const b of ps.reihen) {
     for (let a = 1; a <= 10; a++) {
       if (ops.mul) { add(a, b, 'mul'); if (ps.tausch && a !== b) add(b, a, 'mul'); }
-      if (ops.div) add(a, b, 'div');
+      if (ops.div) { add(a, b, 'div'); if (ps.tausch && a !== b) add(b, a, 'div'); }
       if (ops.gap) { add(a, b, 'gapA'); add(a, b, 'gapB'); }
     }
   }
@@ -298,7 +326,7 @@ function distractors(t, count = 3) {
     near = [ans + 1, ans - 1, ans + 2, ans - 2];
     far = [ans + 3, ans - 3, t.op === 'gapB' ? t.a : t.b, ans * 2, ans + 4];
   }
-  const max = t.op === 'mul' ? 120 : 12;
+  const max = t.op === 'mul' ? 220 : 24;
   const ok = (x) => Number.isInteger(x) && x > 0 && x <= max && x !== ans;
   const out = new Set();
   // eigene frühere Fehler zuerst: genau die Verwechslungen, die das Kind macht
@@ -319,6 +347,10 @@ function strategyText(t) {
     return `Denk an die Malrechnung: ${t.answer} ${S} ${t.b} = ${t.p}. Also ist ${t.p} : ${t.b} = ${t.answer}.`;
   }
   const a = t.a, b = t.b, p = a * b;
+  // Grosses Einmaleins: die Zahl über 10 zerlegen (13 · 7 = 10 · 7 + 3 · 7)
+  if (a > 10 && b <= 10) return `${a} ${S} ${b} = 10 ${S} ${b} + ${a - 10} ${S} ${b} = ${10 * b} + ${(a - 10) * b} = ${p}.`;
+  if (b > 10 && a <= 10) return `${a} ${S} ${b} = ${a} ${S} 10 + ${a} ${S} ${b - 10} = ${10 * a} + ${a * (b - 10)} = ${p}.`;
+  if (a > 10 && b > 10) return `${a} ${S} ${b} = ${p}.`;
   const core = [1, 2, 5, 10];
   // Wenn die Tauschaufgabe einfacher ist, diese zeigen
   if (!core.includes(a) && core.includes(b) && a !== b) return `Tauschaufgabe: ${b} ${S} ${a} = ${p} – das ist dasselbe wie ${a} ${S} ${b}.`;
@@ -335,7 +367,7 @@ function strategyText(t) {
 /** Punktefeld a Reihen × b Punkte, nach 5 eine kleine Lücke (wie am Hunderterfeld) */
 function dotFieldSVG(a, b, { size = 16, mark = 0 } = {}) {
   const gap = size * 0.5;
-  const pos = (i) => i * size + (i >= 5 ? gap : 0);
+  const pos = (i) => i * size + Math.floor(i / 5) * gap; // nach je 5 Punkten eine kleine Lücke
   const W = pos(b - 1) + size, H = pos(a - 1) + size;
   let dots = '';
   for (let r = 0; r < a; r++) {

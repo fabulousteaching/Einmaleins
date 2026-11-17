@@ -157,6 +157,7 @@ function accountButtonHTML() {
 function renderAccountSlot() {
   const slot = document.getElementById('account-slot');
   if (slot) slot.innerHTML = accountButtonHTML();
+  if (typeof updateCoinUI === 'function') updateCoinUI();
 }
 
 function openLoginChooser() {
