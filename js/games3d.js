@@ -534,13 +534,14 @@ const COCKPIT_HTML = `
 async function startMeteor3D() {
   const T = await loadThree();
   await loadNumFont();
-  Object.assign(game, { picker: gamePicker(), lives: 3, score: 0, wave: [], task: null, over: false, streak: 0, recorded: false });
+  Object.assign(game, { picker: gamePicker(), lives: 3, score: 0, wave: [], task: null, over: false, streak: 0, recorded: false, waveDone: true, alienT: 0, alienSeen: false });
   $('#view').innerHTML = gameShell('meteor', `
     <div class="g3 g3-space" id="g3">
       ${COCKPIT_HTML}
+      <div class="ck-alert" id="ckalert" aria-live="polite"></div>
       <div class="crack" id="crack" aria-hidden="true"><svg viewBox="0 0 400 300"><path d="M200 150 L120 60 M200 150 L300 40 M200 150 L360 190 M200 150 L90 230 M200 150 L230 290 M120 60 L80 20 M300 40 L340 10 M360 190 L400 200 M90 230 L30 260 M150 105 L110 120 M260 95 L290 110 M280 170 L300 150" stroke="#fff" stroke-width="2.5" fill="none" opacity=".85"/></svg></div>
     </div>
-    <p class="mode-hint">Tippe den Meteoriten mit der richtigen Zahl an, bevor er die Rakete trifft. Tasten 1–4 gehen auch.</p>`);
+    <p class="mode-hint">Tippe den Meteoriten mit der richtigen Zahl an, bevor er die Rakete trifft. Ein falscher kostet einen Schutzschild. Tasten 1–4 gehen auch.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 68, clear: 0x03040c });
   game.stage3d = st;
@@ -623,7 +624,7 @@ async function startMeteor3D() {
     if (game.over || st.disposed) return;
     game.wave.forEach((m) => removeMeteor(m));
     const t = game.picker.next();
-    game.task = t; game.recorded = false;
+    game.task = t; game.recorded = false; game.waveDone = false;
     $('#mtask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
     const n = game.score >= 12 ? 4 : 3;
     const opts = choicesFor(t, n);
@@ -661,7 +662,7 @@ async function startMeteor3D() {
     for (const m of game.wave) {
       if (m.dead) continue;
       const u = m.mesh.userData;
-      if (!game.over) {
+      if (!game.over && !game.waveDone) {
         m.mesh.position.z += m.vz * dt;
         const prog = 1 - (m.mesh.position.z + 3) / (u.z0 + 3);
         m.mesh.position.x = u.x0 * (1 - 0.72 * prog);
@@ -675,31 +676,83 @@ async function startMeteor3D() {
       tmpV.copy(m.mesh.position).multiplyScalar(-1).normalize().multiplyScalar(R * 0.4);
       m.label.position.copy(m.mesh.position).add(tmpV);
       m.label.scale.set(hgt * NUM_ASPECT * 1.4, hgt * 1.4, 1);
-      if (game.over) continue;
+      if (game.over || game.waveDone) continue;
       if (m.correct && m.mesh.position.z > -3.2) { impact(m); break; }
       if (!m.correct && m.mesh.position.z > -2) removeMeteor(m);
     }
   });
+  // Grüne Laser: heller Kern, Leuchten und Schimmer; schiessen von beiden Kanonen kurz nacheinander
+  const beamGeo = new T.CylinderGeometry(1, 0.3, 1, 12, 1, true); // an der Kanone schmal, zum Ziel hin breiter
+  const flashTex = glowTex('rgba(225,255,225,1)', 'rgba(60,255,120,0)');
+  const UP = new T.Vector3(0, 1, 0);
   function laser(to) {
-    [-1, 1].forEach((s) => {
+    [-1, 1].forEach((s, k) => setTimeout(() => {
+      if (st.disposed) return;
       const from = new T.Vector3(s * 1.3, -0.36 + camera.position.y, -1.2);
       const dir = to.clone().sub(from);
       const len = dir.length();
-      const beam = new T.Mesh(new T.CylinderGeometry(0.03, 0.03, len, 8, 1, true), new T.MeshBasicMaterial({ color: 0x7df9ff, transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
-      beam.position.copy(from).add(dir.clone().multiplyScalar(0.5));
-      beam.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize());
-      scene.add(beam);
-      st.tween(260, (u) => { beam.material.opacity = 1 - u; beam.scale.x = beam.scale.z = 1 + u * 2; }).then(() => { scene.remove(beam); beam.geometry.dispose(); beam.material.dispose(); });
-    });
+      const n = dir.normalize();
+      const q = new T.Quaternion().setFromUnitVectors(UP, n);
+      const parts = [[0.02, 0xf2fff2, 1], [0.07, 0x39ff6a, 0.7], [0.2, 0x22c55e, 0.16]].map(([r, c, op]) => {
+        const b = new T.Mesh(beamGeo, new T.MeshBasicMaterial({ color: c, transparent: true, opacity: op, blending: T.AdditiveBlending, depthWrite: false }));
+        b.quaternion.copy(q); b.userData = { r, op }; b.scale.set(r, 0.001, r); b.position.copy(from);
+        scene.add(b);
+        return b;
+      });
+      const spr = (p, sc) => { const x = new T.Sprite(new T.SpriteMaterial({ map: flashTex, color: 0x9dffb0, transparent: true, blending: T.AdditiveBlending, depthWrite: false })); x.position.copy(p); x.scale.setScalar(sc); scene.add(x); return x; };
+      const muzzle = spr(from, 0.2), spot = spr(to, 0.01);
+      st.tween(110, (u, e) => {
+        const l = len * e;
+        parts.forEach((b) => { b.scale.y = Math.max(0.001, l); b.position.copy(from).addScaledVector(n, l / 2); });
+        muzzle.scale.setScalar(0.2 + e * 0.2);
+      }, ease.out).then(() => {
+        spot.scale.setScalar(2.4);
+        burst(st, to, { n: 26, colors: [0xb6ffc4, 0xffffff, 0x39ff6a], speed: 3.5, life: 0.35, size: 0.22, gravity: 0 });
+        return st.tween(280, (u) => {
+          parts.forEach((b) => { b.material.opacity = b.userData.op * (1 - u); const r = b.userData.r * (1 - 0.7 * u); b.scale.x = r; b.scale.z = r; });
+          muzzle.material.opacity = 1 - u;
+          spot.material.opacity = 1 - u; spot.scale.setScalar(2.4 + u * 1.5);
+        });
+      }).then(() => {
+        parts.forEach((b) => { scene.remove(b); b.material.dispose(); });
+        [muzzle, spot].forEach((x) => { scene.remove(x); x.material.dispose(); });
+      });
+    }, k * 70));
     $$('.ck-gun').forEach((g) => { g.classList.toggle('fire', false); void g.offsetWidth; g.classList.add('fire'); });
     sfx.zap();
+    tone([1320, 880], 0.05, 'sawtooth', 0.03);
+  }
+  const updateLives = (cls) => $$('#lives i').forEach((el, i) => {
+    el.classList.toggle('on', i < game.lives);
+    if (cls && i === (cls === 'gain' ? game.lives - 1 : game.lives)) { el.classList.toggle(cls, false); void el.offsetWidth; el.classList.add(cls); }
+  });
+  /** Schutzschild verloren: durch einen Treffer (crash) oder weil der falsche Meteorit angetippt wurde */
+  function loseLife(word, crash) {
+    game.waveDone = true;
+    game.lives--; game.streak = 0;
+    if (crash) {
+      sfx.boom(); noise(0.7, { freq: 200, gain: 0.2 });
+      st.shake(0.5);
+      $('#crack').classList.add('show');
+    } else {
+      sfx.bad(); noise(0.35, { freq: 260, gain: 0.1 });
+      st.shake(0.15);
+    }
+    host.classList.add('hit');
+    bigWord(host, word, 'bad');
+    setTimeout(() => { host.classList.toggle('hit', false); $('#crack')?.classList.toggle('show', false); }, 1500);
+    updateLives('lost');
+    if (game.lives <= 0) { game.over = true; gLater(meteorEnd, 1600); return; }
+    if (game.lives === 1) scheduleAlien(2600 + Math.random() * 1500);
+    gLater(spawnWave, crash ? 1600 : 1800);
   }
   function hit(m) {
-    if (!m || m.dead || game.over) return;
+    if (!m || m.dead || game.over || game.waveDone) return;
     const t = game.task;
     if (m.correct) {
       if (!game.recorded) recordAnswer(t, m.val, performance.now() - t.shownAt);
       game.recorded = true;
+      game.waveDone = true;
       game.score++; game.streak++;
       laser(m.mesh.position.clone());
       const p = m.mesh.position.clone();
@@ -719,16 +772,16 @@ async function startMeteor3D() {
       bigWord(host, `+1${game.streak >= 3 ? `<small>${game.streak}er-Serie!</small>` : ''}`, 'good small');
       gLater(spawnWave, 800);
     } else {
+      // Falsch: kostet einen Schutzschild, der richtige Meteorit leuchtet grün auf, dann kommt die nächste Welle
       if (!game.recorded) { recordAnswer(t, m.val, performance.now() - t.shownAt); game.recorded = true; }
-      game.streak = 0;
-      sfx.bad();
+      laser(m.mesh.position.clone());
       m.mesh.material.emissive.set(0xaa1111);
       m.label.material.color.set(0xff7a7a);
-      laser(m.mesh.position.clone());
-      const u = m.mesh.userData, x0 = u.x0;
-      st.tween(400, (k) => { u.x0 = x0 + Math.sin(k * 30) * 0.4 * (1 - k); });
+      const px = m.mesh.position.x;
+      st.tween(450, (k) => { m.mesh.position.x = px + Math.sin(k * 30) * 0.4 * (1 - k); });
       const right = game.wave.find((x) => x.correct && !x.dead);
       if (right) { right.mesh.material.emissive.set(0x1f5a10); right.label.material.color.set(0xb9ffa0); right.pulse = true; }
+      loseLife(`Falsch!<small>${esc(taskText(t, true))}</small>`, false);
     }
   }
   function impact(m) {
@@ -736,19 +789,111 @@ async function startMeteor3D() {
     if (!game.recorded) { recordAnswer(t, '', performance.now() - t.shownAt); game.recorded = true; }
     removeMeteor(m);
     game.wave.forEach((x) => { if (!x.dead) removeMeteor(x); });
-    game.lives--; game.streak = 0;
-    sfx.boom(); noise(0.7, { freq: 200, gain: 0.2 });
-    st.shake(0.5);
-    host.classList.add('hit');
-    $('#crack').classList.add('show');
-    bigWord(host, `Treffer!<small>${esc(taskText(t, true))}</small>`, 'bad');
-    setTimeout(() => { host.classList.toggle('hit', false); $('#crack')?.classList.toggle('show', false); }, 1500);
-    $$('#lives i').forEach((el, i) => el.classList.toggle('on', i < game.lives));
-    if (game.lives <= 0) { game.over = true; gLater(meteorEnd, 1500); return; }
-    gLater(spawnWave, 1600);
+    loseLife(`Treffer!<small>${esc(taskText(t, true))}</small>`, true);
   }
-  // Antippen: der Meteorit, der dem Finger am nächsten ist (grosszügig, damit es auch auf dem Tablet gut geht)
+
+  // ---------- Ufo mit kleinem Alien: kommt nur beim letzten Schutzschild, Treffer = Extraleben ----------
+  let alien = null;
+  function makeAlien() {
+    // Untertasse dreht sich, Kuppel mit dem kleinen grünen Alien schaut immer nach vorn; leicht zum Cockpit geneigt
+    const g = new T.Group(), spinner = new T.Group();
+    g.add(spinner);
+    const metal = new T.MeshStandardMaterial({ color: 0xc7d2e0, metalness: 0.75, roughness: 0.25, emissive: 0x111827 });
+    const saucer = new T.Mesh(new T.SphereGeometry(0.62, 28, 14), metal); saucer.scale.set(1, 0.26, 1); spinner.add(saucer);
+    const ring = new T.Mesh(new T.TorusGeometry(0.62, 0.05, 8, 32), new T.MeshStandardMaterial({ color: 0x64748b, metalness: 0.6, roughness: 0.3 })); ring.rotation.x = Math.PI / 2; spinner.add(ring);
+    const lights = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const l = new T.Mesh(new T.SphereGeometry(0.045, 8, 6), new T.MeshBasicMaterial({ color: [0xff4d6d, 0xffd93d, 0x4dd8ff][i % 3] }));
+      l.position.set(Math.cos(a) * 0.58, -0.02, Math.sin(a) * 0.58); spinner.add(l); lights.push(l);
+    }
+    const skin = new T.MeshStandardMaterial({ color: 0x5ee05e, roughness: 0.45, emissive: 0x145214 });
+    const head = new T.Mesh(new T.SphereGeometry(0.2, 18, 14), skin); head.scale.set(1.05, 1.1, 0.95); head.position.set(0, 0.27, 0); g.add(head);
+    const eyeM = new T.MeshBasicMaterial({ color: 0x0b0b0b });
+    const shineM = new T.MeshBasicMaterial({ color: 0xffffff });
+    [-1, 1].forEach((s) => {
+      const eye = new T.Mesh(new T.SphereGeometry(0.065, 12, 10), eyeM); eye.scale.set(1, 1.35, 0.6); eye.position.set(s * 0.085, 0.3, 0.17); eye.rotation.z = s * 0.35; g.add(eye);
+      const shine = new T.Mesh(new T.SphereGeometry(0.018, 6, 6), shineM); shine.position.set(s * 0.085 - 0.015, 0.33, 0.21); g.add(shine);
+      const ant = new T.Mesh(new T.CylinderGeometry(0.01, 0.01, 0.2, 4), skin); ant.position.set(s * 0.09, 0.52, 0); ant.rotation.z = -s * 0.4; g.add(ant);
+      const tip = new T.Mesh(new T.SphereGeometry(0.035, 8, 6), new T.MeshBasicMaterial({ color: 0xfff27a })); tip.position.set(s * 0.13, 0.62, 0); g.add(tip);
+    });
+    const dome = new T.Mesh(new T.SphereGeometry(0.36, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xb8f0ff, transparent: true, opacity: 0.3, roughness: 0.05, metalness: 0.1, depthWrite: false }));
+    dome.position.y = 0.08; g.add(dome);
+    const beam = new T.Sprite(new T.SpriteMaterial({ map: glowTex('rgba(140,255,160,.9)', 'rgba(60,255,120,0)'), transparent: true, blending: T.AdditiveBlending, depthWrite: false }));
+    beam.position.y = -0.22; beam.scale.set(1.8, 0.9, 1); g.add(beam);
+    g.scale.setScalar(1.15);
+    g.userData = { lights, spinner };
+    return g;
+  }
+  function alienAlert(html) {
+    const el = $('#ckalert');
+    if (!el) return;
+    el.innerHTML = html;
+    el.classList.toggle('show', false); void el.offsetWidth; el.classList.add('show');
+  }
+  function launchAlien() {
+    if (alien || game.over || st.disposed) return;
+    const g = makeAlien();
+    const z = -15 - Math.random() * 5;
+    const halfW = Math.tan((camera.fov * Math.PI) / 360) * camera.aspect * -z;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    alien = { g, t0: st.time, dur: 2300 + Math.random() * 700, z, x0: side * (halfW + 1.5), x1: -side * (halfW + 1.5), y: 0.6 + Math.random() * 3, ph: Math.random() * 6, gone: false };
+    g.position.set(alien.x0, alien.y, z);
+    scene.add(g);
+    if (!game.alienSeen) { game.alienSeen = true; alienAlert('👾 Ein Ufo! Triff es für ein <b>Extraleben</b>'); }
+    tone([520, 780, 520, 780, 1040], 0.07, 'sine', 0.05);
+  }
+  function dropAlien() {
+    if (!alien) return;
+    scene.remove(alien.g);
+    alien.g.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
+    alien = null;
+  }
+  st.onFrame((dt, t) => {
+    if (!alien || alien.gone) return;
+    const u = (st.time - alien.t0) / alien.dur;
+    if (u >= 1) { dropAlien(); return; }
+    const a = alien;
+    a.g.position.set(a.x0 + (a.x1 - a.x0) * u + Math.sin(u * Math.PI * 6 + a.ph) * 0.7, a.y + Math.sin(u * Math.PI * 4 + a.ph) * 1.1, a.z + Math.sin(u * Math.PI * 3) * 1.5);
+    a.g.userData.spinner.rotation.y += dt * 6;
+    a.g.rotation.x = 0.5;
+    a.g.rotation.z = Math.cos(u * Math.PI * 4 + a.ph) * 0.3;
+    a.g.userData.lights.forEach((l, i) => { l.visible = Math.floor(t * 8 + i) % 2 === 0; });
+  });
+  function scheduleAlien(ms) {
+    clearTimeout(game.alienT);
+    game.alienT = gLater(() => {
+      if (game.over || game.lives !== 1) return;
+      launchAlien();
+      scheduleAlien(7000 + Math.random() * 4000);
+    }, ms);
+  }
+  function hitAlien() {
+    if (!alien || alien.gone || game.over) return;
+    const p = alien.g.position.clone();
+    alien.gone = true;
+    laser(p);
+    setTimeout(() => {
+      if (st.disposed) return;
+      dropAlien();
+      burst(st, p, { n: 180, colors: [0x39ff6a, 0xfff27a, 0x4dd8ff, 0xff4d6d, 0xffffff], speed: 7, life: 1.2, size: 0.4, gravity: 0 });
+      st.shake(0.06);
+    }, 140);
+    game.lives = Math.min(3, game.lives + 1);
+    updateLives('gain');
+    clearTimeout(game.alienT);
+    sfx.win();
+    tone([660, 880, 1175, 1568], 0.09, 'triangle', 0.08);
+    bigWord(host, '+1 Schild!<small>Extraleben</small>', 'good small');
+  }
+  // Antippen: zuerst das Ufo (genau treffen!), sonst der Meteorit, der dem Finger am nächsten ist (grosszügig)
   stageTap(st, (x, y) => {
+    if (alien && !alien.gone) {
+      const q = st.project(alien.g.position);
+      const rad = Math.max(16, screenRadius(st, alien.g.position, 0.7));
+      if (q.z < 1 && Math.hypot(q.x - x, q.y - y) <= rad) { hitAlien(); return; }
+    }
+    if (game.waveDone) return;
     let best = null, bestD = Infinity;
     for (const m of game.wave) {
       if (m.dead) continue;
@@ -761,6 +906,8 @@ async function startMeteor3D() {
     if (best) hit(best);
   });
   game.pickVal = (v) => hit(game.wave.find((m) => !m.dead && m.val === Number(v)));
+  game.alienPos = () => { if (!alien || alien.gone) return null; const q = st.project(alien.g.position); return { x: q.x, y: q.y, r: Math.max(16, screenRadius(st, alien.g.position, 0.7)) }; };
+  game.launchAlien = launchAlien;
   setGameKeys((e) => {
     if (!/^[1-4]$/.test(e.key)) return;
     const live = game.wave.filter((m) => !m.dead).sort((a, b) => a.mesh.position.x - b.mesh.position.x);

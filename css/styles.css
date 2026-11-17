@@ -589,7 +589,7 @@ button.tf:hover { transform: scale(1.12); z-index: 1; box-shadow: var(--shadow-s
 .ship .flame { animation: flame .15s ease-in-out infinite alternate; transform-origin: 32px 56px; }
 @keyframes flame { to { transform: scaleY(.7); } }
 .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; background: linear-gradient(#6D43C4, #2A1B55); }
-.laser { position: absolute; z-index: 3; height: 5px; margin-top: -2px; border-radius: 3px; background: linear-gradient(90deg, #7DF9FF, #fff); box-shadow: 0 0 14px #7DF9FF; transform-origin: 0 50%; animation: laser .26s ease-out forwards; pointer-events: none; }
+.laser { position: absolute; z-index: 3; height: 5px; margin-top: -2px; border-radius: 3px; background: linear-gradient(90deg, #39FF6A, #EAFFEA); box-shadow: 0 0 10px #39FF6A, 0 0 22px #22C55E; transform-origin: 0 50%; animation: laser .26s ease-out forwards; pointer-events: none; }
 @keyframes laser { to { opacity: 0; } }
 .space.hit { animation: hit .5s; }
 @keyframes hit { 30% { box-shadow: inset 0 0 0 6px #EF4444, var(--shadow-card); } }
@@ -941,7 +941,7 @@ td.hard-chips { display: table-cell; }
 .ck-gun.r { right: 1.5%; transform: scaleX(-1) rotate(-14deg); }
 .ck-gun::before { content: ""; position: absolute; left: -8px; top: -2px; width: 34%; height: 26px; border-radius: 6px; background: linear-gradient(#4a5a80, #1d2541); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2); }
 .ck-gun i { position: absolute; inset: 4px 0 4px 0; border-radius: 4px 10px 10px 4px; background: linear-gradient(#6b7a9c, #2a3452 60%, #1a2138); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .25); }
-.ck-gun i::after { content: ""; position: absolute; right: -6px; top: 50%; width: 14px; height: 14px; border-radius: 50%; transform: translateY(-50%) scale(.3); background: radial-gradient(circle, #fff, #7df9ff 40%, rgba(125, 249, 255, 0) 70%); opacity: 0; }
+.ck-gun i::after { content: ""; position: absolute; right: -6px; top: 50%; width: 14px; height: 14px; border-radius: 50%; transform: translateY(-50%) scale(.3); background: radial-gradient(circle, #fff, #6dff8f 40%, rgba(57, 255, 106, 0) 70%); opacity: 0; }
 .ck-gun.fire i::after { animation: muzzle .28s ease-out; }
 @keyframes muzzle { 0% { opacity: 1; transform: translateY(-50%) scale(2.6); } 100% { opacity: 0; transform: translateY(-50%) scale(.6); } }
 .ck-dash { position: absolute; left: 0; right: 0; bottom: 0; height: 26%; min-height: 96px; z-index: 3; pointer-events: none;
@@ -968,6 +968,21 @@ td.hard-chips { display: table-cell; }
 .g3-space .lives { display: flex; gap: 5px; }
 .g3-space .lives i { width: 22px; height: 26px; clip-path: polygon(50% 0, 100% 18%, 92% 70%, 50% 100%, 8% 70%, 0 18%); background: rgba(125, 211, 252, .18); transition: all .3s; }
 .g3-space .lives i.on { background: linear-gradient(#7DD3FC, #0EA5E9); box-shadow: 0 0 12px #38BDF8; }
+.g3-space .lives i.lost { animation: life-lost .7s ease-out; }
+.g3-space .lives i.gain { animation: life-gain .9s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes life-lost { 0% { background: #EF4444; transform: scale(1.5); } 60% { transform: scale(.8); } }
+@keyframes life-gain { 0% { transform: scale(.2); background: #6DFF8F; } 50% { transform: scale(1.6); background: #6DFF8F; } }
+.lives:has(i.on:first-child):not(:has(i.on:nth-child(2))) i.on { animation: life-last 1s ease-in-out infinite; }
+@keyframes life-last { 50% { background: #FCA5A5; box-shadow: 0 0 14px #EF4444; } }
+.ck-alert { position: absolute; left: 50%; top: 14px; z-index: 4; transform: translateX(-50%); padding: .45rem 1rem; border-radius: 99px; background: rgba(6, 40, 20, .85); border: 2px solid #39FF6A; color: #DFFFE6; font-weight: 600; white-space: nowrap; box-shadow: 0 0 22px rgba(57, 255, 106, .5); opacity: 0; pointer-events: none; }
+.ck-alert b { color: #6DFF8F; }
+.ck-alert.show { animation: ck-alert 3.2s ease forwards; }
+@keyframes ck-alert { 0% { opacity: 0; transform: translate(-50%, -10px); } 10%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+/* 2D-Version: Ufo */
+.space .alien { position: absolute; left: 0; top: 0; z-index: 4; width: 46px; height: 46px; padding: 0; border: 0; background: none; font-family: var(--font-emoji); font-size: 2.1rem; line-height: 1; cursor: pointer; filter: drop-shadow(0 0 10px #39FF6A); touch-action: manipulation; }
+.space .alien.boom { animation: alien-boom .5s ease-out forwards; }
+@keyframes alien-boom { to { scale: 2.4; opacity: 0; } }
+.meteor-note.good { background: #DCFCE7; color: #14532D; }
 .g3-space .m-score b { font-family: var(--font-display); font-size: 1.7rem; line-height: 1; color: #fff; }
 .ck-gauge { display: grid; justify-items: center; gap: 1px; }
 .ck-gauge svg { width: 60px; height: 36px; }

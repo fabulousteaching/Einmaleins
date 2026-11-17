@@ -6,7 +6,7 @@ const GAMES = [
   { id: 'elfmeter', name: 'Elfmeter', desc: 'Schiess den Ball ins richtige Tor-Eck!', color: 'green', art: '<span class="emo">⚽</span>', bestText: (n) => `${n} Tore`, three: true,
     howto: 'Im Tor stehen Ergebnisse. Tippe auf das richtige – der Ball fliegt ins Netz. Bei einer falschen Antwort geht der Schuss daneben. 10 Elfmeter.' },
   { id: 'meteor', name: 'Meteoriten', desc: 'Im Cockpit: Schiess den richtigen Meteoriten ab.', color: 'night', art: '<span class="emo">☄️</span>', bestText: (n) => `${n} Treffer`, three: true,
-    howto: 'Du sitzt im Cockpit deiner Rakete. Meteoriten mit Zahlen rasen auf dich zu. Tippe den mit dem richtigen Ergebnis an, bevor er dich trifft. 3 Schutzschilde – es wird immer schneller.' },
+    howto: 'Du sitzt im Cockpit deiner Rakete. Meteoriten mit Zahlen rasen auf dich zu. Tippe den mit dem richtigen Ergebnis an, bevor er dich trifft. Ein falscher kostet einen Schutzschild – du hast 3. Beim letzten Schild fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben. Es wird immer schneller.' },
   { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf über den Teich bis ans andere Ufer.', color: 'lime', art: '<span class="emo">🐸</span>', bestText: (n) => `${n}/10 auf Anhieb`, three: true,
     howto: 'Der Frosch will über den Teich. Vor ihm liegen Seerosen mit Zahlen: Tippe auf die mit dem richtigen Ergebnis – und hopp! Falsche Seerosen versinken. 10 Sprünge bis ans andere Ufer.' },
   { id: 'memory', name: 'Memory', desc: 'Finde zu jeder Rechnung das Ergebnis.', color: 'pink', art: '<span class="emo">🃏</span>', bestText: (ms) => `${Math.round(ms / 1000)} s`,
@@ -237,7 +237,7 @@ function startMeteor() {
       <div class="ship-wrap"><div class="ship-task" id="mtask"></div><div class="ship" id="ship">${ROCKET_SVG}</div></div>
       <div class="ground"></div>
     </div>
-    <p class="mode-hint">Tippe den Meteoriten mit dem richtigen Ergebnis an, bevor er auf dem Boden landet.</p>`);
+    <p class="mode-hint">Tippe den Meteoriten mit dem richtigen Ergebnis an, bevor er auf dem Boden landet. Ein falscher kostet einen Schutzschild.</p>`);
   gLater(meteorWave, 500);
   game.last = performance.now();
   game.raf = requestAnimationFrame(meteorLoop);
@@ -302,13 +302,12 @@ function meteorHit(el) {
     $('#mscore').textContent = game.score;
     gLater(meteorWave, 650);
   } else {
+    // Falsch: kostet einen Schutzschild, dann kommt die nächste Welle
     if (!game.recorded) { recordAnswer(t, m.val, performance.now() - t.shownAt); game.recorded = true; }
-    sfx.bad();
-    game.streak = 0;
+    laser(m);
     el.classList.add('wrong');
-    m.dead = true;
-    gLater(() => el.classList.add('gone'), 400);
     game.wave.find((x) => x.correct)?.el.classList.add('hint');
+    meteorLoseLife(m, false);
   }
 }
 function laser(m) {
@@ -326,14 +325,20 @@ function laser(m) {
   ship.style.setProperty('--tilt', `${clamp((x2 - x1) / 12, -20, 20)}deg`);
 }
 function meteorLand(m) {
-  m.dead = true;
   const t = game.task;
   if (!game.recorded) { recordAnswer(t, '', performance.now() - t.shownAt); game.recorded = true; }
+  m.el.classList.add('landed');
+  meteorLoseLife(m, true);
+}
+/** Schutzschild verloren: Meteorit gelandet (crash) oder falschen angetippt */
+function meteorLoseLife(m, crash) {
+  const t = game.task;
+  m.dead = true;
   game.lives--;
   game.streak = 0;
-  sfx.boom();
-  m.el.classList.add('landed');
-  game.wave.forEach((x) => { if (!x.dead) { x.dead = true; x.el.classList.add('gone'); } });
+  if (crash) sfx.boom(); else sfx.bad();
+  // alle anhalten; bei einem Fehler bleibt der richtige Meteorit als Hinweis kurz stehen
+  game.wave.forEach((x) => { if (!x.dead) { x.dead = true; if (crash || !x.correct) x.el.classList.add('gone'); } });
   const space = $('#space');
   space.classList.add('hit');
   const note = document.createElement('div');
@@ -343,7 +348,53 @@ function meteorLand(m) {
   setTimeout(() => { space.classList.remove('hit'); note.remove(); }, 1600);
   $$('#lives i').forEach((el, i) => el.classList.toggle('on', i < game.lives));
   if (game.lives <= 0) { game.over = true; gLater(meteorEnd, 1300); return; }
-  gLater(meteorWave, 1500);
+  if (game.lives === 1) meteorAlienSchedule(2600 + Math.random() * 1500);
+  gLater(meteorWave, crash ? 1500 : 1700);
+}
+/* Ufo: kommt nur beim letzten Schutzschild und ist schwer zu treffen; Treffer = Extraleben */
+function meteorAlienSchedule(ms) {
+  clearTimeout(game.alienT);
+  game.alienT = gLater(() => {
+    if (game.over || game.lives !== 1) return;
+    meteorAlien();
+    meteorAlienSchedule(7000 + Math.random() * 4000);
+  }, ms);
+}
+function meteorAlien() {
+  const space = $('#space');
+  if (!space || space.querySelector('.alien')) return;
+  const el = document.createElement('button');
+  el.className = 'alien';
+  el.dataset.action = 'meteor-alien';
+  el.setAttribute('aria-label', 'Ufo');
+  el.textContent = '🛸';
+  space.appendChild(el);
+  const W = space.clientWidth, H = space.clientHeight;
+  const ltr = Math.random() < 0.5;
+  const y0 = 30 + Math.random() * H * 0.4;
+  const frames = Array.from({ length: 9 }, (_, i) => {
+    const u = i / 8;
+    const x = ltr ? -50 + (W + 100) * u : W + 50 - (W + 100) * u;
+    return { transform: `translate(${x}px, ${y0 + Math.sin(u * Math.PI * 4) * 40}px) rotate(${Math.sin(u * Math.PI * 4) * 14}deg)` };
+  });
+  el.animate(frames, { duration: 2300 + Math.random() * 700, easing: 'linear', fill: 'forwards' }).finished.then(() => { if (!el.classList.contains('boom')) el.remove(); }).catch(() => {});
+  tone([520, 780, 520, 780, 1040], 0.07, 'sine', 0.05);
+}
+function meteorAlienHit(el) {
+  if (game.over || el.classList.contains('boom')) return;
+  el.getAnimations().forEach((a) => a.pause());
+  el.classList.add('boom');
+  setTimeout(() => el.remove(), 520);
+  game.lives = Math.min(3, game.lives + 1);
+  clearTimeout(game.alienT);
+  $$('#lives i').forEach((x, i) => x.classList.toggle('on', i < game.lives));
+  sfx.win();
+  tone([660, 880, 1175, 1568], 0.09, 'triangle', 0.08);
+  const note = document.createElement('div');
+  note.className = 'meteor-note good';
+  note.textContent = '+1 Schild – Extraleben!';
+  $('#space')?.appendChild(note);
+  setTimeout(() => note.remove(), 1400);
 }
 function meteorEnd() {
   stopGame();

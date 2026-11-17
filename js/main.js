@@ -71,6 +71,7 @@ const actions = {
   'elf-shoot': (el) => elfShoot(el),
   'elf-level': (el) => { db.settings.elfLevel = +el.dataset.v; saveDB(); renderGame(); },
   'meteor-hit': (el) => meteorHit(el),
+  'meteor-alien': (el) => meteorAlienHit(el),
   'frog-jump': (el) => frogJump(el),
   'game-start': () => startGameNow(),
   'g3-pick': (el) => game.pick?.(el),
@@ -89,7 +90,7 @@ const actions = {
 };
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
-const FAST = new Set(['meteor-hit', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
+const FAST = new Set(['meteor-hit', 'meteor-alien','elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
 let lastFast = { el: null, t: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
