@@ -374,6 +374,7 @@ async function startGameNow() {
 const BALL_SVG = `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#fff" stroke="#1F2937" stroke-width="2"/><path d="M20 12l7 5-2.7 8h-8.6L13 17z" fill="#1F2937"/><path d="M20 12V3.5M27 17l8-3M24.3 25l5 7M15.7 25l-5 7M13 17l-8-3" stroke="#1F2937" stroke-width="2"/></svg>`;
 function startElfmeter() {
   Object.assign(game, { picker: gamePicker(), locked: false });
+  if (db.settings.sound && typeof loadCheer === 'function') loadCheer(); // Torjubel vorladen
   const r = runStart('elfmeter');
   $('#view').innerHTML = gameShell('elfmeter', `
     ${runHudHTML('bar-hud')}

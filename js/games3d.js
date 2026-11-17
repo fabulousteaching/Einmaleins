@@ -246,44 +246,38 @@ function noise(dur = 0.8, { freq = 1200, q = 0.6, gain = 0.12, sweep = 0 } = {})
     src.start();
   } catch { /* */ }
 }
-/** Publikum jubelt (Tor!): anschwellendes Stimmengewirr aus vielen „Stimmen“, das langsam abklingt */
-let CHEER_BUF = null;
-/** Klang einmal berechnen (vor dem ersten Tor), damit es beim Jubel nicht ruckelt */
-function cheerBuffer(dur = 2.6) {
-  if (CHEER_BUF && audioCtx && CHEER_BUF.sampleRate === audioCtx.sampleRate) return CHEER_BUF;
-  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  const sr = audioCtx.sampleRate, n = Math.floor(sr * dur);
-  const buf = audioCtx.createBuffer(2, n, sr);
-  for (let ch = 0; ch < 2; ch++) {
-      const d = buf.getChannelData(ch);
-      // viele Stimmen: Rauschen, dessen Lautstärke unregelmässig schwankt (Rufe), mit Hüllkurve: schnell lauter, dann ausklingen
-      const voices = Array.from({ length: 14 }, () => ({ f: 1.5 + Math.random() * 5, ph: Math.random() * 6 }));
-      let lp = 0;
-      for (let i = 0; i < n; i++) {
-        const t = i / sr;
-        const env = Math.min(1, t / 0.25) * (t < dur * 0.35 ? 1 : Math.max(0, 1 - (t - dur * 0.35) / (dur * 0.65)) ** 1.4);
-        let mod = 0;
-        for (const v of voices) mod += 0.5 + 0.5 * Math.sin(2 * Math.PI * v.f * t + v.ph);
-        lp += ((Math.random() * 2 - 1) - lp) * 0.6; // etwas weicher
-        d[i] = lp * env * (0.45 + mod / voices.length * 0.9);
-      }
-  }
-  CHEER_BUF = buf;
-  return buf;
+/* Torjubel: echte Aufnahme eines jubelnden Fussball-Publikums (audio/torjubel.mp3).
+   Quelle: «Crowd Cheer» von FoolBoyMedia, freesound.org/s/397434 – CC0 (gemeinfrei); gekürzt und ausgeblendet. */
+let CHEER_BUF = null, CHEER_LOADING = null;
+/** Aufnahme einmal laden (vor dem ersten Tor), damit der Jubel sofort kommt */
+function loadCheer() {
+  if (CHEER_BUF) return Promise.resolve(CHEER_BUF);
+  if (CHEER_LOADING) return CHEER_LOADING;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    CHEER_LOADING = fetch(new URL('audio/torjubel.mp3', document.baseURI).href)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((b) => audioCtx.decodeAudioData(b))
+      .then((buf) => { CHEER_BUF = buf; return buf; })
+      .catch((e) => { console.warn('Torjubel nicht geladen', e); CHEER_LOADING = null; return null; });
+    return CHEER_LOADING;
+  } catch { return Promise.resolve(null); }
 }
-function crowdCheer(gain = 0.2) {
+/** Das Publikum jubelt (Tor!) */
+function crowdCheer(gain = 0.9) {
   if (!db.settings.sound) return;
   try {
-    const buf = cheerBuffer();
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    const lo = audioCtx.createBiquadFilter(); lo.type = 'bandpass'; lo.frequency.value = 850; lo.Q.value = 0.6;
-    const hi = audioCtx.createBiquadFilter(); hi.type = 'bandpass'; hi.frequency.value = 2200; hi.Q.value = 0.9;
-    const gl = audioCtx.createGain(); gl.gain.value = gain;
-    const gh = audioCtx.createGain(); gh.gain.value = gain * 0.45;
-    src.connect(lo).connect(gl).connect(audioCtx.destination);
-    src.connect(hi).connect(gh).connect(audioCtx.destination);
-    src.start();
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const play = (buf) => {
+      if (!buf) return;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      const g = audioCtx.createGain(); g.gain.value = gain;
+      src.connect(g).connect(audioCtx.destination);
+      src.start();
+    };
+    if (CHEER_BUF) play(CHEER_BUF); else loadCheer().then(play);
   } catch { /* */ }
 }
 
@@ -357,7 +351,7 @@ async function startElfmeter3D() {
     <p class="mode-hint">Tippe auf die Zahl mit dem richtigen Ergebnis – der Ball fliegt los. Tasten 1–3 gehen auch.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 40, shadows: true, clear: 0x7fb6e6 });
-  if (db.settings.sound) setTimeout(() => { try { cheerBuffer(); } catch { /* */ } }, 400); // Jubel vorbereiten
+  if (db.settings.sound) loadCheer(); // Torjubel vorladen
   game.stage3d = st;
   const { scene, camera } = st;
   scene.fog = new T.Fog(0x9cc8ef, 40, 120);

@@ -172,4 +172,5 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/kid-pics.js` | Bildchen für Kinder-Logins ([Microsoft Fluent Emoji](https://github.com/microsoft/fluentui-emoji), MIT-Lizenz) |
 | `js/vendor/three.module.min.js` | 3D-Grafik ([three.js](https://threejs.org) r170, MIT-Lizenz, siehe `three.LICENSE`); wird erst beim Start eines 3D-Spiels geladen |
 | `js/vendor/qrcode.js` | QR-Codes ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT-Lizenz, Kazuhiko Arase) |
+| `audio/torjubel.mp3` | Torjubel beim Elfmeter: echte Aufnahme eines jubelnden Publikums, [„Crowd Cheer“ von FoolBoyMedia](https://freesound.org/people/FoolBoyMedia/sounds/397434/) auf Freesound, [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (gemeinfrei); auf 4,6 s gekürzt, ein- und ausgeblendet, Lautstärke angeglichen |
 | `supabase/` | Tabellen und Zugriffsregeln (`einmaleins.sql`) und Anleitung |
