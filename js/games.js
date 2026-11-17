@@ -16,7 +16,7 @@ const GAMES = [
   { id: 'frog', name: 'Frosch-Hüpfen', desc: 'Hüpf über den Teich – hin und zurück.', color: 'lime', art: '<span class="emo">🐸</span>', three: true, modes: ['countdown', 'survive', 'speed'],
     howto: 'Der Frosch hüpft über den Teich. Tippe auf die Seerose mit dem richtigen Ergebnis – und hopp! Am Ufer springt er auf einen Stein und kehrt um. Falsche Seerosen versinken.' },
   { id: 'target', name: 'Zielscheibe', desc: 'Spann die Armbrust und triff das richtige Feld.', color: 'wood', art: '<span class="emo">🎯</span>', modes: ['countdown', 'survive', 'speed'],
-    howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger irgendwo aufs Bild – die Armbrust wird gespannt. Dann ziele durch Ziehen und lass los – der Pfeil fliegt. Triff das Feld mit dem richtigen Ergebnis!' },
+    howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger aufs Bild und zieh ihn nach hinten wie bei einer Schleuder: Je stärker du spannst, desto weiter fliegt der Pfeil, seitlich ziehen lenkt in die Gegenrichtung. Loslassen = Schuss. Triff das Feld mit dem richtigen Ergebnis!' },
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
@@ -745,13 +745,14 @@ function startTarget() {
       <div class="tg-stand">${TG_STAND_SVG}</div>
       <div class="tg-target" id="tgtarget">${TG_TARGET_SVG}</div>
       <div class="tg-arrows" id="tgarrows"></div>
+      <svg class="tg-path" id="tgpath" aria-hidden="true"><path d=""/></svg>
       <div class="tg-reticle" id="tgret"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="34" fill="none" stroke="#fff" stroke-width="5" opacity=".9"/><circle cx="50" cy="50" r="34" fill="none" stroke="#E8553A" stroke-width="2.4"/><path d="M50 4v20M50 76v20M4 50h20M76 50h20" stroke="#fff" stroke-width="4"/><circle cx="50" cy="50" r="3" fill="#E8553A"/></svg></div>
       <div class="tg-bow" id="tgbow">${TG_BOW_SVG}</div>
       <div class="tg-flight" id="tgflight">${TG_ARROW_SVG}</div>
       <div class="tg-toast" id="tgtoast"></div>
-      <p class="tg-help" id="tghelp">Finger aufs Bild = spannen · ziehen = zielen · loslassen = schiessen</p>
+      <p class="tg-help" id="tghelp">Finger aufs Bild · nach hinten ziehen = spannen · loslassen = schiessen</p>
     </div>
-    <p class="mode-hint">Lege den Finger irgendwo auf das Bild – die Armbrust wird gespannt. Dann ziele durch Ziehen und lass los, um zu schiessen. Tasten 1–4 gehen auch.</p>`);
+    <p class="mode-hint">Lege den Finger aufs Bild und zieh ihn nach hinten (nach unten): Je stärker du spannst, desto weiter fliegt der Pfeil. Seitlich ziehen lenkt in die Gegenrichtung. Loslassen = Schuss. Tasten 1–4 gehen auch.</p>`);
   tgBind();
   setGameKeys((e) => { if (/^[1-4]$/.test(e.key)) tgShootQuad(['tl', 'tr', 'bl', 'br'][+e.key - 1]); });
   game.pickVal = (v) => { const q = TG_QUADS.find((k) => game.tg.vals[k] === Number(v)); if (q) tgShootQuad(q); };
@@ -795,79 +796,112 @@ function tgToast(text, cls) {
   clearTimeout(game.tgToastT);
   game.tgToastT = gLater(() => el.classList.remove('show'), 1000);
 }
-/* Ablauf eines Schusses (wie beim Original):
-   1. Finger aufs Bild → die Armbrust wird gespannt: Sehne und Pfeil gleiten sichtbar nach hinten.
-   2. Erst wenn sie gespannt ist, erscheint das Fadenkreuz – jetzt durch Ziehen zielen
-      (die Bewegung des Fingers verschiebt das Fadenkreuz doppelt so weit).
-   3. Loslassen → die Sehne schnellt nach vorn, der Pfeil fliegt.
-   Wer loslässt, bevor die Armbrust gespannt ist, schiesst nicht: Die Sehne gleitet einfach zurück. */
-const TG_DRAW_MS = 380;
+/* Zielen wie mit einer Schleuder:
+   - Finger aufs Bild legen = Pfeil einlegen. Dann nach hinten (nach unten) ziehen: Je weiter, desto stärker ist die
+     Armbrust gespannt und desto weiter fliegt der Pfeil – der Zielkreis wandert nach vorn (im Bild nach oben).
+   - Seitlich ziehen bewegt den Zielkreis in die Gegenrichtung (nach links ziehen = nach rechts zielen).
+   - Loslassen = Schuss. Kaum gespannt = kein Schuss, die Sehne gleitet zurück.
+   Zu wenig gespannt fällt der Pfeil vor der Scheibe ins Gras, zu stark fliegt er darüber hinweg. */
+const TG_FULL_PULL = 0.36; // so viel der Bildhöhe nach unten ziehen = ganz gespannt
+const TG_FULL_SIDE = 0.3; // so viel der Bildbreite seitlich ziehen = ganz zur Seite
+const TG_MIN_PULL = 0.1;
+function tgGeom() {
+  const r = $('#tgtarget').getBoundingClientRect(), s = $('#tgstage').getBoundingClientRect();
+  const R = r.width / 2, cy = r.top + R;
+  return { cx: r.left + R, cy, R, near: cy + 1.25 * R, far: cy - 1.4 * R, side: 1.5 * R, w: s.width, h: s.height };
+}
+/** Wohin fliegt der Pfeil bei dieser Spannung (0..1) und Richtung (−1 links … 1 rechts)? */
+const tgAimPoint = (G, pull, side) => ({ x: G.cx + side * G.side, y: G.near + (G.far - G.near) * pull });
 function tgBind() {
   const stage = $('#tgstage');
-  const SENS = 2;
   const g = game.tg;
-  const center = () => { const r = $('#tgtarget').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; };
   stage.addEventListener('pointerdown', (e) => {
     if (game.locked || !runOn() || e.button > 0 || g.aim) return;
     if (e.target.closest('button')) return;
-    const c = center();
-    g.aim = { id: e.pointerId, x0: e.clientX, y0: e.clientY, cx: c.x, cy: c.y, maxR: c.w * 0.62, dx: 0, dy: 0, ready: false };
+    const a = { id: e.pointerId, x0: e.clientX, y0: e.clientY, G: tgGeom(), pullT: 0, sideT: 0, creak: 0 };
+    g.aim = a;
     try { stage.setPointerCapture(e.pointerId); } catch { /* */ }
     $('#tghelp')?.classList.add('hide');
-    const a = g.aim;
-    tgDraw(1, TG_DRAW_MS).then((done) => {
-      if (!done || g.aim !== a) return;
-      a.ready = true;
-      $('#tgbow')?.classList.add('drawn');
-      tgReticle(a.cx + a.dx, a.cy + a.dy, true);
-    });
+    tone([520], 0.04, 'triangle', 0.05); // Pfeil eingelegt
+    // weiches Nachführen: Sehne, Armbrust und Zielkreis folgen dem Finger mit leichter Verzögerung
+    let last = performance.now();
+    const loop = (now) => {
+      if (g.aim !== a) return;
+      const k = 1 - Math.exp(-((now - last) / 1000) * 16);
+      last = now;
+      g.pull = (g.pull || 0) + (a.pullT - (g.pull || 0)) * k;
+      g.side = (g.side || 0) + (a.sideT - (g.side || 0)) * k;
+      tgAimShow(a.G);
+      g.aimRaf = requestAnimationFrame(loop);
+    };
+    g.aimRaf = requestAnimationFrame(loop);
+    tgAimShow(a.G);
     e.preventDefault();
   });
   stage.addEventListener('pointermove', (e) => {
     const a = g.aim;
     if (!a || e.pointerId !== a.id) return;
-    let dx = (e.clientX - a.x0) * SENS, dy = (e.clientY - a.y0) * SENS;
-    const d = Math.hypot(dx, dy);
-    if (d > a.maxR) { dx *= a.maxR / d; dy *= a.maxR / d; }
-    a.dx = dx; a.dy = dy;
-    g.nx = dx / a.maxR; g.ny = dy / a.maxR;
-    tgBow();
-    if (a.ready) tgReticle(a.cx + dx, a.cy + dy, true);
+    a.pullT = clamp((e.clientY - a.y0) / (a.G.h * TG_FULL_PULL), 0, 1);
+    a.sideT = clamp(-(e.clientX - a.x0) / (a.G.w * TG_FULL_SIDE), -1, 1); // Gegenrichtung
+    if (a.pullT - a.creak > 0.18) { // beim Spannen knarrt es ab und zu
+      a.creak = a.pullT;
+      noise(0.16, { freq: 360, q: 2, gain: 0.045, sweep: 200 });
+    } else if (a.pullT < a.creak - 0.18) a.creak = a.pullT;
   });
-  const up = (e) => {
+  const end = (e, cancel) => {
     const a = g.aim;
     if (!a || e.pointerId !== a.id) return;
     g.aim = null;
-    tgReticle(0, 0, false);
-    $('#tgbow')?.classList.remove('drawn');
-    if (!a.ready || game.locked || !runOn()) { // zu früh losgelassen: entspannen, kein Schuss
-      g.nx = 0; g.ny = 0;
-      tgDraw(0, 220);
+    cancelAnimationFrame(g.aimRaf);
+    tgAimHide();
+    if (cancel || (g.pull || 0) < TG_MIN_PULL || game.locked || !runOn()) { // kaum gespannt: kein Schuss
+      if (!cancel && !game.locked && runOn()) tgToast('Zieh nach hinten, um zu spannen!', 'info');
+      tgAnim(0, 0, 220);
       return;
     }
+    const p = tgAimPoint(a.G, g.pull, g.side);
     tgRelease();
-    tgFire(a.cx + a.dx, a.cy + a.dy);
+    tgFire(p.x, p.y);
   };
-  stage.addEventListener('pointerup', up);
-  stage.addEventListener('pointercancel', (e) => { if (g.aim && e.pointerId === g.aim.id) { g.aim = null; tgReticle(0, 0, false); $('#tgbow')?.classList.remove('drawn'); g.nx = 0; g.ny = 0; tgDraw(0, 220); } });
+  stage.addEventListener('pointerup', (e) => end(e, false));
+  stage.addEventListener('pointercancel', (e) => end(e, true));
 }
-/** Sehne spannen (to = 1) oder entspannen (to = 0). Liefert true, wenn die Bewegung ganz durchgelaufen ist. */
-function tgDraw(to, ms) {
+/** Zielkreis, Flugbahn und Armbrust zeichnen */
+function tgAimShow(G) {
+  const g = game.tg;
+  const p = tgAimPoint(G, g.pull || 0, g.side || 0);
+  tgReticle(p.x, p.y, true);
+  const ret = $('#tgret');
+  if (ret) ret.style.setProperty('--sc', String(1.15 - 0.45 * (g.pull || 0))); // weiter weg = kleiner
+  tgBow();
+  // gestrichelte Flugbahn von der Armbrust zum Zielkreis
+  const path = $('#tgpath path'), bow = $('#tgbow')?.getBoundingClientRect();
+  if (path && bow) {
+    const a = tgLocal(bow.left + bow.width / 2, bow.top + bow.height * 0.22), b = tgLocal(p.x, p.y);
+    const lift = 40 + (g.pull || 0) * 120;
+    path.setAttribute('d', `M${a.x} ${a.y} Q${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - lift} ${b.x} ${b.y}`);
+    $('#tgpath').classList.add('on');
+  }
+}
+function tgAimHide() {
+  tgReticle(0, 0, false);
+  $('#tgpath')?.classList.toggle('on', false);
+}
+/** Spannung und Richtung animiert ändern (Entspannen oder Schuss per Taste). Liefert true, wenn ganz durchgelaufen. */
+function tgAnim(toPull, toSide, ms, G = null) {
   const g = game.tg;
   cancelAnimationFrame(g.drawRaf);
-  const from = g.pull || 0;
-  if (to > from) { // Spann-Geräusch: Holz knarrt, Sehne knirscht
-    noise(ms / 1000, { freq: 380, q: 2, gain: 0.05, sweep: 260 });
-    tone([140, 170], ms / 2000, 'sawtooth', 0.015);
-  }
-  const t0 = performance.now(), dur = reduceMotion() ? 1 : ms * Math.abs(to - from);
+  const p0 = g.pull || 0, s0 = g.side || 0;
+  if (toPull > p0) noise(ms / 1000, { freq: 380, q: 2, gain: 0.05, sweep: 260 });
+  const t0 = performance.now(), dur = reduceMotion() ? 1 : ms;
   return new Promise((resolve) => {
     const step = (now) => {
       if (!$('#tgbow')) { resolve(false); return; }
-      const u = dur ? Math.min(1, (now - t0) / dur) : 1;
-      const e = to > from ? 1 - (1 - u) ** 3 : u * u; // spannen: zuerst schnell, dann zäh
-      g.pull = from + (to - from) * e;
-      tgBow();
+      const u = Math.min(1, (now - t0) / dur);
+      const e = toPull > p0 ? 1 - (1 - u) ** 3 : u * u;
+      g.pull = p0 + (toPull - p0) * e;
+      g.side = s0 + (toSide - s0) * e;
+      if (G) tgAimShow(G); else tgBow();
       if (u < 1) g.drawRaf = requestAnimationFrame(step); else resolve(true);
     };
     g.drawRaf = requestAnimationFrame(step);
@@ -877,10 +911,10 @@ function tgDraw(to, ms) {
 function tgRelease() {
   const g = game.tg;
   cancelAnimationFrame(g.drawRaf);
-  g.pull = 0; g.nx = 0; g.ny = 0;
+  g.pull = 0; g.side = 0;
   tgBow();
   const rig = $('#tgbow');
-  rig?.classList.remove('kick'); void rig?.offsetWidth; rig?.classList.add('kick');
+  rig?.classList.toggle('kick', false); void rig?.offsetWidth; rig?.classList.add('kick');
 }
 function tgLocal(x, y) { const r = $('#tgstage').getBoundingClientRect(); return { x: x - r.left, y: y - r.top }; }
 function tgReticle(x, y, on) {
@@ -889,12 +923,14 @@ function tgReticle(x, y, on) {
   el.classList.toggle('on', on);
   if (on) { const p = tgLocal(x, y); el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; }
 }
+/** Armbrust: zeigt in Schussrichtung, hebt sich mit der Spannung; Sehne und Pfeil gehen mit nach hinten */
 function tgBow() {
   const rig = $('#tgbow');
   if (!rig) return;
   const g = game.tg;
-  const nx = clamp(g.nx || 0, -1, 1), ny = clamp(g.ny || 0, -1, 1), pull = clamp(g.pull || 0, 0, 1);
-  rig.style.transform = `translateX(-50%) perspective(900px) translate(${nx * 14}px, ${ny * 12}px) rotateZ(${nx * 8}deg) rotateX(${-ny * 7}deg)`;
+  const side = clamp(g.side || 0, -1, 1), pull = clamp(g.pull || 0, 0, 1);
+  rig.classList.toggle('drawn', pull > TG_MIN_PULL && !!g.aim);
+  rig.style.transform = `translateX(-50%) perspective(900px) translate(${side * 10}px, ${pull * 10}px) rotateZ(${side * 10}deg) rotateX(${pull * 9}deg)`;
   // Beim Spannen biegen sich die Bogenarme nach hinten, die Sehne zieht den Pfeil mit
   const tx = 40 + pull * 16, ty = 82 + pull * 16;
   const limb = `M${tx} ${ty}C${90 + pull * 6} ${20 + pull * 14} 150 55 200 60c50-5 ${110 - pull * 6} ${-40 + pull * 14} ${160 - pull * 16} ${22 + pull * 16}`;
@@ -902,21 +938,24 @@ function tgBow() {
   $('#tgString')?.setAttribute('points', `${tx},${ty} 200,${82 + pull * 110} ${400 - tx},${ty}`);
   $('#tgBolt')?.setAttribute('transform', `translate(0,${pull * 110})`);
 }
-/** Schuss per Taste: spannen, dann genau in die Mitte des Feldes */
+/** Schuss per Taste: zeigt das Spannen und Zielen, dann genau in die Mitte des Feldes */
 function tgShootQuad(q) {
   if (game.locked || !runOn() || game.tg.aim) return;
   game.locked = true;
-  tgDraw(1, TG_DRAW_MS * 0.7).then((done) => {
+  const G = tgGeom(), r = $('#tgtarget').getBoundingClientRect();
+  const [qx, qy] = TG_POS[q];
+  const x = r.left + (qx / 200) * r.width, y = r.top + (qy / 200) * r.height;
+  const pull = (y - G.near) / (G.far - G.near), side = (x - G.cx) / G.side;
+  tgAnim(pull, side, 450, G).then((done) => {
+    tgAimHide();
     if (!done || !runOn()) return;
-    const r = $('#tgtarget').getBoundingClientRect();
-    const [x, y] = TG_POS[q];
     tgRelease();
-    tgFire(r.left + (x / 200) * r.width, r.top + (y / 200) * r.height);
+    tgFire(x, y);
   });
 }
 function tgFire(x, y) {
   game.locked = true;
-  const stage = $('#tgstage'), fl = $('#tgflight'), bow = $('#tgbow').getBoundingClientRect();
+  const fl = $('#tgflight'), bow = $('#tgbow').getBoundingClientRect();
   const from = tgLocal(bow.left + bow.width / 2, bow.top + bow.height * 0.27), to = tgLocal(x, y);
   tone([220, 160], 0.06, 'triangle', 0.08); // Sehne
   noise(0.15, { freq: 1800, gain: 0.05 });
@@ -927,28 +966,30 @@ function tgFire(x, y) {
     { left: `${from.x}px`, top: `${from.y}px`, transform: 'translate(-50%, 0) scale(1.25) rotate(0deg)' },
     { left: `${to.x}px`, top: `${to.y}px`, transform: `translate(-50%, 0) scale(.5) rotate(${ang}deg)` },
   ], { duration: fast ? 1 : 300, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' });
-  void stage;
   gLater(() => { fl.style.opacity = '0'; fl.getAnimations().forEach((a) => a.cancel()); tgHit(x, y); }, fast ? 20 : 310);
 }
 function tgHit(x, y) {
   if (!runOn()) return;
   const r = $('#tgtarget').getBoundingClientRect();
-  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const R = r.width / 2, cx = r.left + R, cy = r.top + R;
   const dx = x - cx, dy = y - cy;
-  const p = tgLocal(x, y);
-  // Pfeil bleibt stecken (auch daneben im Stroh) und zittert kurz
-  const stuck = document.createElement('span');
-  stuck.className = 'tg-stuck';
-  stuck.style.left = `${p.x}px`; stuck.style.top = `${p.y}px`;
-  stuck.innerHTML = TG_STUCK_SVG;
-  $('#tgarrows')?.appendChild(stuck);
-  noise(0.12, { freq: 300, gain: 0.12 }); // Einschlag
-  if (Math.hypot(dx, dy) > r.width * 0.44) { // daneben
-    tgToast('Daneben – nochmal!', 'bad');
-    stuck.classList.add('miss');
+  const stick = (cls = '') => {
+    const p = tgLocal(x, y);
+    const s = document.createElement('span');
+    s.className = `tg-stuck ${cls}`;
+    s.style.left = `${p.x}px`; s.style.top = `${p.y}px`;
+    s.innerHTML = TG_STUCK_SVG;
+    $('#tgarrows')?.appendChild(s);
+    noise(0.12, { freq: 300, gain: 0.12 }); // Einschlag
+  };
+  if (Math.hypot(dx, dy) > R * 0.88) { // daneben: zu kurz, zu weit oder seitlich vorbei
+    if (dy < -R * 0.6 && Math.abs(dx) < R) { tgToast('Zu weit – weniger stark spannen!', 'bad'); noise(0.4, { freq: 900, gain: 0.04, sweep: -600 }); }
+    else if (dy > R * 0.6 && Math.abs(dx) < R) { stick('miss'); tgToast('Zu kurz – stärker spannen!', 'bad'); }
+    else { stick('miss'); tgToast('Daneben – nochmal!', 'bad'); }
     game.locked = false;
     return;
   }
+  stick();
   const q = (dy < 0 ? 't' : 'b') + (dx < 0 ? 'l' : 'r');
   const t = game.task, v = game.tg.vals[q];
   const first = game.tries === 0;
@@ -968,7 +1009,7 @@ function tgHit(x, y) {
     tgToast('Falsches Feld – nochmal!', 'bad');
     // falsch: zählt (Survive: jedes Mal ein Leben, sonst nur der erste Versuch)
     if ((first || game.run.mode === 'survive') && runWrong(t)) return;
-    gLater(() => { g?.classList.remove('wrong'); if (runOn()) game.locked = false; }, 650);
+    gLater(() => { g?.classList.toggle('wrong', false); if (runOn()) game.locked = false; }, 650);
   }
 }
 
