@@ -1,11 +1,12 @@
-# Einmaleins
+# Teilmal
 
-Das kleine und das grosse Einmaleins üben, festigen und automatisieren – am Tablet, am Computer und auf Papier.
+**Mal & Geteilt üben:** das kleine und das grosse Einmaleins üben, festigen und automatisieren – am Tablet, am Computer und auf Papier.
+Teilmal hiess früher «Einmaleins». Die neue Adresse ist **teilmal.fabulousteaching.ch** (siehe „Adresswechsel“ weiter unten).
 Alle Übungen und Spiele gehen **ohne Anmeldung**. Mit Anmeldung gibt es Klassen, Kinder-Logins, eine Übersicht für die Lehrperson und persönliche Übungsblätter für jedes Kind.
 
 ## Das Gedächtnis: schwierige Rechnungen kommen wieder
 
-Einmaleins merkt sich für jede Rechnung, wie oft sie geübt wurde, wie oft sie falsch war, wie schnell die Antwort kam und welche falschen Antworten das Kind gegeben hat (z. B. „54 statt 56“). Daraus wählt es die nächste Aufgabe – in **allen** Übungen und Spielen:
+Teilmal merkt sich für jede Rechnung, wie oft sie geübt wurde, wie oft sie falsch war, wie schnell die Antwort kam und welche falschen Antworten das Kind gegeben hat (z. B. „54 statt 56“). Daraus wählt es die nächste Aufgabe – in **allen** Übungen und Spielen:
 
 - **Falsch** → die Rechnung kommt nach **3–5 anderen Aufgaben** wieder, nie direkt hintereinander.
 - **Richtig** → sie rückt einen Kasten weiter (wie bei einer Lernkartei), der Abstand wächst: 4, 9, 18, 35, 70, 140 Aufgaben.
@@ -97,12 +98,12 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 3. Jedes Kind bekommt wie bei Vokaboom einen **Benutzernamen** (z. B. `Baum34`) und ein **Bilder-Passwort** aus 3 Bildern.
 
    **Mit Vokaboom verbinden – in beide Richtungen:**
-   - „Meine Klassen → Aus Vokaboom übernehmen“ macht aus einer Vokaboom-Klasse eine Einmaleins-Klasse.
-   - In einer Einmaleins-Klasse unter „Kinder → Mit Vokaboom verbinden“: mit einer bestehenden Vokaboom-Klasse verbinden oder die Klasse in Vokaboom neu anlegen.
+   - „Meine Klassen → Aus Vokaboom übernehmen“ macht aus einer Vokaboom-Klasse eine Teilmal-Klasse.
+   - In einer Teilmal-Klasse unter „Kinder → Mit Vokaboom verbinden“: mit einer bestehenden Vokaboom-Klasse verbinden oder die Klasse in Vokaboom neu anlegen.
    - Danach hat jedes Kind in beiden Tools **denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen**. Neue Kinder, egal in welchem Tool angelegt, bekommen automatisch dasselbe Login im anderen. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen). Neue Bilder gelten in beiden Tools.
-   - Löschen: Bei verbundenen Kindern fragt Einmaleins „Nur in Einmaleins“ oder „Auch in Vokaboom“. Nur hier gelöschte Kinder holt der automatische Abgleich nicht zurück.
+   - Löschen: Bei verbundenen Kindern fragt Teilmal „Nur in Teilmal“ oder „Auch in Vokaboom“. Nur hier gelöschte Kinder holt der automatische Abgleich nicht zurück.
 4. **Reihen**: **Kleines** oder **Grosses Einmaleins**, welche Reihen und Aufgabenarten die Klasse übt, wie viele **Rechnungen pro Runde** (10, 15, 20 oder 30) und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen. Ohne eigene Wahl üben die Kinder alle erlaubten Aufgabenarten gemischt.
-5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo** und sehen in Einmaleins und Vokaboom gleich aus: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Einmaleins, bei Kindern, die auch in Vokaboom sind, zusätzlich **ABC Vokabeln**. QR-Code scannen = angemeldet.
+5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo** und sehen in Teilmal und Vokaboom gleich aus: oben „Mein Login“ und die Klasse, dann Name, Benutzername und die 3 Bilder. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Teilmal, bei Kindern, die auch in Vokaboom sind, zusätzlich **ABC Vokabeln**. QR-Code scannen = angemeldet.
 6. **Übersicht**:
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
    - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen, die häufigsten Fehler mit den typischen falschen Antworten und seine Münzen
@@ -121,10 +122,10 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 
 ## Gemeinsam angemeldet mit Vokaboom
 
-Laufen beide Tools unter **fabulousteaching.ch** (`vokaboom.fabulousteaching.ch` und `einmaleins.fabulousteaching.ch`), gilt die Anmeldung für beide:
+Laufen beide Tools unter **fabulousteaching.ch** (`vokaboom.fabulousteaching.ch` und `teilmal.fabulousteaching.ch`), gilt die Anmeldung für beide:
 
 - **Lehrperson:** In einem Tool angemeldet = im anderen auch angemeldet (auf demselben Gerät und Browser). Abmelden meldet in beiden ab.
-- **Kind:** Ein Kind, das in Vokaboom angemeldet ist, ist auch in Einmaleins angemeldet und umgekehrt – sofern es in beiden Tools ist (verbundene Klasse). Abmelden gilt in beiden; meldet sich auf einem geteilten iPad ein anderes Kind an, wechselt das andere Tool mit.
+- **Kind:** Ein Kind, das in Vokaboom angemeldet ist, ist auch in Teilmal angemeldet und umgekehrt – sofern es in beiden Tools ist (verbundene Klasse). Abmelden gilt in beiden; meldet sich auf einem geteilten iPad ein anderes Kind an, wechselt das andere Tool mit.
 - Auf der Startseite der Kinder gibt es den Knopf **„ABC Vokabeln üben“** (in Vokaboom **„1×1 Rechnen üben“**): Er wechselt mit derselben Anmeldung ins andere Tool – das funktioniert unter jeder Adresse.
 - Technisch: kleine Cookies der Domain fabulousteaching.ch (`js/sso.js`, in beiden Repositories gleich). Unter einer anderen Adresse (z. B. github.io) arbeitet jedes Tool wie bisher für sich.
 
@@ -140,12 +141,23 @@ Die Anmeldung läuft über dasselbe [Supabase](https://supabase.com)-Projekt wie
 
 ## Online stellen (GitHub Pages)
 
-Für das gemeinsame Anmelden mit Vokaboom braucht Einmaleins die eigene Adresse **einmaleins.fabulousteaching.ch** (Schritt 3).
+Für das gemeinsame Anmelden mit Vokaboom braucht Teilmal eine eigene Adresse unter fabulousteaching.ch: **teilmal.fabulousteaching.ch**.
 
 1. Im Repository unter **Settings → Pages** „Deploy from a branch“ wählen: Branch `main`, Ordner **/ (root)**, Save.
-2. Nach ein bis zwei Minuten läuft Einmaleins unter **https://fabulousteaching.github.io/Einmaleins/**.
-3. Eigene Adresse (wie bei Vokaboom), z. B. `einmaleins.fabulousteaching.ch`: bei Infomaniak in der DNS-Zone von fabulousteaching.ch einen Eintrag **CNAME `einmaleins` → `fabulousteaching.github.io`** anlegen, dann unter **Settings → Pages → Custom domain** die Adresse eintragen und **Enforce HTTPS** anhaken. GitHub legt dabei die Datei `CNAME` im Repository an.
-4. Die verwendete Adresse in Supabase bei den Redirect URLs eintragen (siehe Anleitung).
+2. Nach ein bis zwei Minuten läuft Teilmal unter **https://fabulousteaching.github.io/Einmaleins/** (diese Adresse leitet später automatisch auf die eigene Adresse weiter).
+3. Eigene Adresse: bei Infomaniak in der DNS-Zone von fabulousteaching.ch einen Eintrag **CNAME `teilmal` → `fabulousteaching.github.io`** anlegen, dann unter **Settings → Pages → Custom domain** `teilmal.fabulousteaching.ch` eintragen und **Enforce HTTPS** anhaken. GitHub schreibt die Adresse dabei in die Datei `CNAME`.
+4. Die Adresse in Supabase bei den Redirect URLs eintragen (siehe Anleitung).
+
+### Adresswechsel von einmaleins.fabulousteaching.ch
+
+Bis November 2026 hiess das Tool „Einmaleins“ und lief unter **einmaleins.fabulousteaching.ch**. Damit gedruckte Login-Kärtchen (QR-Codes), Lesezeichen und Links weiter funktionieren, leitet die alte Adresse auf die neue weiter:
+
+1. DNS-Eintrag **CNAME `teilmal` → `fabulousteaching.github.io`** anlegen (der alte Eintrag `einmaleins` bleibt).
+2. In Supabase unter **Authentication → URL Configuration → Redirect URLs** `https://teilmal.fabulousteaching.ch/**` hinzufügen (die alte Adresse darf bleiben).
+3. In diesem Repository unter **Settings → Pages → Custom domain** `teilmal.fabulousteaching.ch` eintragen, Save, nach ein paar Minuten **Enforce HTTPS** anhaken.
+4. Für die alte Adresse ein zweites, öffentliches Repository anlegen (z. B. `einmaleins-weiterleitung`) und die drei Dateien aus [`tools/alte-adresse/`](tools/alte-adresse/) hineinlegen (`index.html`, `404.html`, `CNAME`). Dort **Settings → Pages**: Branch `main`, / (root); unter Custom domain `einmaleins.fabulousteaching.ch` eintragen (falls es nicht schon dasteht), Save, dann **Enforce HTTPS** anhaken.
+
+Die Weiterleitung behält alles nach dem `#` (z. B. das Login eines Kärtchens). Ausserdem nimmt sie den Übungsstand mit, der auf dem Gerät unter der alten Adresse gespeichert ist (Übungen ohne Anmeldung, Münzen, Bestleistungen): Teilmal übernimmt ihn beim ersten Öffnen (`js/umzug.js`), sofern es auf der neuen Adresse noch keinen Stand gibt. Lehrpersonen und Kinder bleiben dank des gemeinsamen Anmeldens angemeldet.
 
 Vor einem Commit mit Änderungen an CSS oder JS: `sh tools/version.sh` (neue Versionsnummer, damit Browser die neuen Dateien laden).
 
@@ -157,6 +169,7 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | --- | --- |
 | `index.html` | Seite |
 | `css/styles.css` | Gestaltung |
+| `js/umzug.js` | Übernimmt beim Adresswechsel den Übungsstand von der alten Adresse |
 | `js/config.js` | Supabase-Adresse und öffentlicher Schlüssel (dasselbe Projekt wie Vokaboom) |
 | `js/core.js` | Speicher, Aufgaben, Gedächtnis (Auswahl der nächsten Aufgabe), Ablenker, Rechenhilfen, Töne |
 | `js/ui.js` | Rahmen, Startseite (Auswahl kleines/grosses Einmaleins, Reihen, Aufgabenart), Einmaleins-Tafel, Mein Stand, Einstellungen |
@@ -174,3 +187,5 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/vendor/qrcode.js` | QR-Codes ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT-Lizenz, Kazuhiko Arase) |
 | `audio/torjubel.mp3` | Torjubel beim Elfmeter: echte Aufnahme eines jubelnden Publikums, [„Crowd Cheer“ von FoolBoyMedia](https://freesound.org/people/FoolBoyMedia/sounds/397434/) auf Freesound, [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (gemeinfrei); auf 4,6 s gekürzt, ein- und ausgeblendet, Lautstärke angeglichen |
 | `supabase/` | Tabellen und Zugriffsregeln (`einmaleins.sql`) und Anleitung |
+| `tools/alte-adresse/` | Weiterleitung der alten Adresse einmaleins.fabulousteaching.ch (eigenes Repository, siehe „Adresswechsel“) |
+| `icon.svg`, `logo.svg`, `apple-touch-icon.png` | Logo: Sprechblase mit × (mal) und : (geteilt) |

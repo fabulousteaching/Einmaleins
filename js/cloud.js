@@ -1,9 +1,9 @@
-/* Einmaleins – Anmeldung der Lehrperson (Supabase, E-Mail und Passwort)
+/* Teilmal – Anmeldung der Lehrperson (Supabase, E-Mail und Passwort)
  *
  * Läuft im selben Supabase-Projekt wie Vokaboom: Wer dort ein Konto hat, meldet sich hier mit
  * derselben E-Mail-Adresse und demselben Passwort an. Klassen und Kinder sind getrennt (eigene Tabellen).
  * Tabellen und Zugriffsregeln: supabase/einmaleins.sql, Einrichtung: supabase/ANLEITUNG.md.
- * Ohne Eintrag in js/config.js läuft Einmaleins nur im Browser (alles ausser Klassen geht trotzdem).
+ * Ohne Eintrag in js/config.js läuft Teilmal nur im Browser (alles ausser Klassen geht trotzdem).
  */
 'use strict';
 
@@ -77,7 +77,7 @@ async function cloudInit() {
     if (data?.session?.user) {
       setCloudUser(data.session.user);
       renderAccountSlot();
-      if (fromMail === 'signup') toast('Deine E-Mail-Adresse ist bestätigt. Willkommen bei Einmaleins!');
+      if (fromMail === 'signup') toast('Deine E-Mail-Adresse ist bestätigt. Willkommen bei Teilmal!');
       if (ui.view === 'home') render();
     }
   } catch { /* offline: läuft ohne Konto weiter */ }
@@ -120,7 +120,7 @@ function cloudErrorText(e) {
   if (code === 'same_password') return 'Das ist schon dein Passwort.';
   if (code === 'signup_disabled' || /signups? not allowed/i.test(msg)) return 'Neue Konten sind gerade ausgeschaltet.';
   if (code === 'over_request_rate_limit' || e?.status === 429) return 'Zu viele Versuche. Warte einen Moment und versuch es nochmal.';
-  if (code === '42P01' || code === 'PGRST205' || code === 'PGRST202' || /relation .* does not exist|could not find the (table|function)/i.test(msg)) return 'In Supabase fehlen die Einmaleins-Tabellen: Bitte supabase/einmaleins.sql im SQL Editor ausführen.';
+  if (code === '42P01' || code === 'PGRST205' || code === 'PGRST202' || /relation .* does not exist|could not find the (table|function)/i.test(msg)) return 'In Supabase fehlen die Tabellen für Teilmal: Bitte supabase/einmaleins.sql im SQL Editor ausführen.';
   if (code === '42501' || /permission denied|row-level security/i.test(msg)) return 'Keine Berechtigung: Bitte supabase/einmaleins.sql in Supabase nochmals ganz ausführen.';
   if (msg === 'load') return 'Die Anmeldung konnte nicht geladen werden. Bist du online?';
   if (e instanceof TypeError || /failed to fetch|network|load failed/i.test(msg)) return 'Keine Verbindung zum Server. Bist du online? (Gratis-Projekte bei Supabase pausieren nach einer Woche ohne Nutzung.)';

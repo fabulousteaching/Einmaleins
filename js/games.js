@@ -1,4 +1,4 @@
-/* Einmaleins – Spiele. Alle holen ihre Rechnungen aus demselben Gedächtnis wie die Übungen:
+/* Teilmal – Spiele. Alle holen ihre Rechnungen aus demselben Gedächtnis wie die Übungen:
    Schwierige Rechnungen kommen auch hier in Abständen wieder, und die Antworten zählen mit.
 
    Spielmodi (Elfmeter, Meteoriten, Frosch, Zielscheibe, Stimmt das?; Memory nur Speed):

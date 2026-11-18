@@ -1,4 +1,4 @@
-/* Einmaleins – Gestaltung
+/* Teilmal – Gestaltung
    Wie Vokaboom: hell, freundlich, grosse runde Karten, weiche Farbverläufe im Hintergrund.
    Eigene Farben: Petrol/Türkis als Hauptfarbe, dazu Koralle und Sonnengelb. Jede Übung und jedes Spiel mit eigener Farbe. */
 :root {
@@ -151,11 +151,22 @@ hr { border: 0; border-top: 1px solid var(--line); margin: .4rem 0; }
 @media (max-width: 560px) { .topbar.has-back .brand-name, .topbar.has-back .crumbs { display: none; } }
 .brand { display: flex; align-items: center; gap: .55rem; background: none; border: 0; padding: .3rem .2rem; color: var(--ink); border-radius: 14px; }
 .brand-name { font-family: var(--font-display); font-weight: 800; font-size: 1.38rem; letter-spacing: -.03em; }
-.brand-name .hot { background: linear-gradient(100deg, var(--brand), var(--brand-2) 50%, var(--coral)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.brand-mark { display: block; width: 44px; height: 42px; flex: none; }
+/* Schriftzug «Teilmal»: «Teil» im selben Koralle wie der Doppelpunkt im Logo, «mal» in Petrol */
+.brand-name .teil { color: #FF6B4A; }
+.brand-name .mal { background: linear-gradient(100deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-mark { display: block; width: 42px; height: 42px; flex: none; }
 .brand-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.brand:hover .brand-mark svg g { animation: dots .6s ease; transform-origin: 66px 10px; }
-@keyframes dots { 40% { transform: scale(1.25) rotate(12deg); } }
+.brand:hover .brand-mark svg { animation: bm-hop .5s ease; transform-origin: 30% 90%; }
+.brand:hover .bm-colon { animation: bm-colon .5s ease; transform-box: fill-box; transform-origin: center; }
+@keyframes bm-hop { 40% { transform: rotate(-6deg) scale(1.06); } }
+@keyframes bm-colon { 40% { transform: scale(1.25); } }
+/* Startseite: Logo, Schriftzug und Unterzeile */
+.home-brand { display: flex; align-items: center; gap: .8rem; }
+.home-brand-mark { display: block; width: 62px; height: 62px; flex: none; }
+.home-brand-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.home-brand-text { display: grid; gap: .3rem; }
+.home-brand .brand-name { font-size: 2.3rem; line-height: .95; }
+.brand-claim { font-weight: 600; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .crumbs { display: flex; align-items: center; gap: .3rem; min-width: 0; flex: 1; overflow: hidden; }
 .crumb { display: inline-flex; align-items: center; gap: .45rem; background: none; border: 0; padding: .35rem .6rem; border-radius: 10px; color: var(--ink-2); font-weight: 500; min-width: 0; }
 .crumb span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

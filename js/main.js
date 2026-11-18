@@ -1,4 +1,4 @@
-/* Einmaleins – Aktionen und Start */
+/* Teilmal – Aktionen und Start */
 'use strict';
 
 function refreshReihenPanel() {
@@ -125,4 +125,5 @@ function init() {
     if (isKid() && kid.token === before) kidRefresh().catch(() => { /* offline: mit dem Stand auf dem Gerät weiter */ });
   });
 }
-init();
+// Kommt man von der alten Adresse, zuerst den mitgebrachten Übungsstand übernehmen (js/umzug.js)
+if (window.TEILMAL_UMZUG) window.TEILMAL_UMZUG.finally(init); else init();

@@ -1,4 +1,4 @@
-/* Einmaleins – Münzen
+/* Teilmal – Münzen
  *
  * Münzen gibt es nur in den Übungen, ausgegeben werden sie für die Spiele (1 Münze pro Spiel).
  * Fair für alle: Jede richtige Antwort bringt Punkte, alle paar Punkte gibt es eine Münze.

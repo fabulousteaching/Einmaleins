@@ -1,4 +1,4 @@
-/* Einmaleins – 3D-Spiele (three.js, MIT-Lizenz, liegt in js/vendor)
+/* Teilmal – 3D-Spiele (three.js, MIT-Lizenz, liegt in js/vendor)
  *
  * Elfmeter vor dem Tor im Stadion, Meteoriten aus dem Cockpit der Rakete, Frosch-Hüpfen über einen Teich.
  * Beim Elfmeter sind die Zahlen HTML-Schilder im Tor; bei Meteoriten und Frosch stecken sie als Bild direkt im Stein

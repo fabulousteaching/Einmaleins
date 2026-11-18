@@ -1,4 +1,4 @@
-/* Einmaleins – Oberfläche: Rahmen, Startseite, Mein Stand, Dialoge, Einstellungen */
+/* Teilmal – Oberfläche: Rahmen, Startseite, Mein Stand, Dialoge, Einstellungen */
 'use strict';
 
 const ICONS = {
@@ -37,7 +37,10 @@ const ICONS = {
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 const stars = (n, max = 3) => `<span class="stars" aria-label="${n} von ${max} Sternen">${Array.from({ length: max }, (_, i) => `<svg viewBox="0 0 24 24" class="star ${i < n ? 'on' : ''}" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>`).join('')}</span>`;
 
-const BRAND_SVG = (id = 'bg') => `<svg viewBox="0 -4 80 76" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0F766E"/><stop offset="1" stop-color="#0E7490"/></linearGradient></defs><rect x="5" y="22" width="36" height="42" rx="10" fill="#FF6B4A" transform="rotate(-12 23 43)"/><rect x="14" y="18" width="40" height="48" rx="12" fill="url(#${id})"/><path d="M25 31l18 22M43 31 25 53" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/><g fill="#FFC233"><circle cx="58" cy="6" r="3.4"/><circle cx="67" cy="6" r="3.4"/><circle cx="76" cy="6" r="3.4"/><circle cx="58" cy="15" r="3.4"/><circle cx="67" cy="15" r="3.4"/></g><circle cx="76" cy="15" r="3.4" fill="#FF6B4A"/></svg>`;
+/* Logo: Sprechblase mit × (mal) und : (geteilt). Der Doppelpunkt hat dasselbe Koralle wie «Teil» im Schriftzug. */
+const BRAND_BUBBLE = 'M27 12H56a15 15 0 0 1 15 15V42a15 15 0 0 1-15 15H39L22 70l3-13H27a15 15 0 0 1-15-15V27a15 15 0 0 1 15-15z';
+const BRAND_SVG = (id = 'bg') => `<svg viewBox="3 11 69 69" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0F766E"/><stop offset="1" stop-color="#0E7490"/></linearGradient></defs><path class="bm-back" d="${BRAND_BUBBLE}" fill="#FF6B4A" transform="translate(-5 5) rotate(-7 41 40)"/><path d="${BRAND_BUBBLE}" fill="url(#${id})"/><path d="M23 27l15 15M38 27 23 42" stroke="#fff" stroke-width="6.8" stroke-linecap="round"/><g class="bm-colon" fill="#FF6B4A"><circle cx="54" cy="27.5" r="4.3"/><circle cx="54" cy="41.5" r="4.3"/></g></svg>`;
+const BRAND_NAME = '<span class="brand-name"><span class="teil">Teil</span><span class="mal">mal</span></span>';
 
 /* ---------------- Zustand der Oberfläche ---------------- */
 const ui = { view: 'home', mode: null, game: null, modal: null, standMode: 'mul', classId: null };
@@ -48,9 +51,9 @@ function renderShell() {
     <header class="topbar">
       <div class="topbar-inner">
         <button class="back-btn" id="back-btn" data-action="back" hidden aria-label="Zurück">${icon('left')}</button>
-        <button class="brand" data-action="home" aria-label="Einmaleins – zur Startseite">
+        <button class="brand" data-action="home" aria-label="Teilmal – zur Startseite">
           <span class="brand-mark" aria-hidden="true">${BRAND_SVG('brandgrad')}</span>
-          <span class="brand-name">Einmal<span class="hot">eins</span></span>
+          ${BRAND_NAME}
         </button>
         <nav class="crumbs" id="crumbs" aria-label="Wo du gerade bist"></nav>
         <div class="topbar-actions">
@@ -190,7 +193,7 @@ function confetti() {
 let heroTimer = null;
 const HERO_FACTS = [[7, 8], [6, 9], [3, 7], [8, 8], [4, 6], [9, 7], [6, 7], [8, 4], [7, 7], [9, 6]];
 function heroHTML() {
-  const tiles = [[7, 8], [6, 9], [4, 7]].map(([a, b], i) => `<div class="flip-tile t${i}" data-i="${i}"><div class="flip-in"><span class="ft-front">${a}${SIGN()}${b}</span><span class="ft-back">${a * b}</span></div></div>`).join('');
+  const tiles = [[`7${SIGN()}8`, 56], ['54 : 9', 6], [`4${SIGN()}7`, 28]].map(([front, back], i) => `<div class="flip-tile t${i}" data-i="${i}"><div class="flip-in"><span class="ft-front">${front}</span><span class="ft-back">${back}</span></div></div>`).join('');
   return `<div class="hero-art" aria-hidden="true">${tiles}<span class="hero-dots">${'<i></i>'.repeat(12)}</span></div>`;
 }
 function startHeroFlip() {
@@ -265,9 +268,9 @@ function viewHome() {
   return `<section class="home">
     ${kidHead || `<div class="hero">
       <div class="hero-text">
-        <p class="eyebrow">Das kleine und das grosse Einmaleins üben</p>
+        <div class="home-brand"><span class="home-brand-mark" aria-hidden="true">${BRAND_SVG('herograd')}</span><span class="home-brand-text">${BRAND_NAME}<span class="brand-claim">Mal &amp; Geteilt üben</span></span></div>
         <h1>Üben, spielen und <mark>sicher rechnen</mark> – bis das Einmaleins im Schlaf sitzt.</h1>
-        <p class="lead">Einmaleins merkt sich, welche Rechnungen dir noch Mühe machen, und bringt sie in klugen Abständen wieder – nie stur hintereinander.</p>
+        <p class="lead">Teilmal merkt sich, welche Rechnungen dir noch Mühe machen, und bringt sie in klugen Abständen wieder – nie stur hintereinander.</p>
         ${cloud.uid ? `<div class="row"><button class="btn primary" data-action="classes">${icon('users')} Meine Klassen & Übersicht</button></div>` : ''}
       </div>
       ${heroHTML()}

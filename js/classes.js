@@ -1,4 +1,4 @@
-/* Einmaleins – Klassen (für Lehrpersonen) und Kinder-Login
+/* Teilmal – Klassen (für Lehrpersonen) und Kinder-Login
  *
  * Lehrperson (mit Konto): Klassen anlegen, Kinder eintragen (Vorname + erster Buchstabe des Nachnamens),
  * Reihen festlegen, Login-Kärtchen als PDF, Übersicht pro Kind und Rechnung, persönliche Übungsblätter.
@@ -198,7 +198,7 @@ async function kidLoginFromHash() {
         const { data } = await cl.rpc('einmaleins_kid_bridge', { p_from: 'vokaboom', p_token: sso[2] });
         tok = data?.token || ''; user = data?.username || '';
       }
-      if (!tok) { toast('Für dich gibt es in Einmaleins noch keine Klasse. Frag deine Lehrperson.', 'bad'); return true; }
+      if (!tok) { toast('Für dich gibt es in Teilmal noch keine Klasse. Frag deine Lehrperson.', 'bad'); return true; }
       if (isKid() && kid.token === tok) return true;
       await kidStart(tok, user);
       if (isKid()) toast(`Hallo ${kid.first}! Du bist angemeldet.`);
@@ -580,8 +580,8 @@ function classKidsHTML(c, kids) {
     if (klass.confirm === s.id) {
       const linked = s.vokaboom_id && klass.vb?.byId.get(s.vokaboom_id);
       return linked
-        ? `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Kind ist auch in Vokaboom. Der Übungsstand in Einmaleins wird gelöscht.</small></span>
-          <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="here">Nur in Einmaleins</button><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="both">Auch in Vokaboom</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`
+        ? `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Kind ist auch in Vokaboom. Der Übungsstand in Teilmal wird gelöscht.</small></span>
+          <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="here">Nur in Teilmal</button><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}" data-where="both">Auch in Vokaboom</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`
         : `<li class="kid-row confirm"><span><strong>${esc(kidName(s))} löschen?</strong> <small class="muted">Das Login und der Übungsstand werden gelöscht.</small></span>
           <span class="lib-confirm"><button class="btn small danger" data-action="kid-delete-yes" data-id="${s.id}">Löschen</button><button class="btn small ghost" data-action="kid-delete-no">Behalten</button></span></li>`;
     }
@@ -684,7 +684,7 @@ function openVokaboomImport() {
   const taken = new Set(klass.list.filter((x) => x.vokaboom_class && x.id !== c.id).map((x) => x.vokaboom_class));
   const list = (klass.vb?.classes || []).filter((x) => !taken.has(x.id));
   openModal(`${modalHead('Mit Vokaboom verbinden')}
-    <p class="muted small">Danach hat jedes Kind in beiden Tools denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen. Kinder aus Vokaboom kommen nach Einmaleins, Kinder aus Einmaleins nach Vokaboom. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen).</p>
+    <p class="muted small">Danach hat jedes Kind in beiden Tools denselben Benutzernamen und dieselben 3 Bilder – ein Kärtchen. Kinder aus Vokaboom kommen nach Teilmal, Kinder aus Teilmal nach Vokaboom. Gleichnamige Kinder werden nicht doppelt angelegt, sondern verbunden (dann gilt das Vokaboom-Kärtchen).</p>
     ${list.length ? `<p class="label">Bestehende Vokaboom-Klasse</p><ul class="class-list">${list.map((x) => {
       const n = klass.vb.students.filter((s) => s.class_id === x.id).length;
       return `<li class="lib-item"><button class="lib-open" data-action="vokaboom-take" data-id="${x.id}"><span class="class-badge vb" aria-hidden="true">${esc(x.name.slice(0, 3))}</span><span class="lib-text"><strong>${esc(x.name)}</strong><small>${n} ${n === 1 ? 'Kind' : 'Kinder'}</small></span></button></li>`;
@@ -745,7 +745,7 @@ async function kidNewPics(id) {
     s.pics = pics;
     render();
     toast(s.vokaboom_id
-      ? `${kidName(s)} hat neue Bilder – in Einmaleins und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
+      ? `${kidName(s)} hat neue Bilder – in Teilmal und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
       : `${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
@@ -854,7 +854,7 @@ function classCardsHTML(c, kids) {
     <div class="cards-head">
       <div><h2>Login-Kärtchen</h2>
         <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen.</p>
-        <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Einmaleins – ein Kärtchen für beide Tools. Ihre alten Vokaboom-Kärtchen gelten weiterhin.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Einmaleins.'}</p></div>
+        <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Teilmal – ein Kärtchen für beide Tools. Ihre alten Vokaboom-Kärtchen gelten weiterhin.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Teilmal.'}</p></div>
       <button class="btn primary" data-action="cards-pdf" id="cards-pdf">${icon('down')} PDF herunterladen</button>
     </div>
     <div class="card-previews">${kids.map((s) => `<figure class="card-prev" data-sid="${s.id}"><span class="spinner"></span></figure>`).join('')}</div>
@@ -1259,7 +1259,7 @@ function downloadKidSheet(id) {
   const st = studentsOf(c?.id).find((x) => x.id === id);
   if (!st) return;
   if (!kidSheetDoc || klass.sheetKid !== id) previewKidSheet(id, false);
-  downloadBlob(docToPDF(kidSheetDoc), `Einmaleins-${fileSafe(kidName(st))}.pdf`);
+  downloadBlob(docToPDF(kidSheetDoc), `Teilmal-${fileSafe(kidName(st))}.pdf`);
   toast('PDF heruntergeladen.');
 }
 function downloadAllSheets() {
@@ -1268,7 +1268,7 @@ function downloadAllSheets() {
   if (!kids.length) return;
   const doc = new SheetDoc();
   kids.forEach((st, i) => { const { who, prog } = kidSheetData(c, st); addSheetFor(doc, who, prog, c.settings.reihen, sheetOpts(), i === 0); });
-  downloadBlob(docToPDF(doc), `Einmaleins-Blaetter-${fileSafe(c.name)}.pdf`);
+  downloadBlob(docToPDF(doc), `Teilmal-Blaetter-${fileSafe(c.name)}.pdf`);
   toast(`${kids.length} Blätter heruntergeladen.`);
 }
 

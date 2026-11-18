@@ -1,4 +1,4 @@
-/* Einmaleins – Übungsblätter als PDF (A4), aus den individuellen Fehlern eines Kindes
+/* Teilmal – Übungsblätter als PDF (A4), aus den individuellen Fehlern eines Kindes
  *
  * Kleines eigenes PDF-Programm ohne Zusatzbibliothek: Text (Helvetica), Linien, Rechtecke, Kreise.
  * Dieselben Zeichenbefehle ergeben auch die Vorschau als SVG. Masse in Millimetern, Ursprung oben links.
@@ -114,7 +114,7 @@ function docToPDF(doc) {
   const xref = len, count = 5 + 2 * n;
   push(`xref\n0 ${count}\n0000000000 65535 f \n`);
   for (let id = 1; id < count; id++) push(`${String(offs[id]).padStart(10, '0')} 00000 n \n`);
-  push(`trailer\n<< /Size ${count} /Root 1 0 R /Info << /Producer (Einmaleins) >> >>\nstartxref\n${xref}\n%%EOF\n`);
+  push(`trailer\n<< /Size ${count} /Root 1 0 R /Info << /Producer (Teilmal) >> >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(chunks, { type: 'application/pdf' });
 }
 function pageToSVG(ops) {
@@ -240,12 +240,27 @@ function planSheet(prog, reihen, opts) {
 
 /* ---------------- Blatt zeichnen ---------------- */
 const SC = { ink: '#12262A', ink2: '#44606A', ink3: '#8AA0A6', teal: '#0F766E', coral: '#FF6B4A', sun: '#FFC233', box: '#F2F7F6', line: '#C3D4D3', red: '#D9363E' };
+/** Umriss der Logo-Sprechblase (Koordinaten wie im SVG-Logo, 80er-Raster) */
+function bubblePts() {
+  const pts = [];
+  const arc = (cx, cy, a0, a1) => { for (let i = 0; i <= 6; i++) { const a = (a0 + (a1 - a0) * i / 6) * Math.PI / 180; pts.push([cx + 15 * Math.cos(a), cy + 15 * Math.sin(a)]); } };
+  arc(56, 27, -90, 0); arc(56, 42, 0, 90);
+  pts.push([39, 57], [22, 70], [25, 57]);
+  arc(27, 42, 90, 180); arc(27, 27, 180, 270);
+  return pts;
+}
+/** Logo von Teilmal: Sprechblase mit × und : (wie BRAND_SVG in ui.js) */
 function drawLogo(doc, x, y, s = 1) {
-  doc.poly([[x + 1 * s, y + 4.5 * s], [x + 8.5 * s, y + 2.8 * s], [x + 10.3 * s, y + 12.3 * s], [x + 2.8 * s, y + 14 * s]], { fill: SC.coral });
-  doc.rect(x + 3 * s, y + 1.5 * s, 9.4 * s, 11.6 * s, { r: 2.6 * s, fill: SC.teal });
-  doc.line(x + 5.4 * s, y + 4.7 * s, x + 10 * s, y + 9.9 * s, { color: '#FFFFFF', lw: 1.3 * s });
-  doc.line(x + 10 * s, y + 4.7 * s, x + 5.4 * s, y + 9.9 * s, { color: '#FFFFFF', lw: 1.3 * s });
-  [[13.6, 0.4], [15.8, 0.4], [13.6, 2.6]].forEach(([dx, dy]) => doc.circle(x + dx * s, y + dy * s, 0.8 * s, { fill: SC.sun }));
+  const k = 0.21 * s;
+  const P = (px, py) => [x + (px - 3) * k, y + (py - 11) * k];
+  const r = -7 * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+  // Koralle-Blase dahinter: um (41, 40) gedreht und verschoben
+  doc.poly(bubblePts().map(([px, py]) => { const dx = px - 41, dy = py - 40; return P(41 + dx * c - dy * sn - 5, 40 + dx * sn + dy * c + 5); }), { fill: SC.coral });
+  doc.poly(bubblePts().map(([px, py]) => P(px, py)), { fill: SC.teal });
+  doc.line(...P(23, 27), ...P(38, 42), { color: '#FFFFFF', lw: 6.8 * k });
+  doc.line(...P(38, 27), ...P(23, 42), { color: '#FFFFFF', lw: 6.8 * k });
+  doc.circle(...P(54, 27.5), 4.3 * k, { fill: SC.coral });
+  doc.circle(...P(54, 41.5), 4.3 * k, { fill: SC.coral });
 }
 function drawStar(doc, cx, cy, r) {
   const pts = [];
@@ -290,7 +305,8 @@ function drawSheet(doc, who, plan, opts, { showAnswer = false } = {}) {
   const dateTxt = d.toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' });
   // Kopf
   drawLogo(doc, 16, 12, 1.15);
-  doc.text(37, 19, 'Einmaleins', { size: 11, bold: true, color: SC.teal });
+  const teilW = doc.text(37, 19, 'Teil', { size: 11, bold: true, color: SC.coral });
+  doc.text(37 + teilW, 19, 'mal', { size: 11, bold: true, color: SC.teal });
   doc.text(37, 27.5, showAnswer ? 'Lösungen' : 'Mein Übungsblatt', { size: 20, bold: true });
   const nm = who.name || '';
   doc.text(118, 18, 'Name', { size: 8.5, color: SC.ink3 });
@@ -368,7 +384,7 @@ function drawSheet(doc, who, plan, opts, { showAnswer = false } = {}) {
   doc.text(118, fy + 7, 'So gut ging es:', { size: 10, color: SC.ink2 });
   [0, 1, 2].forEach((i) => drawStar(doc, 124 + i * 9, fy + 11.6, 3.4));
   doc.text(194, fy + 13.2, 'Ausmalen!', { size: 8, color: SC.ink3, align: 'right' });
-  doc.text(105, 289, `Erstellt mit Einmaleins · ${dateTxt}`, { size: 7, color: SC.ink3, align: 'center' });
+  doc.text(105, 289, `Erstellt mit Teilmal · ${dateTxt}`, { size: 7, color: SC.ink3, align: 'center' });
 }
 
 /** Ein ganzes Blatt (plus auf Wunsch Lösungen) für eine Person in ein Dokument */
@@ -410,7 +426,7 @@ function renderMySheetPreview() {
 function downloadMySheet() {
   if (!mySheetDoc) renderMySheetPreview();
   const who = isKid() ? kidName() : ($('#sh-name')?.value || '').trim();
-  downloadBlob(docToPDF(mySheetDoc), `Einmaleins-Uebungsblatt${who ? '-' + fileSafe(who) : ''}.pdf`);
+  downloadBlob(docToPDF(mySheetDoc), `Teilmal-Uebungsblatt${who ? '-' + fileSafe(who) : ''}.pdf`);
   toast('PDF heruntergeladen.');
 }
 function sheetOptsHTML(o) {

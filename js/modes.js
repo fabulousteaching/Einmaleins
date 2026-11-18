@@ -1,4 +1,4 @@
-/* Einmaleins – Übungen: Trainer, Auswählen, Reihen-Treppe, Blitztest */
+/* Teilmal – Übungen: Trainer, Auswählen, Reihen-Treppe, Blitztest */
 'use strict';
 
 const EX_ART = {

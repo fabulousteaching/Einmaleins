@@ -1,4 +1,4 @@
-/* Einmaleins – Kern: Hilfsfunktionen, Speicher, Aufgaben und das „Gedächtnis“ für schwierige Rechnungen
+/* Teilmal – Kern: Hilfsfunktionen, Speicher, Aufgaben und das „Gedächtnis“ für schwierige Rechnungen
  *
  * Jede Rechnung hat einen Stand (Kasten 0–5, wie bei einer Lernkartei):
  *  - falsch  → Kasten 0, kommt nach 3–5 anderen Aufgaben wieder (nie direkt hintereinander)

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Teilmal</title>
+  <!--
+    Weiterleitung der alten Adresse einmaleins.fabulousteaching.ch auf teilmal.fabulousteaching.ch.
+    Gleicher Inhalt in index.html und 404.html, damit jede alte Adresse weiterleitet
+    (z. B. die QR-Codes auf den Login-Kärtchen: …/#k=…).
+    Der Übungsstand, der auf diesem Gerät unter der alten Adresse gespeichert ist, wird mitgeschickt
+    (#…&umzug=…) und von Teilmal übernommen (js/umzug.js). Hat das schon geklappt (Cookie tm_umzug),
+    wird nichts mehr mitgeschickt.
+  -->
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #12262A; background: #F4F7F6; text-align: center; }
+    a { color: #0F766E; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <p>Einmaleins heisst jetzt <strong>Teilmal</strong>.<br>
+    <a id="weiter" href="https://teilmal.fabulousteaching.ch/">Weiter zu teilmal.fabulousteaching.ch</a></p>
+  <script>
+    (async function weiter() {
+      const NEU = 'https://teilmal.fabulousteaching.ch';
+      let hash = location.hash.replace(/^#/, '');
+      try {
+        const schonUmgezogen = /(^|;\s*)tm_umzug=1/.test(document.cookie);
+        const daten = {};
+        for (const k of ['einmaleins.db', 'einmaleins.kid', 'einmaleins.kiddb']) {
+          const v = localStorage.getItem(k);
+          if (v) daten[k] = v;
+        }
+        if (!schonUmgezogen && Object.keys(daten).length) {
+          const json = JSON.stringify(daten);
+          const b64 = (u) => {
+            let s = '';
+            for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+            return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          };
+          let paket = 'j.' + b64(new TextEncoder().encode(json));
+          if (typeof CompressionStream === 'function') {
+            const z = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+            paket = 'z.' + b64(new Uint8Array(await new Response(z).arrayBuffer()));
+          }
+          hash = (hash ? hash + '&' : '') + 'umzug=' + paket;
+        }
+      } catch (e) { /* ohne Übungsstand weiterleiten */ }
+      location.replace(NEU + location.pathname + location.search + (hash ? '#' + hash : ''));
+    })();
+  </script>
+</body>
+</html>
