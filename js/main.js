@@ -110,13 +110,30 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && ui.modal) { e.preventDefault(); closeModal(); }
 });
-window.addEventListener('hashchange', () => kidLoginFromHash());
+window.addEventListener('hashchange', () => { if (!spielAusHash()) kidLoginFromHash(); });
+
+/* Direktlink zu einem Spiel: …/#spiel=zielscheibe öffnet gleich die Startkarte dieses Spiels.
+   Erlaubt sind der Spielname wie im Menü (klein, mit Bindestrichen: elfmeter, frosch-huepfen, stimmt-das …)
+   oder die interne id (target, frog …). */
+function spielAusHash() {
+  const m = location.hash.match(/^#spiel=([a-z0-9-]+)$/i);
+  if (!m) return false;
+  const wahl = m[1].toLowerCase();
+  const slug = (s) => s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const spiel = GAME_BY_ID[wahl] || GAMES.find((g) => slug(g.name) === wahl);
+  try { history.replaceState(null, '', location.pathname + location.search); } catch { /* */ }
+  if (!spiel) return false;
+  openGame(spiel.id);
+  return true;
+}
 
 function init() {
   kidLoadSession();
   loadDB();
   renderShell();
   render();
+  spielAusHash();
   cloudInit().finally(async () => {
     const handled = await kidLoginFromHash();
     if (handled) return;

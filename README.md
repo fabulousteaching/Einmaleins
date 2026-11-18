@@ -139,6 +139,13 @@ Laufen beide Tools unter **fabulousteaching.ch** (`vokaboom.fabulousteaching.ch`
 
 Die Anmeldung läuft über dasselbe [Supabase](https://supabase.com)-Projekt wie Vokaboom. Einmalig muss dort die Datei `supabase/einmaleins.sql` ausgeführt werden. Schritt für Schritt: [`supabase/ANLEITUNG.md`](supabase/ANLEITUNG.md).
 
+## Direktlink zu einem Spiel
+
+Mit `#spiel=…` am Ende der Adresse öffnet Teilmal gleich die Startkarte eines Spiels, zum Beispiel
+**https://teilmal.fabulousteaching.ch/#spiel=zielscheibe** (so verlinkt es die Website fabulousteaching.ch im Übungslabor).
+Möglich sind die Spielnamen klein und mit Bindestrichen: `elfmeter`, `meteoriten`, `frosch-huepfen`, `zielscheibe`,
+`stimmt-das`, `memory`, `duell-zu-zweit`.
+
 ## Online stellen (GitHub Pages)
 
 Für das gemeinsame Anmelden mit Vokaboom braucht Teilmal eine eigene Adresse unter fabulousteaching.ch: **teilmal.fabulousteaching.ch**.
