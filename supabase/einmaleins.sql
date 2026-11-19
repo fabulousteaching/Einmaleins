@@ -298,7 +298,23 @@ language sql security definer set search_path = '' as $$
   select public.einmaleins_sync_vokaboom(p_class, p_vclass, true);
 $$;
 
--- Kind: anmelden. Liefert einen Anmelde-Schlüssel oder null (falsch). Nach 8 Fehlversuchen 5 Minuten Pause.
+-- Hilfe: Passwort eines Vokaboom-Kindes prüfen (eigenes Passwort „blau-tiger-47“ oder Klassenpasswort).
+-- Gibt false, solange Vokaboom noch keine Passwörter kennt (vokabelwelt.sql nicht neu ausgeführt).
+create or replace function public.einmaleins_vk_pw_ok(p_vid uuid, p_input text)
+returns boolean
+language plpgsql stable security definer set search_path = '' as $$
+declare ok boolean;
+begin
+  if p_vid is null or p_input is null or to_regprocedure('public.vokaboom_pw_ok(text,text)') is null then return false; end if;
+  execute 'select public.vokaboom_pw_ok(s.pw, $2) or public.vokaboom_pw_ok(c.class_pw, $2)
+    from public.vokaboom_students s join public.vokaboom_classes c on c.id = s.class_id where s.id = $1'
+    into ok using p_vid, p_input;
+  return coalesce(ok, false);
+end;
+$$;
+revoke execute on function public.einmaleins_vk_pw_ok(uuid, text) from public, anon, authenticated;
+
+-- Kind: anmelden (p_pics: Bilder oder – bei Kindern mit Vokaboom-Kärtchen – Passwort). Liefert einen Anmelde-Schlüssel oder null (falsch). Nach 8 Fehlversuchen 5 Minuten Pause.
 -- Kinder aus einer verbundenen Vokaboom-Klasse, die hier noch fehlen, werden dabei übernommen.
 create or replace function public.einmaleins_student_login(p_username text, p_pics text)
 returns jsonb
@@ -313,7 +329,8 @@ begin
   end if;
   select * into st from public.einmaleins_students x where x.username = p_username;
   if st.id is null and to_regclass('public.vokaboom_students') is not null then
-    select s.id, s.class_id into vk from public.vokaboom_students s where s.username = p_username and s.pics = p_pics;
+    select s.id, s.class_id into vk from public.vokaboom_students s
+      where s.username = p_username and (s.pics = p_pics or public.einmaleins_vk_pw_ok(s.id, p_pics));
     if vk.id is not null then
       ecls := public.einmaleins_linked_class(vk.class_id, vk.id);
       if ecls is not null then
@@ -327,7 +344,7 @@ begin
     select coalesce((select s.pics from public.vokaboom_students s where s.id = st.vokaboom_id), st.pics) into vp;
     st.pics := vp;
   end if;
-  if st.id is null or st.pics is distinct from p_pics then
+  if st.id is null or (st.pics is distinct from p_pics and not public.einmaleins_vk_pw_ok(st.vokaboom_id, p_pics)) then
     insert into public.einmaleins_login_fails as lf (username, fails, last_at) values (p_username, 1, now())
       on conflict (username) do update set
         fails = case when lf.last_at < now() - interval '5 minutes' then 1 else lf.fails + 1 end,
