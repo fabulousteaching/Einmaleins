@@ -306,6 +306,10 @@ language plpgsql stable security definer set search_path = '' as $$
 declare ok boolean;
 begin
   if p_vid is null or p_input is null or to_regprocedure('public.vokaboom_pw_ok(text,text)') is null then return false; end if;
+  if to_regprocedure('public.vokaboom_kid_pw_ok(uuid,text)') is not null then -- neueres Vokaboom: auch das frühere Passwort
+    execute 'select public.vokaboom_kid_pw_ok($1, $2)' into ok using p_vid, p_input;
+    return coalesce(ok, false);
+  end if;
   execute 'select public.vokaboom_pw_ok(s.pw, $2) or public.vokaboom_pw_ok(c.class_pw, $2)
     from public.vokaboom_students s join public.vokaboom_classes c on c.id = s.class_id where s.id = $1'
     into ok using p_vid, p_input;
