@@ -1322,7 +1322,7 @@ td.hard-chips { display: table-cell; }
 
 /* ---------- Turbo-Rennen ---------- */
 .kart-track-label { margin: .2rem 0 -.2rem; }
-.kart-tracks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; width: 100%; }
+.kart-tracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; width: 100%; }
 .kart-track { display: grid; justify-items: center; gap: .15rem; padding: .55rem .3rem; border-radius: 16px; border: 2px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
 .kart-track span { font-size: 1.6rem; line-height: 1; }
 .kart-track b { font-size: .9rem; }
@@ -1375,4 +1375,9 @@ td.hard-chips { display: table-cell; }
 .kart-count { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; pointer-events: none; }
 .kart-count span { font-family: var(--font-display); font-weight: 800; font-size: clamp(4rem, 18vw, 9rem); color: #fff; text-shadow: 0 8px 30px rgba(0, 0, 0, .5); animation: g3-word .85s cubic-bezier(.2, 1.4, .4, 1) forwards; }
 .kart-count span.go { color: #FFE08A; }
-@media (max-width: 560px) { .kart-rank { display: none; } .kart-ans .ka { min-width: 3rem; font-size: 1.25rem; } }
+.kart-lights { position: absolute; left: 50%; top: 14px; z-index: 5; transform: translateX(-50%) translateY(-140%); display: flex; gap: 10px; padding: 8px 12px; border-radius: 18px; background: #111827; box-shadow: 0 10px 24px rgba(0, 0, 0, .4); pointer-events: none; opacity: 0; transition: transform .35s cubic-bezier(.2, 1.4, .4, 1), opacity .3s; }
+.kart-lights.on { transform: translateX(-50%); opacity: 1; }
+.kart-lights i { width: 30px; height: 30px; border-radius: 50%; background: #374151; box-shadow: inset 0 -3px 6px rgba(0, 0, 0, .5); transition: background .1s, box-shadow .1s; }
+.kart-lights i.red { background: #EF4444; box-shadow: 0 0 16px #EF4444, inset 0 -3px 6px rgba(0, 0, 0, .3); }
+.kart-lights i.go { background: #22C55E; box-shadow: 0 0 18px #22C55E, inset 0 -3px 6px rgba(0, 0, 0, .3); }
+@media (max-width: 560px) { .kart-tracks { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kart-rank { display: none; } .kart-ans .ka { min-width: 3rem; font-size: 1.25rem; } }

@@ -3,17 +3,21 @@
  * Drei Runden gegen fünf Computer-Fahrer. An mehreren Stellen teilt sich die Strecke in drei Spuren:
  * Auf jeder Spur schwebt ein ?-Würfel – wer durchfährt, trifft immer einen, und eine Rechnung erscheint.
  * Etwas weiter vorne teilt sich die Strecke wieder in drei Tore mit Ergebnissen: richtiges Tor = Turbo,
- * falsches Tor = kurz langsamer. Die Computer-Fahrer machen auch Fehler und bleiben in der Nähe (Gummiband),
- * damit das Rennen spannend bleibt. Alle Strecken sind gleich lang (faire Bestenliste: Zeit für 3 Runden).
+ * falsches Tor = kurz langsamer.
+ *
+ * Strecken mit Steigungen und Gefällen, überhöhten Kurven, Brücken (auch über die eigene Strecke) und
+ * Tunneln bzw. Höhlen. Fahrkönnen zählt: Wer innen um die Kurve fährt, hat den kürzeren Weg. An den Banden
+ * wird man langsamer. Die Computer-Fahrer fahren verschieden gute Linien, machen Fehler und bleiben in der
+ * Nähe (Gummiband), damit das Rennen spannend bleibt. Alle Strecken sind gleich lang (faire Bestenliste).
  * Eigene Grafik und eigene Figuren (keine Vorlage aus anderen Spielen).
  */
 'use strict';
 
 const KART = {
-  LAP: 1150, LAPS: 3, W: 14, BASE: 30,
+  LAP: 1200, LAPS: 3, W: 21, BASE: 31,
   TURBO: 1.5, SLOW: 0.55, FX_MS: 1800,
-  STATIONS: [170, 540, 910], ASK: 190, ZONE: 11,
-  BOTS: 5,
+  STATIONS: [0.15, 0.47, 0.79], ASK: 200, ZONE: 12,
+  WALL: 1.6,     // Bande: so weit ausserhalb der Fahrbahn
 };
 const KART_TRACKS = [
   { id: 'circuit', name: 'Rennstrecke', emo: '🏁' },
@@ -22,43 +26,57 @@ const KART_TRACKS = [
   { id: 'mars', name: 'Mars', emo: '🪐' },
   { id: 'snow', name: 'Schneeland', emo: '❄️' },
   { id: 'city', name: 'Neon-Stadt', emo: '🌃' },
+  { id: 'candy', name: 'Zuckerland', emo: '🍭' },
 ];
 const kartTrackId = () => (KART_TRACKS.some((t) => t.id === db.settings.kartTrack) ? db.settings.kartTrack : 'circuit');
 
-/* Streckenformen (werden auf die Rundenlänge skaliert) */
+/* Streckenformen: f(t) = [x, z, Höhe]; x/z werden auf die Rundenlänge skaliert, die Höhe bleibt in Metern.
+ * Achter-Strecken kreuzen sich mit 16–18 m Höhenunterschied (Brücke). tunnel: Teil der Runde (0–1). */
+const KS = Math.sin, KC = Math.cos, KPI = Math.PI;
 const KART_SHAPES = {
-  circuit: [[0, 0], [60, -5], [110, 10], [132, 50], [112, 92], [70, 96], [48, 70], [18, 80], [-20, 102], [-62, 90], [-82, 50], [-70, 10], [-40, -6]],
-  beach: [[0, 0], [80, -12], [150, 0], [190, 40], [170, 82], [120, 86], [80, 70], [40, 92], [-10, 86], [-42, 50], [-30, 14]],
-  forest: [[0, 0], [50, -22], [100, -10], [122, 30], [92, 62], [102, 102], [60, 132], [10, 112], [-20, 72], [-62, 52], [-50, 10]],
-  mars: [[0, 0], [70, -32], [140, -10], [162, 50], [122, 100], [62, 90], [30, 122], [-30, 112], [-62, 62], [-40, 20]],
-  snow: [[0, 0], [60, 10], [100, -22], [150, 0], [152, 60], [100, 80], [90, 122], [40, 132], [0, 92], [-40, 80], [-52, 30]],
-  city: [[0, 0], [100, 0], [130, 10], [140, 40], [140, 100], [120, 122], [60, 122], [40, 100], [40, 70], [10, 60], [-20, 60], [-32, 30], [-20, 5]],
+  circuit: { phi: -0.8 * KPI, tunnel: [0.52, 0.6], bridgeY: 12, f: (t) => [210 * KS(t) + 8 * KS(3 * t), 135 * KS(2 * t) + 6 * KS(4 * t), 8 + 8 * KC(t)] },
+  beach: { phi: 0, tunnel: [0.2, 0.28], bridgeY: 99, f: (t) => [200 * KC(t) + 10 * KC(3 * t), 105 * KS(t) + 18 * KS(2 * t) + 2 * KS(5 * t), 4 + 3.5 * KS(3 * t) + 6 * Math.max(0, KS(t - 1)) ** 2] },
+  forest: { phi: 0, tunnel: [0.66, 0.76], bridgeY: 16, f: (t) => [160 * KC(t) + 26 * KC(2 * t + 0.6), 125 * KS(t) - 12 * KS(3 * t), 10 + 10 * KS(2 * t + 0.4)] },
+  mars: { phi: -0.75 * KPI, tunnel: [0.52, 0.6], bridgeY: 13, f: (t) => [230 * KS(t) + 20 * KS(2 * t), 120 * KS(2 * t) + 25 * KS(3 * t), 9 + 9 * KC(t)] },
+  snow: { phi: 0, tunnel: [0.2, 0.29], bridgeY: 99, f: (t) => [190 * KC(t) + 16 * KS(2 * t), 125 * KS(t) + 10 * KC(3 * t), Math.max(0, 11 + 11 * KS(t + 0.5) + 3 * KS(4 * t))] },
+  city: { phi: -0.85 * KPI, tunnel: [0.52, 0.6], bridgeY: 12, f: (t) => [200 * KS(t) + 14 * KS(3 * t), 150 * KS(t) * KC(t) + 6 * KS(4 * t), 8 + 8 * KC(t)] },
+  candy: { phi: 0, tunnel: [0.2, 0.28], bridgeY: 11.5, f: (t) => [170 * KC(t) + 40 * KC(2 * t), 130 * KS(t) + 20 * KS(4 * t), 7 + 7 * KS(3 * t)] },
 };
 
-/* Themen: Himmel, Licht, Boden, Strasse, Randsteine, Kulisse */
+/* Themen: Himmel, Licht, Boden, Strasse, Randsteine, Banden, Tunnel, Kulisse */
 const KART_THEMES = {
-  circuit: { sky: ['#2b67bd', '#86bff0', '#e6f1fb'], fog: 0xbfd8ef, fogNear: 160, fogFar: 900, hemi: [0xdbeeff, 0x4f6b3a, 1.05], sun: 0xfff1d6, sunI: 2.5,
-    ground: 'grass', road: 'asphalt', curb: ['#E53935', '#FFFFFF'], island: ['#FACC15', '#1F2937'], board: '#1E293B', props: ['stands', 'tires', 'trees', 'billboards'], clouds: true },
-  beach: { sky: ['#2f7cc7', '#94d0f6', '#ffe9c4'], fog: 0xd9ebf3, fogNear: 160, fogFar: 950, hemi: [0xe6f4ff, 0x9a8156, 1.1], sun: 0xffe7c2, sunI: 2.6,
-    ground: 'sand', road: 'asphaltLight', curb: ['#0EA5E9', '#FFFFFF'], island: ['#F97316', '#FFFFFF'], board: '#0E7490', props: ['palms', 'umbrellas', 'huts', 'rocks', 'sea'], clouds: true },
-  forest: { sky: ['#3d76ab', '#a7c9df', '#e1ecdf'], fog: 0xa9c4a8, fogNear: 70, fogFar: 520, hemi: [0xd6ecd9, 0x2e4426, 1.0], sun: 0xfff0d0, sunI: 2.1,
-    ground: 'forest', road: 'asphalt', curb: ['#FACC15', '#1F2937'], island: ['#84CC16', '#365314'], board: '#365314', props: ['pines', 'oaks', 'mushrooms', 'rocks'], clouds: true },
-  mars: { sky: ['#2a1410', '#a14a28', '#e8a26b'], fog: 0xc7764a, fogNear: 120, fogFar: 760, hemi: [0xffd2b0, 0x5a2414, 0.95], sun: 0xffd2a8, sunI: 2.2,
-    ground: 'mars', road: 'marsRoad', curb: ['#F97316', '#F5F5F4'], island: ['#F5F5F4', '#9A3412'], board: '#7C2D12', props: ['marsRocks', 'craters', 'domes'], moons: true },
-  snow: { sky: ['#5189c6', '#b7d4ef', '#f3f7fc'], fog: 0xe3edf6, fogNear: 110, fogFar: 700, hemi: [0xeef6ff, 0x8fa6bf, 1.15], sun: 0xffffff, sunI: 2.2,
-    ground: 'snow', road: 'ice', curb: ['#2563EB', '#FFFFFF'], island: ['#2563EB', '#FFFFFF'], board: '#1E3A8A', props: ['snowPines', 'snowmen', 'rocks'], snowfall: true, clouds: true },
-  city: { night: true, sky: ['#04050d', '#171035', '#3a1d5a'], fog: 0x1a1236, fogNear: 120, fogFar: 760, hemi: [0x9d8fff, 0x2a2348, 1.5], sun: 0xc9c2ff, sunI: 1.3,
-    ground: 'city', road: 'nightRoad', curb: ['#22D3EE', '#F0ABFC'], island: ['#F0ABFC', '#312E81'], board: '#312E81', props: ['towers', 'lamps'], stars: true },
+  circuit: { sky: ['#2b67bd', '#86bff0', '#e6f1fb'], fog: 0xbfd8ef, fogNear: 180, fogFar: 1000, hemi: [0xdbeeff, 0x4f6b3a, 1.05], sun: 0xfff1d6, sunI: 2.6,
+    ground: 'grass', road: 'asphalt', curb: ['#E53935', '#FFFFFF'], wall: 'barrier', tunnel: 'concrete', island: ['#FACC15', '#1F2937'], board: '#1E293B', mountains: 0x5f8a5a,
+    props: ['stands', 'tires', 'trees', 'billboards', 'bushes', 'flowers', 'balloons'], bunting: ['#ef4444', '#facc15', '#3b82f6', '#22c55e', '#ffffff'], clouds: true },
+  beach: { sky: ['#2f7cc7', '#94d0f6', '#ffe9c4'], fog: 0xd9ebf3, fogNear: 180, fogFar: 1000, hemi: [0xe6f4ff, 0x9a8156, 1.1], sun: 0xffe7c2, sunI: 2.7,
+    ground: 'sand', road: 'asphaltLight', curb: ['#0EA5E9', '#FFFFFF'], wall: 'wood', tunnel: 'rock', island: ['#F97316', '#FFFFFF'], board: '#0E7490', mountains: 0xc9a26b,
+    props: ['palms', 'umbrellas', 'huts', 'rocks', 'sea', 'lighthouse', 'surf'], bunting: ['#f97316', '#0ea5e9', '#facc15', '#ffffff'], clouds: true },
+  forest: { sky: ['#3d76ab', '#a7c9df', '#e1ecdf'], fog: 0xa9c4a8, fogNear: 90, fogFar: 620, hemi: [0xd6ecd9, 0x2e4426, 1.05], sun: 0xfff0d0, sunI: 2.2,
+    ground: 'forest', road: 'asphalt', curb: ['#FACC15', '#1F2937'], wall: 'logs', tunnel: 'rock', island: ['#84CC16', '#365314'], board: '#365314', mountains: 0x3e6b45,
+    props: ['pines', 'oaks', 'mushrooms', 'rocks', 'bushes', 'flowers', 'cabins'], bunting: ['#facc15', '#f97316', '#84cc16'], lanterns: true, clouds: true },
+  mars: { sky: ['#2a1410', '#a14a28', '#e8a26b'], fog: 0xc7764a, fogNear: 140, fogFar: 860, hemi: [0xffd2b0, 0x5a2414, 1.0], sun: 0xffd2a8, sunI: 2.3,
+    ground: 'mars', road: 'marsRoad', curb: ['#F97316', '#F5F5F4'], wall: 'metal', tunnel: 'glass', island: ['#F5F5F4', '#9A3412'], board: '#7C2D12', mountains: 0x8a3b1e,
+    props: ['marsRocks', 'craters', 'domes', 'antennas', 'rocket'], moons: true },
+  snow: { sky: ['#3f7cc0', '#a9cbec', '#eef4fb'], fog: 0xdfe9f4, fogNear: 170, fogFar: 900, hemi: [0xeef6ff, 0x8fa6bf, 1.15], sun: 0xffffff, sunI: 2.3,
+    ground: 'snow', road: 'ice', curb: ['#2563EB', '#FFFFFF'], wall: 'snow', tunnel: 'icecave', island: ['#2563EB', '#FFFFFF'], board: '#1E3A8A', mountains: 0xe8f0f8,
+    props: ['snowPines', 'snowmen', 'rocks', 'igloos', 'crystals'], snowfall: true, clouds: true, bunting: ['#2563eb', '#ffffff', '#ef4444'] },
+  city: { night: true, sky: ['#04050d', '#171035', '#3a1d5a'], fog: 0x1a1236, fogNear: 140, fogFar: 860, hemi: [0x9d8fff, 0x2a2348, 1.5], sun: 0xc9c2ff, sunI: 1.3,
+    ground: 'city', road: 'nightRoad', curb: ['#22D3EE', '#F0ABFC'], wall: 'neon', tunnel: 'neon', island: ['#F0ABFC', '#312E81'], board: '#312E81', mountains: 0x1e1b4b,
+    props: ['towers', 'lamps', 'beams', 'neonArches'], stars: true },
+  candy: { sky: ['#f472b6', '#fbcfe8', '#fff1e6'], fog: 0xfbd5e6, fogNear: 220, fogFar: 1100, hemi: [0xfff0f6, 0xd9a273, 1.15], sun: 0xfff3e0, sunI: 2.3,
+    ground: 'candy', road: 'choco', curb: ['#FFFFFF', '#F472B6'], wall: 'cake', tunnel: 'candy', island: ['#F472B6', '#FFFFFF'], board: '#9D174D', mountains: 0xf5b38a,
+    props: ['lollipops', 'canes', 'cupcakes', 'donuts', 'gumdrops'], bunting: ['#f472b6', '#a78bfa', '#facc15', '#5eead4', '#ffffff'], clouds: true },
 };
 
 const KART_RACERS = [
-  { name: 'Du', color: 0xff5a36, helmet: 0xffffff },
-  { name: 'Blitz', color: 0x2f7bf5, helmet: 0xfacc15 },
-  { name: 'Komet', color: 0xf5c518, helmet: 0x1f2937 },
-  { name: 'Rakete', color: 0x16a34a, helmet: 0xffffff },
-  { name: 'Wirbel', color: 0x8b5cf6, helmet: 0xf472b6 },
-  { name: 'Flitzer', color: 0x14b8a6, helmet: 0xf97316 },
+  { name: 'Du', color: 0xff5a36, helmet: 0xffffff, num: 1 },
+  { name: 'Blitz', color: 0x2f7bf5, helmet: 0xfacc15, num: 7 },
+  { name: 'Komet', color: 0xf5c518, helmet: 0x1f2937, num: 3 },
+  { name: 'Rakete', color: 0x16a34a, helmet: 0xffffff, num: 9 },
+  { name: 'Wirbel', color: 0x8b5cf6, helmet: 0xf472b6, num: 5 },
+  { name: 'Flitzer', color: 0x14b8a6, helmet: 0xf97316, num: 8 },
 ];
+const kartHex = (c) => `#${c.toString(16).padStart(6, '0')}`;
 
 /* ---------------- Texturen ---------------- */
 function kartNoise(g, w, h, n, colors, size = [1, 3]) {
@@ -68,32 +86,35 @@ function kartNoise(g, w, h, n, colors, size = [1, 3]) {
     g.fillRect(Math.random() * w, Math.random() * h, s, s);
   }
 }
-function kartGroundTex(kind) {
-  const R = { repeat: [220, 220] };
+function kartGroundTex(kind, repeat = 260) {
   return canvasTex(256, 256, (g, w, h) => {
-    const base = { grass: '#4c9a46', sand: '#e6cf9c', forest: '#3d6b34', mars: '#b4552f', snow: '#eef3f8', city: '#191a24' }[kind];
+    const base = { grass: '#4c9a46', sand: '#e6cf9c', forest: '#3d6b34', mars: '#b4552f', snow: '#eef3f8', city: '#191a24', candy: '#a7e3c3' }[kind];
     g.fillStyle = base; g.fillRect(0, 0, w, h);
     if (kind === 'grass') kartNoise(g, w, h, 5000, ['rgba(40,110,40,.5)', 'rgba(110,170,70,.4)', 'rgba(30,80,30,.35)'], [1, 3]);
     if (kind === 'sand') kartNoise(g, w, h, 6000, ['rgba(200,170,110,.5)', 'rgba(255,240,210,.5)', 'rgba(170,140,90,.3)'], [1, 2]);
-    if (kind === 'forest') { kartNoise(g, w, h, 4000, ['rgba(30,60,25,.6)', 'rgba(90,120,50,.45)', 'rgba(100,70,40,.4)'], [1, 4]); }
-    if (kind === 'mars') { kartNoise(g, w, h, 6000, ['rgba(130,50,25,.55)', 'rgba(220,120,70,.45)', 'rgba(90,30,15,.4)'], [1, 3]); }
+    if (kind === 'forest') kartNoise(g, w, h, 4000, ['rgba(30,60,25,.6)', 'rgba(90,120,50,.45)', 'rgba(100,70,40,.4)'], [1, 4]);
+    if (kind === 'mars') kartNoise(g, w, h, 6000, ['rgba(130,50,25,.55)', 'rgba(220,120,70,.45)', 'rgba(90,30,15,.4)'], [1, 3]);
     if (kind === 'snow') kartNoise(g, w, h, 3000, ['rgba(200,215,235,.6)', 'rgba(255,255,255,.8)', 'rgba(180,200,225,.4)'], [1, 3]);
+    if (kind === 'candy') { kartNoise(g, w, h, 2500, ['rgba(255,255,255,.5)', 'rgba(120,200,160,.4)'], [1, 3]); for (let i = 0; i < 70; i++) { g.fillStyle = ['#f472b6', '#facc15', '#60a5fa', '#ffffff', '#a78bfa'][i % 5]; g.fillRect(Math.random() * w, Math.random() * h, 5, 2); } }
     if (kind === 'city') {
       g.strokeStyle = 'rgba(120,110,200,.18)'; g.lineWidth = 2;
       for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(0, i * 64); g.lineTo(w, i * 64); g.stroke(); g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, h); g.stroke(); }
       kartNoise(g, w, h, 1500, ['rgba(255,255,255,.04)', 'rgba(0,0,0,.25)'], [1, 3]);
     }
-  }, R);
+  }, { repeat: [repeat, repeat] });
 }
 function kartRoadTex(kind) {
   return canvasTex(256, 512, (g, w, h) => {
-    const base = { asphalt: '#3b3e44', asphaltLight: '#5a5d63', marsRoad: '#7a3a22', ice: '#a9c3d9', nightRoad: '#15151f' }[kind];
+    const base = { asphalt: '#3b3e44', asphaltLight: '#5a5d63', marsRoad: '#7a3a22', ice: '#86a7c4', nightRoad: '#15151f', choco: '#5b3420' }[kind];
     g.fillStyle = base; g.fillRect(0, 0, w, h);
-    kartNoise(g, w, h, 9000, kind === 'ice' ? ['rgba(255,255,255,.35)', 'rgba(120,150,180,.3)'] : kind === 'marsRoad' ? ['rgba(160,80,45,.4)', 'rgba(60,20,10,.35)'] : ['rgba(255,255,255,.05)', 'rgba(0,0,0,.18)', 'rgba(120,120,130,.12)'], [1, 2]);
-    // Fahrspuren: Randlinien und gestrichelte Spurlinien
-    const line = kind === 'nightRoad' ? '#5eead4' : kind === 'ice' ? '#ffffff' : 'rgba(255,255,255,.9)';
+    const spots = kind === 'ice' ? ['rgba(255,255,255,.35)', 'rgba(120,150,180,.3)'] : kind === 'marsRoad' ? ['rgba(160,80,45,.4)', 'rgba(60,20,10,.35)'] : kind === 'choco' ? ['rgba(120,70,40,.5)', 'rgba(40,20,10,.35)'] : ['rgba(255,255,255,.05)', 'rgba(0,0,0,.18)', 'rgba(120,120,130,.12)'];
+    kartNoise(g, w, h, 9000, spots, [1, 2]);
+    if (kind === 'choco') { for (let i = 0; i < 160; i++) { g.fillStyle = ['#f472b6', '#facc15', '#60a5fa', '#ffffff', '#a78bfa', '#4ade80'][i % 6]; g.save(); g.translate(Math.random() * w, Math.random() * h); g.rotate(Math.random() * 3); g.fillRect(-4, -1.5, 8, 3); g.restore(); } }
+    // Reifenspuren in den drei Spuren
+    if (kind !== 'choco' && kind !== 'ice') { g.fillStyle = 'rgba(0,0,0,.08)'; for (const u of [1 / 6, 1 / 2, 5 / 6]) { g.fillRect(w * u - 18, 0, 9, h); g.fillRect(w * u + 9, 0, 9, h); } }
+    const line = kind === 'nightRoad' ? '#5eead4' : kind === 'ice' || kind === 'choco' ? '#ffffff' : 'rgba(255,255,255,.9)';
     g.fillStyle = line;
-    g.fillRect(w * 0.025, 0, w * 0.018, h); g.fillRect(w * 0.957, 0, w * 0.018, h);
+    g.fillRect(w * 0.02, 0, w * 0.014, h); g.fillRect(w * 0.966, 0, w * 0.014, h);
     g.fillStyle = kind === 'nightRoad' ? '#f0abfc' : 'rgba(255,255,255,.75)';
     for (const u of [1 / 3, 2 / 3]) for (let y = 0; y < h; y += 128) g.fillRect(w * u - 3, y, 6, 64);
   }, { repeat: [1, 1] });
@@ -126,35 +147,112 @@ function kartCheckerTex(nx = 8, ny = 2) {
 function kartSignTex(text, bg, fg = '#fff', w = 512, h = 128) {
   return canvasTex(w, h, (g) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
-    g.font = NUM_FONT(Math.round(h * 0.55)); g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = Math.round(h * 0.55); g.font = NUM_FONT(fs);
+    const tw = g.measureText(text).width; if (tw > w - 30) { fs = Math.floor((fs * (w - 30)) / tw); g.font = NUM_FONT(fs); }
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(text, w / 2, h / 2 + 4);
+  });
+}
+/** Banden-Textur je Thema (u: entlang der Strecke, v: Höhe) */
+function kartWallTex(kind) {
+  return canvasTex(256, 64, (g, w, h) => {
+    if (kind === 'barrier') { for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e11d48'; g.fillRect((i * w) / 8, 0, w / 8, h); } g.fillStyle = 'rgba(0,0,0,.15)'; g.fillRect(0, h - 8, w, 8); }
+    if (kind === 'wood' || kind === 'logs') { g.fillStyle = kind === 'logs' ? '#7c4a26' : '#c08a52'; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.18)'; for (let y = 0; y < h; y += 16) g.fillRect(0, y, w, 3); for (let x = 0; x < w; x += 64) g.fillRect(x, 0, 4, h); }
+    if (kind === 'metal') { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#e5e7eb'); gr.addColorStop(1, '#6b7280'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#f97316'; g.fillRect(0, 6, w, 5); }
+    if (kind === 'snow') { g.fillStyle = '#f8fbff'; g.fillRect(0, 0, w, h); kartNoise(g, w, h, 400, ['rgba(180,200,230,.5)', 'rgba(255,255,255,1)'], [2, 6]); }
+    if (kind === 'neon') { g.fillStyle = '#0b0b18'; g.fillRect(0, 0, w, h); g.fillStyle = '#22d3ee'; g.fillRect(0, 8, w, 6); g.fillStyle = '#f0abfc'; g.fillRect(0, h - 18, w, 6); }
+    if (kind === 'cake') { const cs = ['#fde68a', '#fbcfe8', '#fef3c7', '#f9a8d4']; for (let i = 0; i < 4; i++) { g.fillStyle = cs[i]; g.fillRect(0, (i * h) / 4, w, h / 4); } g.fillStyle = '#7c2d12'; g.fillRect(0, 0, w, 7); }
+    if (kind === 'concrete') { g.fillStyle = '#cbd5e1'; g.fillRect(0, 0, w, h); kartNoise(g, w, h, 500, ['rgba(0,0,0,.08)', 'rgba(255,255,255,.3)']); g.fillStyle = 'rgba(0,0,0,.12)'; for (let x = 0; x < w; x += 64) g.fillRect(x, 0, 3, h); }
+  }, { repeat: [1, 1] });
+}
+function kartChevronTex(dir) {
+  return canvasTex(256, 96, (g, w, h) => {
+    g.fillStyle = '#facc15'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#111827';
+    for (let i = 0; i < 3; i++) {
+      const x = 40 + i * 70;
+      g.beginPath();
+      if (dir > 0) { g.moveTo(x, 12); g.lineTo(x + 34, h / 2); g.lineTo(x, h - 12); g.lineTo(x + 18, h - 12); g.lineTo(x + 52, h / 2); g.lineTo(x + 18, 12); }
+      else { g.moveTo(x + 52, 12); g.lineTo(x + 18, h / 2); g.lineTo(x + 52, h - 12); g.lineTo(x + 34, h - 12); g.lineTo(x, h / 2); g.lineTo(x + 34, 12); }
+      g.closePath(); g.fill();
+    }
   });
 }
 
 /* ---------------- Strecke ---------------- */
-function kartBuildTrack(T, shape) {
-  const raw = shape.map(([x, z]) => new T.Vector3(x, 0, z));
-  const c0 = new T.CatmullRomCurve3(raw, true, 'centripetal');
-  const k = KART.LAP / c0.getLength();
-  const curve = new T.CatmullRomCurve3(raw.map((p) => p.clone().multiplyScalar(k)), true, 'centripetal');
-  curve.arcLengthDivisions = 3000;
-  const len = curve.getLength();
-  const N = Math.round(len * 2);
-  const P = new Float32Array(N * 2), F = new Float32Array(N * 2);
-  const v = new T.Vector3(), tg = new T.Vector3();
-  let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+function kartBuildTrack(shape, W) {
+  const HW = W / 2, WL = HW + KART.WALL;
+  // 1. fein abtasten, waagrecht auf die Rundenlänge skalieren
+  const M = 8000, raw = [];
+  for (let i = 0; i < M; i++) raw.push(shape.f((i / M) * 2 * Math.PI + shape.phi));
+  let plan = 0;
+  for (let i = 0; i < M; i++) { const a = raw[i], b = raw[(i + 1) % M]; plan += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+  const k = KART.LAP / plan;
+  const pts = raw.map(([x, z, y]) => [x * k, y, z * k]);
+  const cum = new Float64Array(M + 1);
+  for (let i = 0; i < M; i++) { const a = pts[i], b = pts[(i + 1) % M]; cum[i + 1] = cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
+  const len = cum[M];
+  // 2. gleichmässig alle 0,5 m
+  const N = Math.round(len * 2), ds = len / N;
+  const X = new Float32Array(N), Y = new Float32Array(N), Z = new Float32Array(N);
+  let j = 0;
   for (let i = 0; i < N; i++) {
-    const u = i / N;
-    curve.getPointAt(u, v); curve.getTangentAt(u, tg);
-    P[i * 2] = v.x; P[i * 2 + 1] = v.z;
-    const l = Math.hypot(tg.x, tg.z) || 1;
-    F[i * 2] = tg.x / l; F[i * 2 + 1] = tg.z / l;
-    minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x); minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z);
+    const s = i * ds;
+    while (cum[j + 1] < s) j++;
+    const f = (s - cum[j]) / Math.max(1e-9, cum[j + 1] - cum[j]);
+    const a = pts[j % M], b = pts[(j + 1) % M];
+    X[i] = a[0] + (b[0] - a[0]) * f; Y[i] = a[1] + (b[1] - a[1]) * f; Z[i] = a[2] + (b[2] - a[2]) * f;
   }
-  const tr = { N, P, F, len, box: { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 } };
-  // grobe Stützpunkte für den Abstand zur Strecke (Kulisse nicht auf die Fahrbahn stellen)
+  const idx = (i) => ((i % N) + N) % N;
+  // 3. Richtung, Krümmung (rechts positiv), Steigung
+  const FX = new Float32Array(N), FZ = new Float32Array(N), K = new Float32Array(N), SL = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const a = idx(i - 2), b = idx(i + 2);
+    const fx = X[b] - X[a], fz = Z[b] - Z[a]; const l = Math.hypot(fx, fz) || 1;
+    FX[i] = fx / l; FZ[i] = fz / l;
+    SL[i] = (Y[b] - Y[a]) / (4 * ds);
+  }
+  for (let i = 0; i < N; i++) {
+    const a = idx(i - 6), b = idx(i + 6);
+    K[i] = (FX[a] * FZ[b] - FZ[a] * FX[b]) / (12 * ds);
+  }
+  // geglättete Krümmung → Überhöhung der Kurven
+  const KS2 = new Float32Array(N), B = new Float32Array(N);
+  const win = 30;
+  for (let i = 0; i < N; i++) { let s = 0; for (let d = -win; d <= win; d++) s += K[idx(i + d)]; KS2[i] = s / (2 * win + 1); }
+  // 4. Abschnitte: 0 normal, 1 Brücke, 2 Tunnel
+  const TY = new Uint8Array(N);
+  const [t0, t1] = shape.tunnel || [2, 2];
+  for (let i = 0; i < N; i++) { const u = i / N; if (u >= t0 && u <= t1) TY[i] = 2; }
+  for (let i = 0; i < N; i++) if (!TY[i] && Y[i] > shape.bridgeY) TY[i] = 1;
+  // Kreuzung: der obere Teil ist eine Brücke
+  for (let i = 0; i < N; i += 4) for (let q = 0; q < N; q += 4) {
+    const dIdx = Math.min(Math.abs(i - q), N - Math.abs(i - q));
+    if (dIdx * ds < 90) continue;
+    if (Math.hypot(X[i] - X[q], Z[i] - Z[q]) < W + 8 && Y[i] > Y[q] + 5) {
+      for (let d = -100; d <= 100; d++) if (TY[idx(i + d)] !== 2) TY[idx(i + d)] = 1;
+    }
+  }
+  // zu kurze Brücken weglassen (Damm statt Brücke)
+  for (let i = 0; i < N; i++) {
+    if (TY[i] !== 1 || TY[idx(i - 1)] === 1) continue;
+    let n = 0; while (TY[idx(i + n)] === 1 && n < N) n++;
+    if (n * ds < 30) for (let d = 0; d < n; d++) TY[idx(i + d)] = 0;
+  }
+  // Überhöhung (nicht im Tunnel; nahe am Boden nur so viel, dass der innere Rand nicht im Boden steckt)
+  for (let i = 0; i < N; i++) {
+    const b = TY[i] === 2 ? 0 : clamp(KS2[i] * 5, -0.15, 0.15);
+    const maxB = Math.max(0, (Y[i] + 0.15) / (WL + 0.5));
+    B[i] = clamp(b, -maxB, maxB);
+  }
+  // Überhöhung glätten (sonst Knicke)
+  const B2 = new Float32Array(N);
+  for (let i = 0; i < N; i++) { let s = 0; for (let d = -10; d <= 10; d++) s += B[idx(i + d)]; B2[i] = s / 21; }
+  let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
+  for (let i = 0; i < N; i++) { minX = Math.min(minX, X[i]); maxX = Math.max(maxX, X[i]); minZ = Math.min(minZ, Z[i]); maxZ = Math.max(maxZ, Z[i]); }
+  const tr = { N, ds, len, X, Y, Z, FX, FZ, K: KS2, SL, B: B2, TY, HW, W, box: { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 } };
   tr.coarse = [];
-  for (let s = 0; s < len; s += 6) { const q = kartAt(tr, s); tr.coarse.push(q.x, q.z); }
+  for (let i = 0; i < N; i += 12) tr.coarse.push(X[i], Z[i], Y[i], i);
   return tr;
 }
 /** Punkt auf der Strecke bei Strecke s (beliebig, wird auf eine Runde umgerechnet) */
@@ -162,93 +260,160 @@ function kartAt(tr, s, out = {}) {
   const L = tr.len;
   const u = ((((s % L) + L) % L) / L) * tr.N;
   const i0 = Math.floor(u) % tr.N, i1 = (i0 + 1) % tr.N, f = u - Math.floor(u);
-  const P = tr.P, F = tr.F;
-  out.x = P[i0 * 2] * (1 - f) + P[i1 * 2] * f;
-  out.z = P[i0 * 2 + 1] * (1 - f) + P[i1 * 2 + 1] * f;
-  let fx = F[i0 * 2] * (1 - f) + F[i1 * 2] * f, fz = F[i0 * 2 + 1] * (1 - f) + F[i1 * 2 + 1] * f;
+  const mix = (A) => A[i0] * (1 - f) + A[i1] * f;
+  out.x = mix(tr.X); out.y = mix(tr.Y); out.z = mix(tr.Z);
+  let fx = mix(tr.FX), fz = mix(tr.FZ);
   const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
   out.fx = fx; out.fz = fz; out.rx = -fz; out.rz = fx; // r: rechts in Fahrtrichtung
+  out.k = mix(tr.K); out.b = mix(tr.B); out.sl = mix(tr.SL); out.ty = tr.TY[i0];
   return out;
 }
-function kartDistToTrack(tr, x, z) {
-  let best = 1e9;
+/** Höhe der Fahrbahn bei seitlich lat (überhöhte Kurven: innen tiefer) */
+const kartH = (q, lat) => q.y - lat * q.b;
+/** waagrechter Abstand zur Strecke und deren Höhe dort */
+function kartNear(tr, x, z) {
+  let best = 1e18, y = 0, idx = 0;
   const c = tr.coarse;
-  for (let i = 0; i < c.length; i += 2) { const dx = c[i] - x, dz = c[i + 1] - z; const d = dx * dx + dz * dz; if (d < best) best = d; }
-  return Math.sqrt(best);
+  for (let i = 0; i < c.length; i += 4) { const dx = c[i] - x, dz = c[i + 1] - z; const d = dx * dx + dz * dz; if (d < best) { best = d; y = c[i + 2]; idx = c[i + 3]; } }
+  return { d: Math.sqrt(best), y, idx };
 }
-/** Band entlang der Strecke zwischen seitlich a und b (Fahrbahn, Randsteine) */
-function kartRibbon(T, tr, a, b, y, step, vScale) {
-  const n = Math.ceil(tr.len / step);
-  const pos = new Float32Array((n + 1) * 6), uv = new Float32Array((n + 1) * 4), nor = new Float32Array((n + 1) * 6);
-  const idx = [];
+/** Gitter entlang der Strecke: pro Zeile (Strecke s) Spalten aus fn(q, spalte, s) → [x, y, z, u, v]. Nur Abschnitte mit keep(i). */
+function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8 } = {}) {
+  const pos = [], uv = [], ind = [];
   const q = {};
-  for (let i = 0; i <= n; i++) {
-    const s = (i / n) * tr.len;
-    kartAt(tr, s, q);
-    pos.set([q.x + q.rx * a, y, q.z + q.rz * a, q.x + q.rx * b, y, q.z + q.rz * b], i * 6);
-    nor.set([0, 1, 0, 0, 1, 0], i * 6);
-    uv.set([0, s / vScale, 1, s / vScale], i * 4);
-    if (i < n) { const A = i * 2, B = A + 1, C = A + 2, D = A + 3; idx.push(A, B, C, B, D, C); }
+  let prevKept = false;
+  const N = tr.N;
+  for (let i = 0; i <= N; i += step) {
+    const ii = i % N;
+    if (keep && !keep(ii)) { prevKept = false; continue; }
+    kartAt(tr, i * tr.ds, q);
+    const base = pos.length / 3;
+    for (let c = 0; c < cols; c++) {
+      const p = fn(q, c, i * tr.ds);
+      pos.push(p[0], p[1], p[2]);
+      uv.push(p[3] ?? c / (cols - 1), p[4] ?? (i * tr.ds) / vScale);
+    }
+    if (prevKept) {
+      const a0 = base - cols;
+      for (let c = 0; c < cols - 1; c++) { const A = a0 + c, Bv = a0 + c + 1, Cv = base + c, D = base + c + 1; ind.push(A, Bv, Cv, Bv, D, Cv); }
+    }
+    prevKept = true;
   }
   const g = new T.BufferGeometry();
-  g.setAttribute('position', new T.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new T.BufferAttribute(nor, 3));
-  g.setAttribute('uv', new T.BufferAttribute(uv, 2));
-  g.setIndex(idx);
+  g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  g.setIndex(ind);
+  g.computeVertexNormals();
   return g;
 }
 
 /* ---------------- Kart ---------------- */
-function kartModel(T, color, helmetColor) {
+function kartTireTex() {
+  return canvasTex(64, 256, (g, w, h) => { g.fillStyle = '#17181c'; g.fillRect(0, 0, w, h); g.fillStyle = '#2a2c33'; for (let y = 0; y < h; y += 16) { g.fillRect(0, y, w / 2 - 3, 7); g.fillRect(w / 2 + 3, y + 8, w / 2 - 3, 7); } });
+}
+function kartRimTex() {
+  return canvasTex(128, 128, (g, w) => {
+    g.fillStyle = '#17181c'; g.fillRect(0, 0, w, w);
+    const r = w / 2;
+    const gr = g.createRadialGradient(r, r, 4, r, r, r * 0.62); gr.addColorStop(0, '#f1f5f9'); gr.addColorStop(1, '#94a3b8');
+    g.fillStyle = gr; g.beginPath(); g.arc(r, r, r * 0.62, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#334155';
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + 0.3; g.beginPath(); g.ellipse(r + Math.cos(a) * r * 0.34, r + Math.sin(a) * r * 0.34, r * 0.13, r * 0.07, a, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#e2e8f0'; g.beginPath(); g.arc(r, r, r * 0.12, 0, Math.PI * 2); g.fill();
+  });
+}
+function kartNumTex(n, color) {
+  return canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(w / 2, h / 2, w / 2 - 4, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 8; g.strokeStyle = kartHex(color); g.stroke();
+    g.font = NUM_FONT(78); g.fillStyle = '#111827'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), w / 2, h / 2 + 4);
+  });
+}
+const KART_SHARED = {};
+function kartModel(T, color, helmetColor, num) {
+  const S = KART_SHARED;
+  if (!S.tire || S.T !== T) {
+    S.T = T;
+    const rim = new T.MeshStandardMaterial({ map: kartRimTex(), roughness: 0.35, metalness: 0.6 });
+    S.tireMat = [new T.MeshStandardMaterial({ map: kartTireTex(), roughness: 0.85 }), rim, rim];
+    S.tire = new T.CylinderGeometry(0.42, 0.42, 0.38, 26, 1);
+    S.dark = new T.MeshStandardMaterial({ color: 0x1b1d22, metalness: 0.3, roughness: 0.6 });
+    S.carbon = new T.MeshStandardMaterial({ color: 0x2b2f38, metalness: 0.5, roughness: 0.35 });
+    S.chrome = new T.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 1, roughness: 0.15 });
+    S.glove = new T.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
+    S.visor = new T.MeshPhysicalMaterial({ color: 0x0f172a, metalness: 0.5, roughness: 0.05, clearcoat: 1 });
+    S.light = new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4cc, emissiveIntensity: 1.6 });
+    S.tail = new T.MeshStandardMaterial({ color: 0xff2020, emissive: 0xff1010, emissiveIntensity: 1.2 });
+    // Wanne: Seitenprofil (vorne = +x im Profil), in der Breite ausgezogen, mit runden Kanten
+    const sh = new T.Shape();
+    sh.moveTo(-1.32, 0.2); sh.lineTo(1.2, 0.2); sh.quadraticCurveTo(1.62, 0.22, 1.62, 0.36); sh.lineTo(1.05, 0.5);
+    sh.lineTo(0.42, 0.6); sh.quadraticCurveTo(0.2, 0.66, 0.06, 0.58); sh.lineTo(-0.5, 0.58); sh.quadraticCurveTo(-0.8, 0.98, -1.18, 0.98);
+    sh.lineTo(-1.32, 0.82); sh.closePath();
+    const bg = new T.ExtrudeGeometry(sh, { depth: 0.9, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.1, bevelSegments: 4, curveSegments: 10 });
+    bg.rotateY(-Math.PI / 2); bg.translate(0.45, 0, 0);
+    S.body = bg;
+    S.pod = new T.CapsuleGeometry(0.2, 0.6, 6, 12); S.pod.rotateX(Math.PI / 2);
+    S.bumper = new T.CapsuleGeometry(0.12, 1.4, 4, 10); S.bumper.rotateZ(Math.PI / 2);
+  }
   const g = new T.Group();
-  const paint = new T.MeshStandardMaterial({ color, metalness: 0.45, roughness: 0.32 });
-  const dark = new T.MeshStandardMaterial({ color: 0x1b1d22, metalness: 0.2, roughness: 0.7 });
-  const metal = new T.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.25 });
-  const rubber = new T.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85 });
+  const paint = new T.MeshPhysicalMaterial({ color, metalness: 0.35, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 });
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, parent = g) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; parent.add(m); return m; };
   const body = new T.Group(); g.add(body);
-  add(new T.BoxGeometry(1.25, 0.32, 2.2), paint, 0, 0.42, 0, 0, 0, 0, body);           // Wanne
-  add(new T.BoxGeometry(0.95, 0.22, 0.9), paint, 0, 0.5, 1.15, -0.22, 0, 0, body);      // Nase
-  add(new T.BoxGeometry(1.75, 0.16, 0.34), dark, 0, 0.3, 1.55, 0, 0, 0, body);          // Frontflügel
-  add(new T.BoxGeometry(0.34, 0.3, 1.15), paint, 0.78, 0.4, -0.1, 0, 0, 0, body);       // Seitenkästen
-  add(new T.BoxGeometry(0.34, 0.3, 1.15), paint, -0.78, 0.4, -0.1, 0, 0, 0, body);
-  add(new T.BoxGeometry(1.7, 0.07, 0.42), paint, 0, 1.05, -1.12, 0, 0, 0, body);        // Heckflügel
-  add(new T.BoxGeometry(0.07, 0.42, 0.2), dark, 0.55, 0.83, -1.1, 0, 0, 0, body);
-  add(new T.BoxGeometry(0.07, 0.42, 0.2), dark, -0.55, 0.83, -1.1, 0, 0, 0, body);
-  add(new T.BoxGeometry(0.8, 0.36, 0.5), dark, 0, 0.62, -0.85, 0, 0, 0, body);          // Motor
-  const pipeG = new T.CylinderGeometry(0.09, 0.11, 0.5, 12);
-  add(pipeG, metal, 0.24, 0.62, -1.22, Math.PI / 2, 0, 0, body);                         // Auspuff
-  add(pipeG, metal, -0.24, 0.62, -1.22, Math.PI / 2, 0, 0, body);
-  add(new T.BoxGeometry(0.7, 0.5, 0.12), dark, 0, 0.82, -0.42, -0.25, 0, 0, body);       // Sitz
-  add(new T.TorusGeometry(0.2, 0.035, 8, 20), dark, 0, 0.92, 0.32, -1.05, 0, 0, body);   // Lenkrad
-  // Fahrerin/Fahrer mit Helm
+  add(S.body, paint, 0, 0.02, 0, 0, 0, 0, body);                                            // Wanne
+  for (const sx of [1, -1]) {
+    add(S.pod, paint, sx * 0.82, 0.42, 0, 0, 0, 0, body);                                     // Seitenkästen
+    add(new T.BoxGeometry(0.3, 0.24, 0.06), S.dark, sx * 0.82, 0.42, 0.52, 0, 0, 0, body);   // Lufteinlass
+  }
+  add(S.bumper, S.carbon, 0, 0.28, 1.84, 0, 0, 0, body);                                     // Stossstange
+  add(new T.BoxGeometry(2.05, 0.06, 0.4), S.carbon, 0, 0.24, 1.7, 0, 0, 0, body);            // Frontflügel
+  for (const x of [1.02, -1.02]) add(new T.BoxGeometry(0.05, 0.26, 0.46), S.carbon, x, 0.32, 1.7, 0, 0, 0, body);
+  add(new T.BoxGeometry(1.85, 0.07, 0.5), paint, 0, 1.2, -1.3, -0.08, 0, 0, body);             // Heckflügel
+  for (const x of [0.93, -0.93]) add(new T.BoxGeometry(0.05, 0.42, 0.62), S.carbon, x, 1.1, -1.3, 0, 0, 0, body);
+  for (const x of [0.4, -0.4]) add(new T.BoxGeometry(0.06, 0.5, 0.14), S.carbon, x, 0.9, -1.22, 0, 0, 0, body);
+  add(new T.BoxGeometry(0.86, 0.42, 0.6), S.dark, 0, 0.7, -0.98, 0, 0, 0, body);              // Motor
+  add(new T.CylinderGeometry(0.24, 0.24, 0.5, 14), S.chrome, 0, 0.98, -0.95, 0, 0, Math.PI / 2, body);
+  const pipe = new T.CylinderGeometry(0.08, 0.1, 0.62, 12);
+  add(pipe, S.chrome, 0.26, 0.72, -1.42, Math.PI / 2 - 0.35, 0, 0, body); add(pipe, S.chrome, -0.26, 0.72, -1.42, Math.PI / 2 - 0.35, 0, 0, body); // Auspuff
+  for (const x of [0.3, -0.3]) add(new T.CircleGeometry(0.08, 16), S.light, x, 0.3, 1.745, 0, 0, 0, body);           // Scheinwerfer
+  for (const x of [0.55, -0.55]) add(new T.BoxGeometry(0.2, 0.08, 0.04), S.tail, x, 0.62, -1.47, 0, 0, 0, body);      // Rücklichter
+  // Startnummer vorne und an den Seitenkästen
+  const numMat = new T.MeshStandardMaterial({ map: kartNumTex(num, color), roughness: 0.4, transparent: true });
+  add(new T.CircleGeometry(0.22, 24), numMat, 0, 0.6, 1.07, -1.15, 0, 0, body);
+  add(new T.CircleGeometry(0.17, 24), numMat, 1.025, 0.43, 0, 0, Math.PI / 2, 0, body);
+  add(new T.CircleGeometry(0.17, 24), numMat, -1.025, 0.43, 0, 0, -Math.PI / 2, 0, body);
+  add(new T.BoxGeometry(0.72, 0.5, 0.12), S.dark, 0, 0.85, -0.5, -0.25, 0, 0, body);           // Sitz
+  add(new T.TorusGeometry(0.21, 0.035, 8, 24), S.dark, 0, 0.97, 0.36, -1.05, 0, 0, body);      // Lenkrad
+  add(new T.CylinderGeometry(0.04, 0.04, 0.4, 8), S.dark, 0, 0.85, 0.5, -1.05, 0, 0, body);
+  // Fahrerin/Fahrer: Anzug, Arme, Handschuhe, Helm mit Visier und Streifen
   const suit = new T.MeshStandardMaterial({ color: new T.Color(color).multiplyScalar(0.55), roughness: 0.6 });
-  add(new T.CapsuleGeometry(0.27, 0.32, 6, 12), suit, 0, 1.0, -0.22, -0.15, 0, 0, body);
-  const helmet = new T.MeshStandardMaterial({ color: helmetColor, metalness: 0.3, roughness: 0.25 });
-  add(new T.SphereGeometry(0.3, 20, 16), helmet, 0, 1.42, -0.12, 0, 0, 0, body);
-  add(new T.SphereGeometry(0.3, 20, 12, -1.1, 2.2, 1.0, 0.75), new T.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.6, roughness: 0.1 }), 0, 1.42, -0.1, 0, 0, 0, body);
-  add(new T.BoxGeometry(0.06, 0.08, 0.5), paint, 0, 1.73, -0.15, 0, 0, 0, body);        // Helmstreifen
-  // Räder (vorne lenkbar)
-  const wheelG = new T.CylinderGeometry(0.38, 0.38, 0.34, 20), rimG = new T.CylinderGeometry(0.2, 0.2, 0.36, 12);
+  add(new T.CapsuleGeometry(0.28, 0.34, 6, 14), suit, 0, 1.02, -0.28, -0.18, 0, 0, body);
+  for (const sx of [1, -1]) {
+    add(new T.CapsuleGeometry(0.08, 0.42, 4, 8), suit, sx * 0.26, 1.03, 0.04, -1.1, 0, sx * 0.35, body);
+    add(new T.SphereGeometry(0.085, 10, 8), S.glove, sx * 0.17, 1.0, 0.33, 0, 0, 0, body);
+  }
+  const helmet = new T.MeshPhysicalMaterial({ color: helmetColor, metalness: 0.2, roughness: 0.25, clearcoat: 1 });
+  add(new T.SphereGeometry(0.31, 24, 18), helmet, 0, 1.46, -0.18, 0, 0, 0, body);
+  add(new T.SphereGeometry(0.315, 24, 12, Math.PI / 2 - 1.15, 2.3, 1.05, 0.75), S.visor, 0, 1.46, -0.18, 0, 0, 0, body);
+  add(new T.TorusGeometry(0.31, 0.03, 8, 30, Math.PI), paint, 0, 1.46, -0.18, 0, Math.PI / 2, 0, body);
+  // Räder (vorne lenkbar) mit Profil und Felgen
   const wheels = [];
-  for (const [x, z, front] of [[0.86, 0.85, 1], [-0.86, 0.85, 1], [0.9, -0.82, 0], [-0.9, -0.82, 0]]) {
-    const steer = new T.Group(); steer.position.set(x, 0.38, z); g.add(steer);
+  for (const [x, z, front, r] of [[0.95, 1.05, 1, 0.92], [-0.95, 1.05, 1, 0.92], [1.0, -0.95, 0, 1], [-1.0, -0.95, 0, 1]]) {
+    const steer = new T.Group(); steer.position.set(x, 0.42 * r, z); g.add(steer);
     const spin = new T.Group(); steer.add(spin);
-    add(wheelG, rubber, 0, 0, 0, 0, 0, Math.PI / 2, spin);
-    add(rimG, metal, 0, 0, 0, 0, 0, Math.PI / 2, spin);
-    wheels.push({ steer, spin, front });
+    const w = add(S.tire, S.tireMat, 0, 0, 0, 0, 0, Math.PI / 2, spin); w.scale.set(r, front ? 0.85 : 1, r);
+    wheels.push({ steer, spin, front, r: 0.42 * r });
   }
   // Turbo-Flammen
   const flameMat = new T.SpriteMaterial({ map: glowTex('rgba(255,240,180,1)', 'rgba(255,90,20,0)'), color: 0xffffff, transparent: true, depthWrite: false, blending: T.AdditiveBlending });
-  const flames = [0.24, -0.24].map((x) => { const s = new T.Sprite(flameMat); s.position.set(x, 0.62, -1.55); s.scale.set(0.01, 0.01, 1); g.add(s); return s; });
-  return { g, body, wheels, flames, flameMat };
+  const flames = [0.26, -0.26].map((x) => { const s = new T.Sprite(flameMat); s.position.set(x, 0.82, -1.8); s.scale.set(0.01, 0.01, 1); g.add(s); return s; });
+  return { g, body, wheels, flames };
 }
 
 /* ---------------- Spiel ---------------- */
 async function startKart3D() {
   const T = await loadThree();
   await loadNumFont();
-  const tid = kartTrackId(), TH = KART_THEMES[tid];
+  const tid = kartTrackId(), TH = KART_THEMES[tid], SH = KART_SHAPES[tid];
   Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
   $('#view').innerHTML = gameShell('kart', `
     <div class="g3 g3-kart theme-${tid}" id="g3">
@@ -258,29 +423,34 @@ async function startKart3D() {
       <div class="kart-ask" id="kask" hidden><small id="kaskhint">Fahr durch das richtige Ergebnis</small><b id="ktask"></b><div class="kart-ans" id="kans"></div></div>
       <div class="kart-lines" id="klines"></div>
       <div class="kart-pad l" id="kpl" aria-hidden="true">◀</div><div class="kart-pad r" id="kpr" aria-hidden="true">▶</div>
+      <div class="kart-lights" id="klights" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="kart-count" id="kcount"></div>
     </div>
-    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten.</p>`);
+    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipp: Innen um die Kurve ist der Weg kürzer!</p>`);
   const host = $('#g3');
-  const st = createStage(host, { fov: 62, near: 0.6, far: 3200, shadows: true, clear: TH.fog });
+  const st = createStage(host, { fov: 62, near: 0.6, far: 3600, shadows: true, clear: TH.fog });
   game.stage3d = st;
   const { scene, camera, renderer } = st;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
   scene.fog = new T.Fog(TH.fog, TH.fogNear, TH.fogFar);
-  const tr = kartBuildTrack(T, KART_SHAPES[tid]);
-  const L = tr.len, W = KART.W, HW = W / 2, LANE = W / 3;
+  const W = KART.W, HW = W / 2, LANE = W / 3, WL = HW + KART.WALL;
+  const tr = kartBuildTrack(SH, W);
+  const L = tr.len;
   const q = {}, q2 = {};
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const yawAt = (o) => Math.atan2(o.fx, o.fz);
+  const pt = (o, lat, up = 0) => new T.Vector3(o.x + o.rx * lat, kartH(o, lat) + up, o.z + o.rz * lat);
+  const cdist = (a, b) => Math.abs((((a - b) % L) + L + L / 2) % L - L / 2); // Abstand entlang der Runde
 
   /* Licht und Himmel */
   scene.add(new T.HemisphereLight(TH.hemi[0], TH.hemi[1], TH.hemi[2]));
   const sun = new T.DirectionalLight(TH.sun, TH.sunI);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 200 });
-  sun.shadow.bias = -0.0005;
+  Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 220 });
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02;
   scene.add(sun, sun.target);
-  // Nachts: ein Licht fährt über dir mit (wie Strassenlampen), damit die Karts gut zu sehen sind
-  const nightLight = TH.night ? new T.PointLight(0xfff1e0, 260, 40, 1.6) : null;
+  const nightLight = TH.night ? new T.PointLight(0xfff1e0, 300, 44, 1.6) : null;
   if (nightLight) scene.add(nightLight);
   const sunDir = new T.Vector3(-0.45, 0.8, 0.35).normalize();
   const skyTex = canvasTex(16, 512, (g, w, h) => {
@@ -288,37 +458,35 @@ async function startKart3D() {
     gr.addColorStop(0, TH.sky[0]); gr.addColorStop(0.42, TH.sky[1]); gr.addColorStop(0.5, TH.sky[2]); gr.addColorStop(1, TH.sky[2]);
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
   });
-  const sky = new T.Mesh(new T.SphereGeometry(2800, 32, 16), new T.MeshBasicMaterial({ map: skyTex, side: T.BackSide, fog: false, depthWrite: false }));
-  scene.add(sky);
-  // Umgebung für Spiegelungen (Karts glänzen)
+  scene.add(new T.Mesh(new T.SphereGeometry(3200, 32, 16), new T.MeshBasicMaterial({ map: skyTex, side: T.BackSide, fog: false, depthWrite: false })));
   try {
     const envScene = new T.Scene();
     envScene.add(new T.Mesh(new T.SphereGeometry(10, 32, 16), new T.MeshBasicMaterial({ map: skyTex, side: T.BackSide })));
     const sunBall = new T.Mesh(new T.SphereGeometry(1.2, 16, 8), new T.MeshBasicMaterial({ color: TH.night ? 0x8a7dff : 0xffffff }));
     sunBall.position.copy(sunDir).multiplyScalar(8); envScene.add(sunBall);
-    const pm = new T.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(envScene, 0.02).texture;
-    scene.environmentIntensity = TH.night ? 0.5 : 0.85;
-    pm.dispose();
+    const pmrem = new T.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(envScene, 0.02).texture;
+    scene.environmentIntensity = TH.night ? 0.55 : 0.9;
+    pmrem.dispose();
   } catch { /* ohne Spiegelungen */ }
   if (!TH.night) {
     const sunSprite = new T.Sprite(new T.SpriteMaterial({ map: glowTex('rgba(255,250,230,1)', 'rgba(255,230,180,0)'), fog: false, depthWrite: false, transparent: true }));
-    sunSprite.position.copy(sunDir).multiplyScalar(2300); sunSprite.scale.set(520, 520, 1); scene.add(sunSprite);
+    sunSprite.position.copy(sunDir).multiplyScalar(2700); sunSprite.scale.set(600, 600, 1); scene.add(sunSprite);
   }
   if (TH.stars || TH.moons) {
     const n = 900, p = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, e = 0.08 + Math.random() * 1.3; p.set([Math.cos(a) * Math.cos(e) * 2600, Math.sin(e) * 2600, Math.sin(a) * Math.cos(e) * 2600], i * 3); }
+    for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, e = 0.08 + Math.random() * 1.3; p.set([Math.cos(a) * Math.cos(e) * 3000, Math.sin(e) * 3000, Math.sin(a) * Math.cos(e) * 3000], i * 3); }
     const gs = new T.BufferGeometry(); gs.setAttribute('position', new T.BufferAttribute(p, 3));
     scene.add(new T.Points(gs, new T.PointsMaterial({ color: 0xffffff, size: TH.moons ? 3 : 5, sizeAttenuation: false, fog: false, transparent: true, opacity: TH.moons ? 0.5 : 0.9 })));
   }
   if (TH.moons) {
-    for (const [x, y, z, r, c] of [[-900, 700, -1700, 120, 0xd9c2a8], [1300, 420, -1500, 60, 0xbfa58c]]) {
+    for (const [x, y, z, r, c] of [[-900, 700, -1900, 130, 0xd9c2a8], [1400, 420, -1700, 64, 0xbfa58c]]) {
       const m = new T.Mesh(new T.SphereGeometry(r, 24, 16), new T.MeshBasicMaterial({ color: c, fog: false }));
       m.position.set(x + tr.box.cx, y, z + tr.box.cz); scene.add(m);
     }
   }
   if (TH.clouds) {
-    const cloudTex = canvasTex(256, 128, (g, w, h) => {
+    const cloudTex = canvasTex(256, 128, (g, w) => {
       for (let i = 0; i < 14; i++) {
         const x = 40 + Math.random() * (w - 80), y = 50 + Math.random() * 40, r = 22 + Math.random() * 30;
         const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
@@ -327,224 +495,449 @@ async function startKart3D() {
     });
     const cm = new T.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0.9 });
     for (let i = 0; i < 26; i++) {
-      const s = new T.Sprite(cm); const a = Math.random() * Math.PI * 2, d = 900 + Math.random() * 1300;
-      s.position.set(tr.box.cx + Math.cos(a) * d, 240 + Math.random() * 380, tr.box.cz + Math.sin(a) * d);
-      const sc = 380 + Math.random() * 420; s.scale.set(sc, sc / 2, 1); scene.add(s);
+      const s = new T.Sprite(cm); const a = Math.random() * Math.PI * 2, d = 1000 + Math.random() * 1400;
+      s.position.set(tr.box.cx + Math.cos(a) * d, 260 + Math.random() * 400, tr.box.cz + Math.sin(a) * d);
+      const sc = 420 + Math.random() * 460; s.scale.set(sc, sc / 2, 1); scene.add(s);
     }
   }
 
-  /* Boden, Fahrbahn, Randsteine, Start und Ziel */
-  const ground = new T.Mesh(new T.PlaneGeometry(5000, 5000), new T.MeshStandardMaterial({ map: kartGroundTex(TH.ground), roughness: 0.95, metalness: 0 }));
+  /* Boden und Berge rundherum */
+  const groundMat = new T.MeshStandardMaterial({ map: kartGroundTex(TH.ground), roughness: 0.95, metalness: 0 });
+  const ground = new T.Mesh(new T.PlaneGeometry(6000, 6000), groundMat);
   // Boden etwas tiefer als die Fahrbahn: sonst flimmern die beiden auf Geräten mit ungenauem Tiefenpuffer
-  ground.rotation.x = -Math.PI / 2; ground.position.set(tr.box.cx, -0.18, tr.box.cz); ground.receiveShadow = true;
+  ground.rotation.x = -Math.PI / 2; ground.position.set(tr.box.cx, -0.25, tr.box.cz); ground.receiveShadow = true;
   scene.add(ground);
-  const roadTex = kartRoadTex(TH.road); roadTex.wrapT = T.RepeatWrapping; roadTex.wrapS = T.ClampToEdgeWrapping;
-  const roadMat = new T.MeshStandardMaterial({ map: roadTex, roughness: TH.road === 'ice' ? 0.25 : 0.85, metalness: TH.road === 'ice' ? 0.15 : 0.02, side: T.DoubleSide });
-  if (TH.road === 'nightRoad') { roadMat.emissive = new T.Color(0xffffff); roadMat.emissiveMap = roadTex; roadMat.emissiveIntensity = 0.35; }
-  const road = new T.Mesh(kartRibbon(T, tr, -HW, HW, 0.04, 2, 16), roadMat);
-  road.receiveShadow = true; scene.add(road);
-  const curbTex = kartStripeTex(TH.curb[0], TH.curb[1]); curbTex.wrapT = T.RepeatWrapping;
-  const curbMat = new T.MeshStandardMaterial({ map: curbTex, roughness: 0.6, side: T.DoubleSide });
-  if (TH.night) { curbMat.emissive = new T.Color(0xffffff); curbMat.emissiveMap = curbTex; curbMat.emissiveIntensity = 0.8; }
-  for (const [a, b] of [[HW, HW + 1.4], [-HW - 1.4, -HW]]) { const c = new T.Mesh(kartRibbon(T, tr, a, b, 0.08, 2, 4), curbMat); c.receiveShadow = true; scene.add(c); }
-  // Startlinie und Torbogen
-  kartAt(tr, 0, q);
-  const yawAt = (o) => Math.atan2(o.fx, o.fz);
-  const startLine = new T.Mesh(new T.PlaneGeometry(W, 2.2), new T.MeshStandardMaterial({ map: kartCheckerTex(14, 2), roughness: 0.7 }));
-  startLine.rotation.set(-Math.PI / 2, 0, yawAt(q) + Math.PI); startLine.position.set(q.x, 0.12, q.z); scene.add(startLine);
   {
-    const archMat = new T.MeshStandardMaterial({ color: TH.night ? 0x312e81 : 0xe5e7eb, metalness: 0.5, roughness: 0.35 });
-    const arch = new T.Group(); arch.position.set(q.x, 0, q.z); arch.rotation.y = yawAt(q); scene.add(arch);
-    for (const x of [HW + 2, -HW - 2]) { const p = new T.Mesh(new T.BoxGeometry(0.9, 7.5, 0.9), archMat); p.position.set(-x, 3.75, 0); p.castShadow = true; arch.add(p); }
-    const ban = new T.Mesh(new T.BoxGeometry(W + 5, 1.8, 0.5), [archMat, archMat, archMat, archMat, new T.MeshStandardMaterial({ map: kartSignTex('TEILMAL · TURBO-RENNEN', '#FF6B4A') }), new T.MeshStandardMaterial({ map: kartSignTex('START · ZIEL', '#0F766E') })]);
-    ban.position.set(0, 7.2, 0); ban.castShadow = true; arch.add(ban);
-    const chk = new T.Mesh(new T.BoxGeometry(W + 5, 0.5, 0.52), new T.MeshStandardMaterial({ map: kartCheckerTex(24, 2) }));
-    chk.position.set(0, 6.05, 0); arch.add(chk);
+    const mm = new T.MeshStandardMaterial({ color: TH.mountains, roughness: 1, flatShading: true });
+    const snowCap = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
+    const rad = Math.max(tr.box.maxX - tr.box.minX, tr.box.maxZ - tr.box.minZ) * 0.5 + 520;
+    for (let i = 0; i < 34; i++) {
+      const a = (i / 34) * Math.PI * 2 + rnd(-0.08, 0.08), d = rad + rnd(0, 380);
+      const h = TH.night ? rnd(40, 90) : rnd(90, 230), r = h * rnd(0.9, 1.5);
+      const m = new T.Mesh(new T.ConeGeometry(r, h, 7, 2), mm);
+      m.position.set(tr.box.cx + Math.cos(a) * d, h / 2 - 2, tr.box.cz + Math.sin(a) * d); m.rotation.y = rnd(0, 3); scene.add(m);
+      if (!TH.night && ['snow', 'grass', 'forest'].includes(TH.ground) && h > 150) { const c = new T.Mesh(new T.ConeGeometry(r * 0.32, h * 0.32, 7, 1), snowCap); c.position.set(m.position.x, h - h * 0.16 - 2, m.position.z); c.rotation.y = m.rotation.y; scene.add(c); }
+    }
   }
 
-  /* Weggabelungen: Inseln zwischen den Spuren, ?-Würfel und Antwort-Tore */
+  /* Fahrbahn, Randsteine, Banden, Dämme, Brücken, Tunnel */
+  const roadTex = kartRoadTex(TH.road); roadTex.wrapS = T.ClampToEdgeWrapping;
+  const roadMat = new T.MeshStandardMaterial({ map: roadTex, roughness: TH.road === 'ice' ? 0.25 : 0.8, metalness: TH.road === 'ice' ? 0.15 : 0.02, side: T.DoubleSide });
+  if (TH.road === 'nightRoad') { roadMat.emissive = new T.Color(0xffffff); roadMat.emissiveMap = roadTex; roadMat.emissiveIntensity = 0.35; }
+  const road = new T.Mesh(kartGrid(T, tr, 2, (o, c) => { const p = pt(o, c ? HW : -HW, 0.04); return [p.x, p.y, p.z, c, undefined]; }, { step: 4, vScale: 16 }), roadMat);
+  road.receiveShadow = true; scene.add(road);
+  const curbTex = kartStripeTex(TH.curb[0], TH.curb[1]); curbTex.wrapS = curbTex.wrapT = T.RepeatWrapping;
+  const curbMat = new T.MeshStandardMaterial({ map: curbTex, roughness: 0.6, side: T.DoubleSide });
+  if (TH.night) { curbMat.emissive = new T.Color(0xffffff); curbMat.emissiveMap = curbTex; curbMat.emissiveIntensity = 0.8; }
+  for (const [a, b] of [[HW, WL], [-WL, -HW]]) {
+    const c = new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, j ? b : a, 0.08); return [p.x, p.y, p.z]; }, { step: 4, vScale: 4 }), curbMat);
+    c.receiveShadow = true; scene.add(c);
+  }
+  // Banden (nicht im Tunnel); auf Brücken Betonbrüstung
+  const wallTex = kartWallTex(TH.wall);
+  const wallMat = new T.MeshStandardMaterial({ map: wallTex, roughness: 0.6, side: T.DoubleSide });
+  if (TH.wall === 'neon') { wallMat.emissive = new T.Color(0xffffff); wallMat.emissiveMap = wallTex; wallMat.emissiveIntensity = 1; }
+  const concrete = new T.MeshStandardMaterial({ map: kartWallTex('concrete'), roughness: 0.85, side: T.DoubleSide });
+  const wallH = TH.wall === 'snow' ? 1.4 : 1.0;
+  const wallTop = (o) => (o.ty === 1 ? 1.2 : wallH);
+  const capMat = new T.MeshStandardMaterial({ color: TH.night ? 0x22d3ee : 0xe5e7eb, roughness: 0.4, emissive: TH.night ? 0x22d3ee : 0x000000, emissiveIntensity: TH.night ? 1 : 0, side: T.DoubleSide });
+  for (const side of [-1, 1]) {
+    const mk = (keep, mat, h) => {
+      const m = new T.Mesh(kartGrid(T, tr, 2, (o, j, s) => { const p = pt(o, side * WL, j ? h : -0.05); return [p.x, p.y, p.z, s / 8, j]; }, { keep, step: 4 }), mat);
+      m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    };
+    mk((i) => tr.TY[i] === 0, wallMat, wallH);
+    mk((i) => tr.TY[i] === 1, concrete, 1.2);
+    if (TH.wall !== 'snow') {
+      scene.add(new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, side * (WL + (j ? 0.25 : -0.25)), wallTop(o) + 0.02); return [p.x, p.y, p.z]; }, { keep: (i) => tr.TY[i] !== 2, step: 4 }), capMat));
+    }
+  }
+  // Dämme: wo die Strecke höher liegt (nicht auf Brücken und nicht im Berg-Tunnel) – Böschung bis zum Boden
+  const tunnelStyle = TH.tunnel, glassy = tunnelStyle === 'glass';
+  const bankTex = kartGroundTex(TH.ground, 1);
+  const bankMat = new T.MeshStandardMaterial({ map: bankTex, roughness: 0.95, side: T.DoubleSide });
+  for (const side of [-1, 1]) {
+    const m = new T.Mesh(kartGrid(T, tr, 2, (o, j, s) => {
+      const eh = kartH(o, side * WL);
+      if (!j) { const p = pt(o, side * (WL + 0.2), -0.04); return [p.x, p.y, p.z, s / 10, 0]; }
+      const out = WL + 0.2 + Math.max(0.5, eh + 0.3) * 1.7;
+      return [o.x + o.rx * side * out, -0.3, o.z + o.rz * side * out, s / 10, (out - WL) / 10];
+    }, { keep: (i) => tr.TY[i] !== 1 && (tr.TY[i] !== 2 || glassy) && tr.Y[i] > 0.35, step: 4 }), bankMat);
+    m.receiveShadow = true; scene.add(m);
+  }
+  // Brücken: Unterseite, Seiten, Pfeiler (nicht auf die untere Strecke)
+  if (tr.TY.some((t) => t === 1)) {
+    const bridgeMat = new T.MeshStandardMaterial({ color: TH.night ? 0x312e81 : TH.wall === 'logs' ? 0x8b5a2b : TH.wall === 'cake' ? 0xfbcfe8 : 0xb8c0cc, roughness: 0.7, side: T.DoubleSide });
+    const keep = (i) => tr.TY[i] === 1;
+    scene.add(new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, j ? WL + 0.3 : -WL - 0.3, -1.4); return [p.x, p.y, p.z]; }, { keep }), bridgeMat));
+    for (const side of [-1, 1]) {
+      const m = new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, side * (WL + 0.3), j ? 0.0 : -1.4); return [p.x, p.y, p.z]; }, { keep }), bridgeMat);
+      m.castShadow = true; scene.add(m);
+    }
+    const pil = [];
+    for (let i = 0; i < tr.N; i += 26) {
+      if (tr.TY[i] !== 1) continue;
+      kartAt(tr, i * tr.ds, q);
+      for (const side of [-1, 1]) {
+        const lat = side * (HW - 1.5), x = q.x + q.rx * lat, z = q.z + q.rz * lat, top = kartH(q, lat) - 1.4;
+        // nicht auf eine tiefere Fahrbahn stellen
+        let blocked = false;
+        for (let c = 0; c < tr.coarse.length; c += 4) {
+          if (tr.coarse[c + 2] < top - 3 && Math.hypot(tr.coarse[c] - x, tr.coarse[c + 1] - z) < WL + 3) { blocked = true; break; }
+        }
+        if (!blocked && top > 0.5) pil.push({ x, z, h: top + 0.3 });
+      }
+    }
+    if (pil.length) {
+      const m = new T.InstancedMesh(new T.CylinderGeometry(0.9, 1.1, 1, 12), bridgeMat, pil.length);
+      const o = new T.Object3D();
+      pil.forEach((p, i) => { o.position.set(p.x, p.h / 2 - 0.3, p.z); o.scale.set(1, p.h, 1); o.updateMatrix(); m.setMatrixAt(i, o.matrix); });
+      m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    }
+  }
+  // Tunnel bzw. Höhle: Röhre über der Strecke; aussen ein Berg bis zum Boden (auf dem Mars eine Glasröhre)
+  if (tr.TY.some((t) => t === 2)) {
+    const keep = (i) => tr.TY[i] === 2;
+    const RW = WL + 1.2, RH = 9.5, cols = 15;
+    const inTex = canvasTex(256, 256, (g, w, h) => {
+      const base = { concrete: '#9ca3af', rock: '#6b5b4b', glass: '#9ad7ff', icecave: '#a5d8f5', neon: '#14112b', candy: '#ffffff' }[tunnelStyle];
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      kartNoise(g, w, h, 1800, ['rgba(0,0,0,.18)', 'rgba(255,255,255,.12)'], [2, 7]);
+      if (tunnelStyle === 'concrete' || tunnelStyle === 'neon') { g.fillStyle = tunnelStyle === 'neon' ? '#f0abfc' : '#fde68a'; g.fillRect(w / 2 - 10, 0, 20, h); g.fillStyle = tunnelStyle === 'neon' ? '#22d3ee' : 'rgba(0,0,0,.2)'; for (let y = 0; y < h; y += 64) g.fillRect(0, y, w, 4); }
+      if (tunnelStyle === 'candy') { g.fillStyle = '#f472b6'; for (let y = -w; y < h + w; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y + w / 2); g.lineTo(w, y + w / 2 + 28); g.lineTo(0, y + 28); g.fill(); } }
+      if (tunnelStyle === 'icecave') kartNoise(g, w, h, 300, ['rgba(255,255,255,.6)', 'rgba(56,189,248,.35)'], [4, 14]);
+    }, { repeat: [1, 1] });
+    const inMat = new T.MeshStandardMaterial({ map: inTex, side: T.DoubleSide, roughness: glassy ? 0.1 : tunnelStyle === 'icecave' ? 0.3 : 0.85, metalness: glassy ? 0.2 : 0, transparent: glassy, opacity: glassy ? 0.38 : 1, depthWrite: !glassy });
+    if (tunnelStyle !== 'rock') { inMat.emissive = new T.Color(0xffffff); inMat.emissiveMap = inTex; inMat.emissiveIntensity = tunnelStyle === 'neon' ? 0.9 : 0.3; }
+    const tube = new T.Mesh(kartGrid(T, tr, cols, (o, c, s) => {
+      const a = (c / (cols - 1)) * Math.PI, lat = -Math.cos(a) * RW, up = Math.sin(a) * RH;
+      return [o.x + o.rx * lat, o.y + up - 0.05, o.z + o.rz * lat, (c / (cols - 1)) * 3, s / 12];
+    }, { keep, step: 4 }), inMat);
+    tube.castShadow = !glassy; tube.receiveShadow = !glassy; scene.add(tube);
+    if (glassy) {
+      // Rippen aus Metall
+      const ribs = [];
+      for (let i = 0; i < tr.N; i += 16) if (tr.TY[i] === 2) { kartAt(tr, i * tr.ds, q); ribs.push({ x: q.x, y: q.y, z: q.z, yaw: yawAt(q) }); }
+      const rm = new T.InstancedMesh(new T.TorusGeometry(RW, 0.18, 6, 28, Math.PI), new T.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.8, roughness: 0.3 }), ribs.length);
+      const o = new T.Object3D();
+      ribs.forEach((r, i) => { o.position.set(r.x, r.y - 0.05, r.z); o.rotation.set(0, r.yaw, 0); o.scale.set(1, RH / RW, 1); o.updateMatrix(); rm.setMatrixAt(i, o.matrix); });
+      scene.add(rm);
+    } else {
+      // Berg aussen, unregelmässig, mit Fuss bis zum Boden
+      const rockCol = { concrete: 0x6b8f5e, rock: 0x7a6a58, icecave: 0xc9d9ea, neon: 0x23204a, candy: 0x7b4a2e }[tunnelStyle] || 0x7a6a58;
+      const rockMat = new T.MeshStandardMaterial({ color: rockCol, roughness: 1, flatShading: true, side: T.DoubleSide });
+      const RW2 = RW + 10, RH2 = RH + 9, arc = 13;
+      const shell = new T.Mesh(kartGrid(T, tr, arc + 2, (o, c, s) => {
+        const foot = Math.max(0, o.y) * 1.6 + 8;
+        if (c === 0 || c === arc + 1) { const lat = (c ? 1 : -1) * (RW2 + foot); return [o.x + o.rx * lat, -0.3, o.z + o.rz * lat]; }
+        const cc = c - 1;
+        const a = (cc / (arc - 1)) * Math.PI, n = 1 + 0.12 * Math.sin(s * 0.21 + cc * 1.7) + 0.08 * Math.sin(s * 0.53 - cc * 2.3);
+        const lat = -Math.cos(a) * RW2 * n, up = Math.sin(a) * RH2 * n;
+        return [o.x + o.rx * lat, o.y + up - 0.4, o.z + o.rz * lat];
+      }, { keep, step: 8 }), rockMat);
+      shell.castShadow = true; shell.receiveShadow = true; scene.add(shell);
+      // Portale: Wand zwischen Röhre und Berg an beiden Enden
+      for (let i = 0; i < tr.N; i++) {
+        const isStart = tr.TY[i] === 2 && tr.TY[(i - 1 + tr.N) % tr.N] !== 2, isEnd = tr.TY[i] === 2 && tr.TY[(i + 1) % tr.N] !== 2;
+        if (!isStart && !isEnd) continue;
+        kartAt(tr, i * tr.ds, q);
+        const foot = Math.max(0, q.y) * 1.6 + 8;
+        const shp = new T.Shape();
+        shp.moveTo(-(RW2 + foot), -q.y + 0.1);
+        for (let c = 0; c <= 16; c++) { const a = (c / 16) * Math.PI; shp.lineTo(-Math.cos(a) * RW2 * 1.06, Math.sin(a) * RH2 * 1.06 - 0.4); }
+        shp.lineTo(RW2 + foot, -q.y + 0.1); shp.closePath();
+        const hole = new T.Path();
+        hole.moveTo(-RW, -0.2);
+        for (let c = 0; c <= 16; c++) { const a = (c / 16) * Math.PI; hole.lineTo(-Math.cos(a) * RW, Math.sin(a) * RH); }
+        hole.lineTo(RW, -0.2); hole.closePath();
+        shp.holes.push(hole);
+        const pm = new T.Mesh(new T.ExtrudeGeometry(shp, { depth: 1.2, bevelEnabled: false }), rockMat);
+        pm.position.set(q.x, q.y, q.z); pm.rotation.y = yawAt(q); pm.translateZ(isStart ? -1.2 : 0);
+        pm.castShadow = true; scene.add(pm);
+        // Rahmen um die Einfahrt
+        const frame = new T.Mesh(new T.TorusGeometry(1, 0.08, 8, 32, Math.PI), new T.MeshStandardMaterial({ color: TH.night ? 0xf0abfc : 0xfacc15, emissive: TH.night ? 0xf0abfc : 0x000000, emissiveIntensity: TH.night ? 1.5 : 0, roughness: 0.4 }));
+        frame.scale.set(RW, RH, 6); frame.position.set(q.x, q.y, q.z); frame.rotation.y = yawAt(q); scene.add(frame);
+      }
+      // Lampen an der Decke
+      const lamps = [];
+      for (let i = 0; i < tr.N; i += 20) if (tr.TY[i] === 2) { kartAt(tr, i * tr.ds, q); lamps.push({ x: q.x, y: q.y + RH - 0.6, z: q.z, yaw: yawAt(q) }); }
+      const lm = new T.InstancedMesh(new T.BoxGeometry(1.4, 0.2, 0.6), new T.MeshStandardMaterial({ color: 0xffffff, emissive: tunnelStyle === 'neon' ? 0xf0abfc : tunnelStyle === 'icecave' ? 0xbae6fd : 0xfff3c4, emissiveIntensity: 2 }), lamps.length);
+      const o = new T.Object3D();
+      lamps.forEach((p, i) => { o.position.set(p.x, p.y, p.z); o.rotation.set(0, p.yaw + Math.PI / 2, 0); o.updateMatrix(); lm.setMatrixAt(i, o.matrix); });
+      scene.add(lm);
+    }
+  }
+  // Startlinie und Torbogen
+  kartAt(tr, 0, q);
+  {
+    const sl = new T.Mesh(new T.PlaneGeometry(W, 2.4), new T.MeshStandardMaterial({ map: kartCheckerTex(16, 2), roughness: 0.7 }));
+    sl.rotation.set(-Math.PI / 2, 0, yawAt(q) + Math.PI, 'YXZ'); sl.rotation.set(-Math.PI / 2, 0, 0); sl.rotateOnWorldAxis(new T.Vector3(0, 1, 0), yawAt(q));
+    sl.position.set(q.x, q.y + 0.12, q.z); scene.add(sl);
+    const archMat = new T.MeshStandardMaterial({ color: TH.night ? 0x312e81 : 0xe5e7eb, metalness: 0.5, roughness: 0.35 });
+    const arch = new T.Group(); arch.position.set(q.x, q.y, q.z); arch.rotation.y = yawAt(q); scene.add(arch);
+    for (const x of [WL + 1, -WL - 1]) { const p = new T.Mesh(new T.BoxGeometry(1.1, 9, 1.1), archMat); p.position.set(-x, 4.5, 0); p.castShadow = true; arch.add(p); }
+    const ban = new T.Mesh(new T.BoxGeometry(2 * WL + 4, 2.2, 0.6), [archMat, archMat, archMat, archMat, new T.MeshStandardMaterial({ map: kartSignTex('TEILMAL · TURBO-RENNEN', '#FF6B4A') }), new T.MeshStandardMaterial({ map: kartSignTex('START · ZIEL', '#0F766E') })]);
+    ban.position.set(0, 8.6, 0); ban.castShadow = true; arch.add(ban);
+    const chk = new T.Mesh(new T.BoxGeometry(2 * WL + 4, 0.6, 0.62), new T.MeshStandardMaterial({ map: kartCheckerTex(30, 2) }));
+    chk.position.set(0, 7.2, 0); arch.add(chk);
+  }
+
+  /* Weggabelungen: Stationen nicht im Tunnel und nicht am Start */
+  const freeAt = (s) => { if (s < 60 || s > L - 30) return false; for (let d = -KART.ZONE - 6; d <= KART.ZONE + 6; d += 2) { kartAt(tr, s + d, q); if (q.ty === 2) return false; } return true; };
+  const stationS = KART.STATIONS.map((u) => {
+    for (let n = 0; n < 60; n++) { const s0 = u * L + n * 8; if (freeAt(s0) && freeAt(s0 + KART.ASK)) return s0; }
+    for (let n = 1; n < 60; n++) { const s0 = u * L - n * 8; if (freeAt(s0) && freeAt(s0 + KART.ASK)) return s0; }
+    return u * L;
+  });
   const islandTex = kartStripeTex(TH.island[0], TH.island[1], 2); islandTex.wrapS = islandTex.wrapT = T.RepeatWrapping; islandTex.repeat.set(1, 3);
   const islandMat = new T.MeshStandardMaterial({ map: islandTex, roughness: 0.55 });
-  const capMat = new T.MeshStandardMaterial({ color: TH.island[0], roughness: 0.5 });
+  const islandCap = new T.MeshStandardMaterial({ color: TH.island[0], roughness: 0.5 });
   function buildIslands(sc) {
     for (const lat of [-LANE / 2, LANE / 2]) {
-      const seg = 5, from = sc - KART.ZONE, len = (2 * KART.ZONE) / seg;
+      const seg = 6, from = sc - KART.ZONE, len = (2 * KART.ZONE) / seg;
       for (let i = 0; i < seg; i++) {
         kartAt(tr, from + (i + 0.5) * len, q);
-        const m = new T.Mesh(new T.BoxGeometry(0.7, 0.6, len + 0.06), islandMat);
-        m.position.set(q.x + q.rx * lat, 0.3, q.z + q.rz * lat); m.rotation.y = yawAt(q); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+        const m = new T.Mesh(new T.BoxGeometry(0.9, 0.7, len + 0.08), islandMat);
+        m.position.copy(pt(q, lat, 0.35)); m.rotation.set(-Math.atan(q.sl), yawAt(q), Math.atan(q.b), 'YXZ'); m.castShadow = true; m.receiveShadow = true; scene.add(m);
       }
       for (const e of [from, sc + KART.ZONE]) {
         kartAt(tr, e, q);
-        const c = new T.Mesh(new T.CylinderGeometry(0.35, 0.35, 0.6, 16), capMat);
-        c.position.set(q.x + q.rx * lat, 0.3, q.z + q.rz * lat); c.castShadow = true; scene.add(c);
+        const c = new T.Mesh(new T.CylinderGeometry(0.45, 0.45, 0.7, 16), islandCap);
+        c.position.copy(pt(q, lat, 0.35)); c.castShadow = true; scene.add(c);
       }
     }
   }
   const cubeMat = new T.MeshStandardMaterial({ map: kartCubeTex(), emissive: 0x6d28d9, emissiveIntensity: 0.35, metalness: 0.2, roughness: 0.15, transparent: true, opacity: 0.92 });
-  const cubeGeo = new T.BoxGeometry(1.5, 1.5, 1.5);
+  const cubeGeo = new T.BoxGeometry(1.8, 1.8, 1.8);
   const glowMat = new T.SpriteMaterial({ map: glowTex('rgba(200,180,255,.9)', 'rgba(120,80,255,0)'), transparent: true, depthWrite: false, blending: T.AdditiveBlending });
-  const stations = KART.STATIONS.map((s0, k) => {
+  const stations = stationS.map((s0, k) => {
     buildIslands(s0); buildIslands(s0 + KART.ASK);
-    // Würfel: einer pro Spur
     const cubes = [-1, 0, 1].map((lane) => {
       kartAt(tr, s0, q);
-      const grp = new T.Group(); grp.position.set(q.x + q.rx * lane * LANE, 1.4, q.z + q.rz * lane * LANE);
+      const grp = new T.Group(); grp.position.copy(pt(q, lane * LANE, 1.7));
       const m = new T.Mesh(cubeGeo, cubeMat); m.castShadow = true; grp.add(m);
-      const gl = new T.Sprite(glowMat); gl.scale.set(3.4, 3.4, 1); grp.add(gl);
+      const gl = new T.Sprite(glowMat); gl.scale.set(4, 4, 1); grp.add(gl);
       scene.add(grp);
       return { grp, m, phase: Math.random() * 6, hiddenUntil: 0, base: grp.position.y };
     });
-    // Tor mit drei Schildern
     const s1 = s0 + KART.ASK;
     kartAt(tr, s1, q);
-    const gate = new T.Group(); gate.position.set(q.x, 0, q.z); gate.rotation.y = yawAt(q); scene.add(gate);
+    const gate = new T.Group(); gate.position.set(q.x, q.y, q.z); gate.rotation.y = yawAt(q); scene.add(gate);
     const postMat = new T.MeshStandardMaterial({ color: TH.night ? 0x4338ca : 0xf1f5f9, metalness: 0.6, roughness: 0.3 });
-    for (const x of [-HW - 0.3, -LANE / 2, LANE / 2, HW + 0.3]) { const p = new T.Mesh(new T.CylinderGeometry(0.22, 0.26, 6.2, 12), postMat); p.position.set(-x, 3.1, 0); p.castShadow = true; gate.add(p); }
-    const bar = new T.Mesh(new T.BoxGeometry(W + 1.2, 0.45, 0.45), postMat); bar.position.set(0, 6.1, 0); bar.castShadow = true; gate.add(bar);
+    for (const x of [-WL, -LANE / 2, LANE / 2, WL]) { const p = new T.Mesh(new T.CylinderGeometry(0.25, 0.3, 7.6, 12), postMat); p.position.set(-x, 3.8 - x * q.b, 0); p.castShadow = true; gate.add(p); }
+    const bar = new T.Mesh(new T.BoxGeometry(2 * WL + 1.2, 0.5, 0.5), postMat); bar.position.set(0, 7.5, 0); bar.castShadow = true; gate.add(bar);
     const boards = [-1, 0, 1].map((lane) => {
       const mat = new T.MeshStandardMaterial({ map: kartBoardTex('?', TH.board), roughness: 0.5, side: T.DoubleSide });
       if (TH.night) { mat.emissive = new T.Color(0xffffff); mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.6; }
-      const b = new T.Mesh(new T.PlaneGeometry(4.0, 2.25), mat);
-      b.position.set(-lane * LANE, 4.6, -0.3); b.rotation.y = Math.PI;
-      gate.add(b);
-      const frame = new T.Mesh(new T.BoxGeometry(4.25, 2.5, 0.12), new T.MeshStandardMaterial({ color: new T.Color(TH.board), roughness: 0.5 }));
-      frame.position.set(-lane * LANE, 4.6, -0.22); gate.add(frame);
+      const b = new T.Mesh(new T.PlaneGeometry(5.6, 3.0), mat);
+      b.position.set(-lane * LANE, 5.7, -0.32); b.rotation.y = Math.PI; gate.add(b);
+      const frame = new T.Mesh(new T.BoxGeometry(5.9, 3.3, 0.14), new T.MeshStandardMaterial({ color: new T.Color(TH.board), roughness: 0.5 }));
+      frame.position.set(-lane * LANE, 5.7, -0.22); gate.add(frame);
       return { mat, b, lane };
     });
     return { k, s0, s1, cubes, gate, boards, vals: null, correct: -1, label: [] };
   });
+  const nearStation = (s, r = 30) => stations.some((x) => cdist(s, x.s0) < r || cdist(s, x.s1) < r);
 
   /* Kulisse */
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  function scatter(n, minD, maxD, avoid = HW + 6) {
+  function scatter(n, minD, maxD, avoid = 6) {
     const out = [];
-    for (let tries = 0; out.length < n && tries < n * 8; tries++) {
+    kartAt(tr, 0, q2);
+    const sx = q2.x, sz = q2.z;
+    for (let tries = 0; out.length < n && tries < n * 10; tries++) {
       const s = Math.random() * L, side = Math.random() < 0.5 ? -1 : 1, d = rnd(minD, maxD);
       kartAt(tr, s, q);
-      const x = q.x + q.rx * side * (HW + d), z = q.z + q.rz * side * (HW + d);
-      if (kartDistToTrack(tr, x, z) < avoid) continue;
-      if (Math.hypot(x - kartAt(tr, 0, q2).x, z - q2.z) < 24) continue; // Start frei lassen
+      const x = q.x + q.rx * side * (WL + d), z = q.z + q.rz * side * (WL + d);
+      const nr = kartNear(tr, x, z);
+      if (nr.d < WL + avoid + Math.max(0, nr.y) * 1.8) continue;
+      if (Math.hypot(x - sx, z - sz) < 30) continue;
       out.push({ x, z, s, side, rot: Math.random() * Math.PI * 2, sc: 1 });
     }
     return out;
   }
   const dummy = new T.Object3D();
-  function inst(geo, mat, list, f, { cast = true } = {}) {
+  function inst(geo, mat, list, f, { cast = true, color = null } = {}) {
     if (!list.length) return null;
     const m = new T.InstancedMesh(geo, mat, list.length);
-    list.forEach((p, i) => { dummy.position.set(p.x, 0, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.sc); f?.(dummy, p); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); });
+    list.forEach((p, i) => { dummy.position.set(p.x, -0.25, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.sc); f?.(dummy, p, i); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); if (color) m.setColorAt(i, new T.Color(color(p, i))); });
     m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m;
   }
   const P = TH.props;
   const trunkMat = new T.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
   if (P.includes('trees') || P.includes('pines') || P.includes('snowPines')) {
     const snowy = P.includes('snowPines');
-    const list = scatter(P.includes('pines') || snowy ? 520 : 260, 9, 160).map((p) => ({ ...p, sc: rnd(0.8, 1.6) }));
-    inst(new T.CylinderGeometry(0.35, 0.5, 3, 8), trunkMat, list, (o) => { o.position.y = 1.5 * o.scale.y; });
-    const pineMat = new T.MeshStandardMaterial({ color: snowy ? 0x2f5a46 : 0x24552f, roughness: 0.85, flatShading: true });
+    const list = scatter(P.includes('pines') || snowy ? 620 : 300, 6, 180).map((p) => ({ ...p, sc: rnd(0.8, 1.7) }));
+    inst(new T.CylinderGeometry(0.35, 0.5, 3, 8), trunkMat, list, (o) => { o.position.y = 1.5 * o.scale.y - 0.25; });
+    const pineMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true });
+    const tint = (p, i) => (snowy ? [0x2f5a46, 0x335f4a, 0x2a5240][i % 3] : [0x24552f, 0x2c6b38, 0x1f4a29, 0x356f2f][i % 4]);
     for (const [h, r, y] of [[4.2, 2.6, 4.2], [3.4, 2.0, 6.2], [2.6, 1.3, 7.9]]) {
-      inst(new T.ConeGeometry(r, h, 9), pineMat, list, (o) => { o.position.y = y * o.scale.y; });
-      if (snowy) inst(new T.ConeGeometry(r * 0.62, h * 0.42, 9), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = (y + h * 0.3) * o.scale.y; }, { cast: false });
+      inst(new T.ConeGeometry(r, h, 9), pineMat, list, (o) => { o.position.y = y * o.scale.y - 0.25; }, { color: tint });
+      if (snowy) inst(new T.ConeGeometry(r * 0.62, h * 0.42, 9), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = (y + h * 0.3) * o.scale.y - 0.25; }, { cast: false });
     }
   }
   if (P.includes('oaks')) {
-    const list = scatter(220, 10, 150).map((p) => ({ ...p, sc: rnd(0.9, 1.5) }));
-    inst(new T.CylinderGeometry(0.4, 0.6, 4, 8), trunkMat, list, (o) => { o.position.y = 2 * o.scale.y; });
-    inst(new T.IcosahedronGeometry(3.2, 1), new T.MeshStandardMaterial({ color: 0x3f7d2c, roughness: 0.85, flatShading: true }), list, (o) => { o.position.y = 5.6 * o.scale.y; });
+    const list = scatter(240, 8, 170).map((p) => ({ ...p, sc: rnd(0.9, 1.6) }));
+    inst(new T.CylinderGeometry(0.4, 0.6, 4, 8), trunkMat, list, (o) => { o.position.y = 2 * o.scale.y - 0.25; });
+    inst(new T.IcosahedronGeometry(3.2, 1), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }), list, (o) => { o.position.y = 5.6 * o.scale.y - 0.25; }, { color: (p, i) => [0x3f7d2c, 0x4d8a33, 0x6a9a2f, 0xb45309][i % 9 === 0 ? 3 : i % 3] });
+  }
+  if (P.includes('bushes')) {
+    const list = scatter(260, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.4) }));
+    inst(new T.IcosahedronGeometry(1.1, 0), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), list, (o) => { o.position.y = 0.5 * o.scale.y - 0.25; o.scale.y *= 0.75; }, { color: (p, i) => [0x3f8f3a, 0x4b9c3d, 0x2f7a33][i % 3] });
+  }
+  if (P.includes('flowers')) {
+    const list = scatter(700, 2.5, 50, 2.5).map((p) => ({ ...p, sc: rnd(0.7, 1.3) }));
+    inst(new T.SphereGeometry(0.22, 6, 4), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = 0.2; }, { cast: false, color: (p, i) => ['#f472b6', '#facc15', '#ffffff', '#a78bfa', '#fb7185'][i % 5] });
   }
   if (P.includes('mushrooms')) {
-    const list = scatter(70, 4, 30, HW + 3).map((p) => ({ ...p, sc: rnd(0.6, 1.3) }));
-    inst(new T.CylinderGeometry(0.25, 0.32, 0.9, 10), new T.MeshStandardMaterial({ color: 0xf5efe0 }), list, (o) => { o.position.y = 0.45 * o.scale.y; });
+    const list = scatter(90, 3, 34, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.5) }));
+    inst(new T.CylinderGeometry(0.25, 0.32, 0.9, 10), new T.MeshStandardMaterial({ color: 0xf5efe0 }), list, (o) => { o.position.y = 0.45 * o.scale.y - 0.25; });
     const capTex = canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#d7263d'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; for (let i = 0; i < 14; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h * 0.8, 3 + Math.random() * 5, 0, Math.PI * 2); g.fill(); } });
-    inst(new T.SphereGeometry(0.7, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ map: capTex, roughness: 0.5 }), list, (o) => { o.position.y = 0.85 * o.scale.y; });
+    inst(new T.SphereGeometry(0.7, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ map: capTex, roughness: 0.5 }), list, (o) => { o.position.y = 0.85 * o.scale.y - 0.25; });
+  }
+  if (P.includes('cabins')) {
+    const list = scatter(10, 20, 70, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.2) }));
+    inst(new T.BoxGeometry(6, 3.4, 5), new T.MeshStandardMaterial({ map: kartWallTex('logs'), roughness: 0.9 }), list, (o) => { o.position.y = 1.7 * o.scale.y - 0.25; });
+    inst(new T.ConeGeometry(5, 2.8, 4), new T.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.8, flatShading: true }), list, (o) => { o.position.y = 4.8 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
   }
   if (P.includes('rocks') || P.includes('marsRocks')) {
     const mars = P.includes('marsRocks');
-    const list = scatter(mars ? 420 : 120, 5, 180, HW + 4).map((p) => ({ ...p, sc: rnd(0.5, mars ? 3.4 : 2.2) }));
-    inst(new T.DodecahedronGeometry(1.2, 0), new T.MeshStandardMaterial({ color: mars ? 0x7c3a20 : TH.ground === 'snow' ? 0x7d8794 : 0x7b7f86, roughness: 0.95, flatShading: true }), list, (o) => { o.position.y = 0.4 * o.scale.y; o.rotation.x = Math.random(); o.scale.y *= 0.65; });
+    const list = scatter(mars ? 460 : 150, 3, 200, 3).map((p) => ({ ...p, sc: rnd(0.5, mars ? 3.6 : 2.4) }));
+    inst(new T.DodecahedronGeometry(1.2, 0), new T.MeshStandardMaterial({ color: mars ? 0x7c3a20 : TH.ground === 'snow' ? 0x7d8794 : 0x7b7f86, roughness: 0.95, flatShading: true }), list, (o) => { o.position.y = 0.2 * o.scale.y; o.rotation.x = Math.random(); o.scale.y *= 0.65; });
   }
   if (P.includes('craters')) {
-    const list = scatter(40, 18, 200, HW + 14).map((p) => ({ ...p, sc: rnd(2, 6) }));
-    inst(new T.CircleGeometry(2.2, 24), new T.MeshStandardMaterial({ color: 0x6b2a14, roughness: 1 }), list, (o) => { o.position.y = -0.1; o.rotation.set(-Math.PI / 2, 0, 0); }, { cast: false });
-    inst(new T.TorusGeometry(2.3, 0.35, 6, 24), new T.MeshStandardMaterial({ color: 0x9a4220, roughness: 1, flatShading: true }), list, (o) => { o.position.y = 0.05; o.rotation.set(-Math.PI / 2, 0, 0); o.scale.z = 0.4; });
+    const list = scatter(40, 18, 220, 14).map((p) => ({ ...p, sc: rnd(2, 6) }));
+    inst(new T.CircleGeometry(2.2, 24), new T.MeshStandardMaterial({ color: 0x6b2a14, roughness: 1 }), list, (o) => { o.position.y = -0.2; o.rotation.set(-Math.PI / 2, 0, 0); }, { cast: false });
+    inst(new T.TorusGeometry(2.3, 0.35, 6, 24), new T.MeshStandardMaterial({ color: 0x9a4220, roughness: 1, flatShading: true }), list, (o) => { o.position.y = -0.2; o.rotation.set(-Math.PI / 2, 0, 0); o.scale.z = 0.4; });
   }
   if (P.includes('domes')) {
-    const list = scatter(12, 25, 110, HW + 20).map((p) => ({ ...p, sc: rnd(1, 1.8) }));
-    inst(new T.SphereGeometry(6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xf5f5f4, metalness: 0.3, roughness: 0.3 }), list);
+    const list = scatter(14, 26, 120, 20).map((p) => ({ ...p, sc: rnd(1, 1.9) }));
+    inst(new T.SphereGeometry(6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshPhysicalMaterial({ color: 0xf5f5f4, metalness: 0.3, roughness: 0.25, clearcoat: 1 }), list);
     inst(new T.TorusGeometry(6, 0.25, 6, 32), new T.MeshStandardMaterial({ color: 0x67e8f9, emissive: 0x22d3ee, emissiveIntensity: 1.2 }), list, (o) => { o.position.y = 1.2 * o.scale.y; o.rotation.set(-Math.PI / 2, 0, 0); });
-    inst(new T.CylinderGeometry(0.15, 0.15, 9, 6), new T.MeshStandardMaterial({ color: 0xd6d3d1, metalness: 0.7 }), list, (o) => { o.position.x += 7; o.position.y = 4.5; });
+  }
+  if (P.includes('antennas')) {
+    const list = scatter(18, 12, 90, 10);
+    inst(new T.CylinderGeometry(0.15, 0.2, 10, 6), new T.MeshStandardMaterial({ color: 0xd6d3d1, metalness: 0.7 }), list, (o) => { o.position.y = 4.8; });
+    inst(new T.SphereGeometry(1.6, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), new T.MeshStandardMaterial({ color: 0xf5f5f4, metalness: 0.4, side: T.DoubleSide }), list, (o) => { o.position.y = 9.6; o.rotation.set(-0.9, 0, 0); });
+  }
+  if (P.includes('rocket')) {
+    const [p] = scatter(1, 40, 80, 30);
+    if (p) {
+      const g = new T.Group(); g.position.set(p.x, -0.25, p.z); scene.add(g);
+      const white = new T.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.3, roughness: 0.3 }), red = new T.MeshStandardMaterial({ color: 0xdc2626 });
+      const body = new T.Mesh(new T.CylinderGeometry(2.4, 2.6, 26, 24), white); body.position.y = 15; body.castShadow = true; g.add(body);
+      const nose = new T.Mesh(new T.ConeGeometry(2.4, 7, 24), red); nose.position.y = 31.5; g.add(nose);
+      for (let i = 0; i < 4; i++) { const f = new T.Mesh(new T.BoxGeometry(0.3, 6, 4), red); f.position.set(Math.cos((i * Math.PI) / 2) * 3, 4, Math.sin((i * Math.PI) / 2) * 3); f.rotation.y = (-i * Math.PI) / 2; g.add(f); }
+      const tower = new T.Mesh(new T.BoxGeometry(2, 30, 2), new T.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.7 })); tower.position.set(5, 15, 0); g.add(tower);
+    }
   }
   if (P.includes('palms')) {
-    const list = scatter(170, 8, 120).map((p) => ({ ...p, sc: rnd(0.9, 1.4), lean: rnd(-0.25, 0.25) }));
-    inst(new T.CylinderGeometry(0.28, 0.45, 9, 8), new T.MeshStandardMaterial({ color: 0x8b6b45, roughness: 0.95 }), list, (o, p) => { o.position.y = 4.5 * o.scale.y; o.rotation.z = p.lean; });
+    const list = scatter(190, 6, 130).map((p) => ({ ...p, sc: rnd(0.9, 1.4), lean: rnd(-0.25, 0.25) }));
+    inst(new T.CylinderGeometry(0.28, 0.45, 9, 8), new T.MeshStandardMaterial({ color: 0x8b6b45, roughness: 0.95 }), list, (o, p) => { o.position.y = 4.5 * o.scale.y - 0.25; o.rotation.z = p.lean; });
     const leafMat = new T.MeshStandardMaterial({ color: 0x2f8f3a, roughness: 0.75, side: T.DoubleSide, flatShading: true });
     const leafG = new T.ConeGeometry(0.7, 5.2, 4); leafG.rotateZ(-Math.PI / 2); leafG.translate(2.5, 0, 0); leafG.scale(1, 0.25, 1);
     for (let a = 0; a < 7; a++) {
-      inst(leafG, leafMat, list, (o, p) => { o.position.x += Math.sin(p.lean) * -9 * o.scale.y * 0.5; o.position.y = 9 * o.scale.y; o.rotation.set(0, p.rot + (a / 7) * Math.PI * 2, -0.35); });
+      inst(leafG, leafMat, list, (o, p) => {
+        // Krone oben auf dem schiefen Stamm
+        const top = 9 * o.scale.y, lean = p.lean;
+        o.position.x += -Math.sin(lean) * top * Math.cos(p.rot); o.position.z += Math.sin(lean) * top * Math.sin(p.rot);
+        o.position.y = Math.cos(lean) * top - 0.25; o.rotation.set(0, p.rot + (a / 7) * Math.PI * 2, -0.35);
+      });
     }
   }
   if (P.includes('umbrellas')) {
-    const list = scatter(60, 6, 40, HW + 4);
-    inst(new T.CylinderGeometry(0.06, 0.06, 2.6, 6), new T.MeshStandardMaterial({ color: 0xf5f5f5 }), list, (o) => { o.position.y = 1.3; });
+    const list = scatter(70, 4, 40, 3);
+    inst(new T.CylinderGeometry(0.06, 0.06, 2.6, 6), new T.MeshStandardMaterial({ color: 0xf5f5f5 }), list, (o) => { o.position.y = 1.05; });
     const umTex = canvasTex(256, 32, (g, w, h) => { for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#ffffff' : ['#ef4444', '#0ea5e9', '#f59e0b'][i % 3]; g.fillRect((i * w) / 8, 0, w / 8, h); } });
-    inst(new T.ConeGeometry(1.6, 0.7, 16, 1, true), new T.MeshStandardMaterial({ map: umTex, side: T.DoubleSide }), list, (o) => { o.position.y = 2.75; });
+    inst(new T.ConeGeometry(1.6, 0.7, 16, 1, true), new T.MeshStandardMaterial({ map: umTex, side: T.DoubleSide }), list, (o) => { o.position.y = 2.5; });
+  }
+  if (P.includes('surf')) {
+    const list = scatter(40, 4, 30, 3);
+    inst(new T.CapsuleGeometry(0.35, 2.2, 4, 10), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), list, (o) => { o.position.y = 1.1; o.rotation.z = 0.25; o.scale.z = 0.25; }, { color: (p, i) => ['#f97316', '#22d3ee', '#facc15', '#ec4899'][i % 4] });
   }
   if (P.includes('huts')) {
-    const list = scatter(14, 16, 70, HW + 12).map((p) => ({ ...p, sc: rnd(0.9, 1.3) }));
-    inst(new T.BoxGeometry(5, 3, 4), new T.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.9 }), list, (o) => { o.position.y = 1.5 * o.scale.y; });
-    inst(new T.ConeGeometry(4.2, 2.4, 4), new T.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8, flatShading: true }), list, (o) => { o.position.y = 4.2 * o.scale.y; o.rotation.y += Math.PI / 4; });
+    const list = scatter(16, 16, 80, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.3) }));
+    inst(new T.BoxGeometry(5, 3, 4), new T.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.9 }), list, (o) => { o.position.y = 1.5 * o.scale.y - 0.25; });
+    inst(new T.ConeGeometry(4.2, 2.4, 4), new T.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8, flatShading: true }), list, (o) => { o.position.y = 4.2 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
   }
   if (P.includes('sea')) {
     const seaTex = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#1e88b8'; g.fillRect(0, 0, w, h); kartNoise(g, w, h, 2500, ['rgba(255,255,255,.18)', 'rgba(20,90,140,.35)', 'rgba(120,220,240,.25)'], [1, 5]); }, { repeat: [60, 60] });
-    const sea = new T.Mesh(new T.PlaneGeometry(4000, 1600), new T.MeshStandardMaterial({ map: seaTex, roughness: 0.15, metalness: 0.3, transparent: true, opacity: 0.95 }));
-    sea.rotation.x = -Math.PI / 2; sea.position.set(tr.box.cx, 0.08, tr.box.maxZ + 70 + 800); scene.add(sea);
+    const sea = new T.Mesh(new T.PlaneGeometry(5000, 1800), new T.MeshStandardMaterial({ map: seaTex, roughness: 0.15, metalness: 0.3 }));
+    sea.rotation.x = -Math.PI / 2; sea.position.set(tr.box.cx, -0.1, tr.box.maxZ + 90 + 900); scene.add(sea);
     st.onFrame((dt) => { seaTex.offset.x += dt * 0.01; seaTex.offset.y += dt * 0.006; });
   }
+  if (P.includes('lighthouse')) {
+    const g = new T.Group(); g.position.set(tr.box.cx + 120, -0.25, tr.box.maxZ + 70); scene.add(g);
+    const lt = canvasTex(32, 128, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#ffffff' : '#dc2626'; c.fillRect(0, (i * h) / 8, w, h / 8); } });
+    const tw = new T.Mesh(new T.CylinderGeometry(2.2, 3.4, 26, 20), new T.MeshStandardMaterial({ map: lt })); tw.position.y = 13; tw.castShadow = true; g.add(tw);
+    const lamp = new T.Mesh(new T.CylinderGeometry(2.4, 2.4, 3, 16), new T.MeshStandardMaterial({ color: 0xfef9c3, emissive: 0xfde047, emissiveIntensity: 1 })); lamp.position.y = 27.5; g.add(lamp);
+    const roof = new T.Mesh(new T.ConeGeometry(3, 3, 16), new T.MeshStandardMaterial({ color: 0x1f2937 })); roof.position.y = 30.5; g.add(roof);
+  }
   if (P.includes('snowmen')) {
-    const list = scatter(30, 5, 35, HW + 4);
+    const list = scatter(36, 4, 36, 3);
     const snowMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
-    for (const [r, y] of [[1.1, 1.0], [0.8, 2.6], [0.55, 3.75]]) inst(new T.SphereGeometry(r, 16, 12), snowMat, list, (o) => { o.position.y = y; });
-    inst(new T.ConeGeometry(0.12, 0.6, 8), new T.MeshStandardMaterial({ color: 0xf97316 }), list, (o, p) => { o.rotation.set(Math.PI / 2, 0, p.rot, 'YXZ'); o.rotation.set(Math.PI / 2, p.rot, 0, 'YXZ'); o.position.y = 3.75; o.position.x += Math.sin(p.rot) * 0.6; o.position.z += Math.cos(p.rot) * 0.6; });
-    inst(new T.CylinderGeometry(0.4, 0.45, 0.6, 12), new T.MeshStandardMaterial({ color: 0x111827 }), list, (o) => { o.position.y = 4.4; });
+    for (const [r, y] of [[1.1, 0.8], [0.8, 2.4], [0.55, 3.55]]) inst(new T.SphereGeometry(r, 16, 12), snowMat, list, (o) => { o.position.y = y; });
+    inst(new T.ConeGeometry(0.12, 0.6, 8), new T.MeshStandardMaterial({ color: 0xf97316 }), list, (o, p) => { o.rotation.set(Math.PI / 2, p.rot, 0, 'YXZ'); o.position.y = 3.55; o.position.x += Math.sin(p.rot) * 0.6; o.position.z += Math.cos(p.rot) * 0.6; });
+    inst(new T.CylinderGeometry(0.4, 0.45, 0.6, 12), new T.MeshStandardMaterial({ color: 0x111827 }), list, (o) => { o.position.y = 4.2; });
+  }
+  if (P.includes('igloos')) {
+    const list = scatter(14, 14, 70, 12).map((p) => ({ ...p, sc: rnd(0.9, 1.4) }));
+    const iTex = canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#f8fbff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#c7d7ea'; g.lineWidth = 2; for (let y = 0; y < h; y += 12) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 12) % 2 ? 0 : 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 12); g.stroke(); } } });
+    inst(new T.SphereGeometry(4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ map: iTex, roughness: 0.8 }), list);
+  }
+  if (P.includes('crystals')) {
+    const list = scatter(120, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.5, 1.6) }));
+    inst(new T.OctahedronGeometry(1, 0), new T.MeshStandardMaterial({ color: 0xbae6fd, emissive: 0x38bdf8, emissiveIntensity: 0.4, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }), list, (o) => { o.position.y = 1 * o.scale.y; o.scale.y *= 2.2; });
   }
   if (P.includes('stands')) {
     const seatTex = canvasTex(256, 256, (g, w, h) => { for (let r = 0; r < 16; r++) { g.fillStyle = r % 2 ? '#334155' : '#475569'; g.fillRect(0, (r * h) / 16, w, h / 16); for (let i = 0; i < 40; i++) { g.fillStyle = ['#ef4444', '#3b82f6', '#facc15', '#22c55e', '#ffffff', '#f97316'][(Math.random() * 6) | 0]; g.fillRect(Math.random() * w, (r * h) / 16 + 3, 4, 7); } } });
-    for (const sStand of [L - 58, 42]) {
+    for (const sStand of [L - 60, 46]) {
       kartAt(tr, sStand, q);
       for (const side of [-1, 1]) {
-        if (kartDistToTrack(tr, q.x + q.rx * side * (HW + 15), q.z + q.rz * side * (HW + 15)) < HW + 8) continue;
-        if (kartDistToTrack(tr, q.x + q.rx * side * (HW + 15) + q.fx * 31, q.z + q.rz * side * (HW + 15) + q.fz * 31) < HW + 8) continue;
-        if (kartDistToTrack(tr, q.x + q.rx * side * (HW + 15) - q.fx * 31, q.z + q.rz * side * (HW + 15) - q.fz * 31) < HW + 8) continue;
-        const g = new T.Group(); g.position.set(q.x + q.rx * side * (HW + 9), 0, q.z + q.rz * side * (HW + 9)); g.rotation.y = yawAt(q) + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
-        const s = new T.Mesh(new T.BoxGeometry(60, 9, 9), [new T.MeshStandardMaterial({ color: 0x64748b }), new T.MeshStandardMaterial({ color: 0x64748b }), new T.MeshStandardMaterial({ color: 0x94a3b8 }), new T.MeshStandardMaterial({ color: 0x64748b }), new T.MeshStandardMaterial({ map: seatTex }), new T.MeshStandardMaterial({ color: 0x64748b })]);
-        s.position.y = 4.5; s.rotation.x = 0; s.castShadow = true; s.receiveShadow = true; g.add(s);
-        const roof = new T.Mesh(new T.BoxGeometry(62, 0.5, 11), new T.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.4 })); roof.position.set(0, 12, 0); roof.castShadow = true; g.add(roof);
+        const cx = q.x + q.rx * side * (WL + 14), cz = q.z + q.rz * side * (WL + 14);
+        if ([0, 31, -31].some((d) => kartNear(tr, cx + q.fx * d, cz + q.fz * d).d < WL + 9)) continue;
+        const g = new T.Group(); g.position.set(cx, q.y - 0.25, cz); g.rotation.y = yawAt(q) + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
+        // Stufen mit Zuschauern
+        for (let r = 0; r < 5; r++) {
+          const s = new T.Mesh(new T.BoxGeometry(60, 1.8, 2.2), [0, 0, 1, 0, 1, 0].map((x) => (x ? new T.MeshStandardMaterial({ map: seatTex }) : new T.MeshStandardMaterial({ color: 0x64748b }))));
+          s.position.set(0, 0.9 + r * 1.8, -r * 2.2); s.castShadow = true; s.receiveShadow = true; g.add(s);
+        }
+        const roof = new T.Mesh(new T.BoxGeometry(62, 0.5, 13), new T.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.4 })); roof.position.set(0, 13, -4.5); roof.castShadow = true; g.add(roof);
+        for (const x of [-30, 0, 30]) { const p = new T.Mesh(new T.BoxGeometry(0.6, 13, 0.6), new T.MeshStandardMaterial({ color: 0x94a3b8 })); p.position.set(x, 6.5, -10); g.add(p); }
         scene.add(g);
       }
     }
   }
   if (P.includes('tires')) {
     const list = [];
-    for (let s = 0; s < L; s += 14) {
-      kartAt(tr, s, q); kartAt(tr, s + 8, q2);
-      const turn = q.fx * q2.fz - q.fz * q2.fx; // Kurve: Reifenstapel aussen
-      if (Math.abs(turn) < 0.01) continue;
-      const side = turn > 0 ? -1 : 1;
-      for (let h = 0; h < 3; h++) list.push({ x: q.x + q.rx * side * (HW + 3.2), z: q.z + q.rz * side * (HW + 3.2), rot: 0, sc: 1, h });
+    for (let s = 0; s < L; s += 12) {
+      kartAt(tr, s, q);
+      if (Math.abs(q.k) < 0.012 || q.ty !== 0 || q.y > 1.2) continue;
+      const side = q.k > 0 ? -1 : 1; // aussen
+      for (let h = 0; h < 3; h++) { const x = q.x + q.rx * side * (WL + 2.2), z = q.z + q.rz * side * (WL + 2.2); list.push({ x, z, y: -0.25, rot: 0, sc: 1, h }); }
     }
-    inst(new T.TorusGeometry(0.55, 0.28, 8, 16), new T.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 }), list, (o, p) => { o.position.y = 0.3 + p.h * 0.52; o.rotation.set(Math.PI / 2, 0, 0); });
+    inst(new T.TorusGeometry(0.55, 0.28, 8, 16), new T.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.9 }), list, (o, p) => { o.position.y = p.y + 0.3 + p.h * 0.52; o.rotation.set(Math.PI / 2, 0, 0); });
   }
   if (P.includes('billboards')) {
     const ads = [['TEILMAL', '#FF6B4A'], ['1×1 TURBO', '#0F766E'], ['MAL & GETEILT', '#2563EB'], ['RECHNEN MACHT SCHNELL', '#7C3AED']];
-    for (let i = 0; i < 8; i++) {
-      kartAt(tr, (i + 0.5) * (L / 8), q);
+    for (let i = 0; i < 12; i++) {
+      kartAt(tr, (i + 0.5) * (L / 12), q);
+      if (q.ty !== 0 || q.y > 1.5) continue;
       const side = i % 2 ? 1 : -1;
       const [txt, col] = ads[i % ads.length];
-      const b = new T.Mesh(new T.BoxGeometry(12, 3, 0.3), [0, 0, 0, 0, 1, 1].map((x) => (x ? new T.MeshStandardMaterial({ map: kartSignTex(txt, col) }) : new T.MeshStandardMaterial({ color: 0x334155 }))));
-      b.position.set(q.x + q.rx * side * (HW + 6), 3.2, q.z + q.rz * side * (HW + 6)); b.rotation.y = yawAt(q) + Math.PI + side * 0.6;
+      const b = new T.Mesh(new T.BoxGeometry(14, 3.4, 0.3), [0, 0, 0, 0, 1, 1].map((x) => (x ? new T.MeshStandardMaterial({ map: kartSignTex(txt, col) }) : new T.MeshStandardMaterial({ color: 0x334155 }))));
+      b.position.copy(pt(q, side * (WL + 6), 4)); b.rotation.y = yawAt(q) + Math.PI + side * 0.6;
       b.castShadow = true; scene.add(b);
-      for (const dx of [-4.5, 4.5]) { const p = new T.Mesh(new T.CylinderGeometry(0.15, 0.15, 2, 6), new T.MeshStandardMaterial({ color: 0x94a3b8 })); p.position.set(dx, -2.4, 0); b.add(p); }
+      for (const dx of [-5, 5]) { const p = new T.Mesh(new T.CylinderGeometry(0.15, 0.15, 3, 6), new T.MeshStandardMaterial({ color: 0x94a3b8 })); p.position.set(dx, -3, 0); b.add(p); }
+    }
+  }
+  if (P.includes('balloons')) {
+    for (let i = 0; i < 6; i++) {
+      const a = rnd(0, Math.PI * 2), d = rnd(250, 520);
+      const g = new T.Group(); g.position.set(tr.box.cx + Math.cos(a) * d, rnd(60, 130), tr.box.cz + Math.sin(a) * d); scene.add(g);
+      const bt = canvasTex(64, 128, (c, w, h) => { const cs = [['#ef4444', '#facc15'], ['#3b82f6', '#ffffff'], ['#22c55e', '#f97316']][i % 3]; for (let k2 = 0; k2 < 8; k2++) { c.fillStyle = cs[k2 % 2]; c.fillRect((k2 * w) / 8, 0, w / 8, h); } });
+      const ball = new T.Mesh(new T.SphereGeometry(9, 20, 16), new T.MeshStandardMaterial({ map: bt })); ball.scale.y = 1.2; g.add(ball);
+      const basket = new T.Mesh(new T.BoxGeometry(2.5, 2, 2.5), new T.MeshStandardMaterial({ color: 0x8b5a2b })); basket.position.y = -14; g.add(basket);
+      st.onFrame((dt, t) => { g.position.y += Math.sin(t * 0.3 + i) * dt * 0.8; });
     }
   }
   if (P.includes('towers')) {
@@ -553,15 +946,93 @@ async function startKart3D() {
       for (let y = 6; y < h; y += 14) for (let x = 6; x < w; x += 14) { if (Math.random() < 0.55) { g.fillStyle = ['#fde68a', '#a5f3fc', '#f0abfc', '#ffffff'][(Math.random() * 4) | 0]; g.globalAlpha = 0.5 + Math.random() * 0.5; g.fillRect(x, y, 7, 8); } }
       g.globalAlpha = 1;
     }, { repeat: [2, 3] });
-    const list = scatter(260, 14, 260, HW + 14).map((p) => ({ ...p, sc: 1, hgt: rnd(18, 110), wd: rnd(8, 18) }));
-    inst(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial({ map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.9, roughness: 0.6 }), list, (o, p) => { o.scale.set(p.wd, p.hgt, p.wd); o.position.y = p.hgt / 2; });
+    const list = scatter(300, 14, 280, 16).map((p) => ({ ...p, sc: 1, hgt: rnd(18, 130), wd: rnd(8, 18) }));
+    inst(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial({ map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.9, roughness: 0.6 }), list, (o, p) => { o.scale.set(p.wd, p.hgt, p.wd); o.position.y = p.hgt / 2 - 0.25; });
+    // Leuchtkanten oben auf den Häusern
+    inst(new T.BoxGeometry(1, 0.6, 1), new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.4 }), list, (o, p) => { o.scale.set(p.wd + 0.4, 0.6, p.wd + 0.4); o.position.y = p.hgt; }, { cast: false, color: (p, i) => ['#22d3ee', '#f0abfc', '#a78bfa', '#facc15'][i % 4] });
   }
   if (P.includes('lamps')) {
     const list = [];
-    for (let s = 0; s < L; s += 28) for (const side of [-1, 1]) { kartAt(tr, s + (side > 0 ? 14 : 0), q); list.push({ x: q.x + q.rx * side * (HW + 2.6), z: q.z + q.rz * side * (HW + 2.6), rot: 0, sc: 1 }); }
-    inst(new T.CylinderGeometry(0.12, 0.16, 7, 6), new T.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 }), list, (o) => { o.position.y = 3.5; });
+    for (let s = 0; s < L; s += 30) for (const side of [-1, 1]) { kartAt(tr, s + (side > 0 ? 15 : 0), q); if (q.ty === 2) continue; const p = pt(q, side * (WL + 0.25), q.ty === 1 ? 1.2 : wallH); list.push({ x: p.x, z: p.z, y: p.y, rot: 0, sc: 1 }); }
+    inst(new T.CylinderGeometry(0.12, 0.16, 7, 6), new T.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 }), list, (o, p) => { o.position.y = p.y + 3.5; });
     const gm = new T.SpriteMaterial({ map: glowTex('rgba(240,171,252,1)', 'rgba(124,58,237,0)'), transparent: true, depthWrite: false, blending: T.AdditiveBlending });
-    list.forEach((p, i) => { const s = new T.Sprite(gm); s.position.set(p.x, 7.2, p.z); s.scale.set(3, 3, 1); if (i % 2 === 0) s.material = gm; scene.add(s); });
+    list.forEach((p) => { const s = new T.Sprite(gm); s.position.set(p.x, p.y + 7.2, p.z); s.scale.set(3, 3, 1); scene.add(s); });
+  }
+  if (P.includes('beams')) {
+    const bm = new T.MeshBasicMaterial({ color: 0xa5b4fc, transparent: true, opacity: 0.12, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide });
+    for (let i = 0; i < 8; i++) {
+      const a = rnd(0, Math.PI * 2), d = rnd(150, 400);
+      const b = new T.Mesh(new T.ConeGeometry(14, 600, 16, 1, true), bm); b.position.set(tr.box.cx + Math.cos(a) * d, 300, tr.box.cz + Math.sin(a) * d); b.rotation.set(rnd(-0.3, 0.3), 0, rnd(-0.3, 0.3)); scene.add(b);
+      st.onFrame((dt, t) => { b.rotation.z = Math.sin(t * 0.25 + i) * 0.35; });
+    }
+  }
+  if (P.includes('neonArches')) {
+    for (let i = 0; i < 9; i++) {
+      const s = (i + 0.3) * (L / 9);
+      kartAt(tr, s, q);
+      if (q.ty === 2 || nearStation(s)) continue;
+      const a = new T.Mesh(new T.TorusGeometry(WL + 1, 0.35, 8, 40, Math.PI), new T.MeshStandardMaterial({ color: 0xffffff, emissive: [0x22d3ee, 0xf0abfc, 0xa78bfa][i % 3], emissiveIntensity: 2 }));
+      a.position.set(q.x, q.y, q.z); a.rotation.y = yawAt(q); scene.add(a);
+    }
+  }
+  if (P.includes('lollipops')) {
+    const list = scatter(60, 5, 110, 4).map((p) => ({ ...p, sc: rnd(0.8, 2) }));
+    inst(new T.CylinderGeometry(0.18, 0.18, 7, 8), new T.MeshStandardMaterial({ color: 0xffffff }), list, (o) => { o.position.y = 3.5 * o.scale.y - 0.25; });
+    const lt = canvasTex(128, 128, (g) => { for (let r = 64; r > 0; r -= 8) { g.fillStyle = (r / 8) % 2 ? '#f472b6' : '#ffffff'; g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fill(); } });
+    inst(new T.CylinderGeometry(2.2, 2.2, 0.6, 28), new T.MeshStandardMaterial({ map: lt, roughness: 0.3 }), list, (o) => { o.position.y = 7.6 * o.scale.y; o.rotation.x = Math.PI / 2; }, { color: (p, i) => ['#ffffff', '#fde68a', '#bae6fd', '#ddd6fe'][i % 4] });
+  }
+  if (P.includes('canes')) {
+    const list = scatter(70, 3, 50, 3).map((p) => ({ ...p, sc: rnd(0.8, 1.5) }));
+    const ct = canvasTex(32, 128, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#ef4444'; for (let y = -w; y < h; y += 20) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y + w); g.lineTo(w, y + w + 8); g.lineTo(0, y + 8); g.fill(); } }, { repeat: [1, 3] });
+    const cm2 = new T.MeshStandardMaterial({ map: ct, roughness: 0.3 });
+    inst(new T.CylinderGeometry(0.35, 0.35, 6, 12), cm2, list, (o) => { o.position.y = 3 * o.scale.y - 0.25; });
+    inst(new T.TorusGeometry(0.9, 0.35, 10, 20, Math.PI), cm2, list, (o) => { o.position.y = 6 * o.scale.y - 0.25; o.position.x += 0.9 * o.scale.x * Math.cos(o.rotation.y); o.position.z -= 0.9 * o.scale.x * Math.sin(o.rotation.y); });
+  }
+  if (P.includes('cupcakes')) {
+    const list = scatter(26, 18, 120, 14).map((p) => ({ ...p, sc: rnd(2, 4) }));
+    inst(new T.CylinderGeometry(2.2, 1.7, 2.4, 20), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = 1.2 * o.scale.y - 0.25; }, { color: (p, i) => ['#f472b6', '#60a5fa', '#a78bfa', '#facc15'][i % 4] });
+    inst(new T.SphereGeometry(2.3, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), list, (o) => { o.position.y = 2.4 * o.scale.y - 0.25; }, { color: (p, i) => ['#fef3c7', '#fbcfe8', '#ffffff', '#7c2d12'][i % 4] });
+    inst(new T.SphereGeometry(0.5, 12, 8), new T.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 }), list, (o) => { o.position.y = 4.8 * o.scale.y - 0.25; });
+  }
+  if (P.includes('donuts')) {
+    const list = scatter(30, 10, 100, 10).map((p) => ({ ...p, sc: rnd(1.5, 3.5) }));
+    inst(new T.TorusGeometry(1.4, 0.7, 14, 28), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), list, (o) => { o.position.y = 2.1 * o.scale.y - 0.25; }, { color: (p, i) => ['#f9a8d4', '#fde68a', '#c4b5fd', '#92400e'][i % 4] });
+  }
+  if (P.includes('gumdrops')) {
+    const list = scatter(260, 2.5, 60, 2.5).map((p) => ({ ...p, sc: rnd(0.5, 1.2) }));
+    inst(new T.SphereGeometry(0.7, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 }), list, (o) => { o.position.y = -0.2; }, { color: (p, i) => ['#ef4444', '#22c55e', '#facc15', '#a855f7', '#f97316', '#38bdf8'][i % 6] });
+  }
+  // Kurvenschilder (Pfeile aussen auf der Bande)
+  {
+    const cl = [], cr = [];
+    for (let s = 20; s < L; s += 24) {
+      kartAt(tr, s, q);
+      if (Math.abs(q.k) < 0.016 || q.ty === 2 || nearStation(s)) continue;
+      const side = q.k > 0 ? -1 : 1;
+      const p = pt(q, side * (WL + 0.2), wallTop(q) + 0.75);
+      (q.k > 0 ? cr : cl).push({ x: p.x, z: p.z, y: p.y, rot: yawAt(q) + Math.PI, sc: 1 });
+    }
+    const chev = (list, dir) => inst(new T.BoxGeometry(3.2, 1.2, 0.1), [0, 0, 0, 0, 1, 1].map((x) => (x ? new T.MeshStandardMaterial({ map: kartChevronTex(dir), emissive: TH.night ? 0xffffff : 0x000000, emissiveMap: TH.night ? kartChevronTex(dir) : null, emissiveIntensity: TH.night ? 0.5 : 0 }) : new T.MeshStandardMaterial({ color: 0x111827 }))), list, (o, p) => { o.position.y = p.y; });
+    if (cr.length) chev(cr, 1);
+    if (cl.length) chev(cl, -1);
+  }
+  // Fähnchen- bzw. Laternen-Girlanden über der Strecke
+  if (TH.bunting) {
+    const flags = [], poles = [];
+    for (let s = 70; s < L - 40; s += 95) {
+      kartAt(tr, s, q);
+      if (q.ty !== 0 || nearStation(s)) continue;
+      const A = pt(q, -WL - 0.6, 9), Bp = pt(q, WL + 0.6, 9);
+      poles.push({ x: A.x, z: A.z, y: A.y - 9, rot: 0, sc: 1 }, { x: Bp.x, z: Bp.z, y: Bp.y - 9, rot: 0, sc: 1 });
+      const n = 18;
+      for (let i = 1; i < n; i++) {
+        const t = i / n, sag = Math.sin(t * Math.PI) * 2.2;
+        flags.push({ x: A.x + (Bp.x - A.x) * t, z: A.z + (Bp.z - A.z) * t, y: A.y + (Bp.y - A.y) * t - sag, rot: yawAt(q) + Math.PI / 2, sc: 1, ci: i });
+      }
+    }
+    inst(new T.CylinderGeometry(0.12, 0.14, 9.4, 6), new T.MeshStandardMaterial({ color: 0x8b5a2b }), poles, (o, p) => { o.position.y = p.y + 4.7; });
+    const fg = TH.lanterns ? new T.SphereGeometry(0.32, 10, 8) : new T.ConeGeometry(0.42, 0.9, 3);
+    inst(fg, new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, side: T.DoubleSide, emissive: TH.lanterns ? 0xffb347 : 0x000000, emissiveIntensity: TH.lanterns ? 0.6 : 0 }), flags, (o, p) => { o.position.y = p.y - 0.45; o.rotation.set(TH.lanterns ? 0 : Math.PI, p.rot, 0); }, { cast: false, color: (p) => TH.bunting[p.ci % TH.bunting.length] });
   }
   if (TH.snowfall) {
     const n = 1400, p = new Float32Array(n * 3);
@@ -569,31 +1040,28 @@ async function startKart3D() {
     const gs = new T.BufferGeometry(); gs.setAttribute('position', new T.BufferAttribute(p, 3));
     const flakes = new T.Points(gs, new T.PointsMaterial({ color: 0xffffff, size: 0.35, transparent: true, opacity: 0.9, depthWrite: false }));
     scene.add(flakes);
-    st.onFrame((dt) => {
+    st.onFrame((dt, t) => {
       const a = gs.attributes.position.array;
-      for (let i = 0; i < n; i++) { a[i * 3 + 1] -= dt * (3 + (i % 5)); a[i * 3] += Math.sin((st.time / 1000) + i) * dt * 0.6; if (a[i * 3 + 1] < 0) a[i * 3 + 1] += 40; }
+      for (let i = 0; i < n; i++) { a[i * 3 + 1] -= dt * (3 + (i % 5)); a[i * 3] += Math.sin(t + i) * dt * 0.6; if (a[i * 3 + 1] < 0) a[i * 3 + 1] += 40; }
       gs.attributes.position.needsUpdate = true;
-      flakes.position.set(camera.position.x, 0, camera.position.z);
+      flakes.position.set(camera.position.x, camera.position.y - 20, camera.position.z);
     });
   }
 
   /* Fahrerinnen und Fahrer */
   const racers = KART_RACERS.map((r, i) => {
-    const m = kartModel(T, r.color, r.helmet);
+    const m = kartModel(T, r.color, r.helmet, r.num);
     scene.add(m.g);
-    const row = Math.floor(i / 2), col = i % 2;
     return {
       i, name: r.name, color: r.color, bot: i > 0, m,
-      p: -6 - row * 7 - (col ? 3.5 : 0), lat: col ? LANE * 0.55 : -LANE * 0.55, latV: 0, v: 0,
-      fx: null, fxUntil: 0, zoneLane: null, wantLane: null, line: rnd(-HW + 2, HW - 2), phase: rnd(0, 6),
-      skill: i > 0 ? rnd(0.965, 1.03) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, finished: 0, lastLap: 0, seen: new Set(),
+      p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
+      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0,
     };
   });
   // Startaufstellung: Du startest von Platz 4
   const me = racers[0];
-  const grid = [[-6, -0.55], [-6, 0.55], [-13, -0.55], [-13, 0.55], [-20, -0.55], [-20, 0.55]];
-  const order = [1, 2, 3, 0, 4, 5];
-  order.forEach((ri, gi) => { racers[ri].p = grid[gi][0]; racers[ri].lat = grid[gi][1] * LANE; });
+  const grid = [[-7, -0.55], [-7, 0.55], [-15, -0.55], [-15, 0.55], [-23, -0.55], [-23, 0.55]];
+  [1, 2, 3, 0, 4, 5].forEach((ri, gi) => { racers[ri].p = grid[gi][0]; racers[ri].lat = grid[gi][1] * LANE; });
 
   /* Steuerung: Tasten und Tippen/Halten links oder rechts */
   const input = { left: false, right: false, ptr: new Map() };
@@ -612,11 +1080,10 @@ async function startKart3D() {
   document.addEventListener('keydown', kd); document.addEventListener('keyup', ku);
   const ptrSide = (e) => { const r = host.getBoundingClientRect(); return e.clientX - r.left < r.width / 2 ? -1 : 1; };
   const pd = (e) => { input.ptr.set(e.pointerId, ptrSide(e)); host.setPointerCapture?.(e.pointerId); e.preventDefault(); };
-  const pm = (e) => { if (input.ptr.has(e.pointerId)) input.ptr.set(e.pointerId, ptrSide(e)); };
+  const pmv = (e) => { if (input.ptr.has(e.pointerId)) input.ptr.set(e.pointerId, ptrSide(e)); };
   const pu = (e) => { input.ptr.delete(e.pointerId); };
-  host.addEventListener('pointerdown', pd); host.addEventListener('pointermove', pm);
+  host.addEventListener('pointerdown', pd); host.addEventListener('pointermove', pmv);
   host.addEventListener('pointerup', pu); host.addEventListener('pointercancel', pu); host.addEventListener('pointerleave', pu);
-  // Motorgeräusch (leise, nur mit Tönen)
   let engine = null;
   function startEngine() {
     if (!db.settings.sound) return;
@@ -636,13 +1103,10 @@ async function startKart3D() {
     try { engine.g.gain.cancelScheduledValues(audioCtx.currentTime); engine.g.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.08); const e = engine; setTimeout(() => { try { e.o.stop(); e.o2.stop(); } catch { /* */ } }, 400); } catch { /* */ }
     engine = null;
   }
-  game.cleanups.push(() => {
-    document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku);
-    stopEngine();
-  });
+  game.cleanups.push(() => { document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); stopEngine(); });
 
   /* Anzeige */
-  const elPlace = $('#kplace'), elLap = $('#klap'), elRank = $('#krank'), elTime = $('#ktime'), elAsk = $('#kask'), elTask = $('#ktask'), elAns = $('#kans'), elHint = $('#kaskhint'), elLines = $('#klines'), elCount = $('#kcount');
+  const elPlace = $('#kplace'), elLap = $('#klap'), elRank = $('#krank'), elTime = $('#ktime'), elAsk = $('#kask'), elTask = $('#ktask'), elAns = $('#kans'), elHint = $('#kaskhint'), elLines = $('#klines'), elCount = $('#kcount'), elLights = $('#klights');
   const map = $('#kmap'), mg = map.getContext('2d');
   const mapImg = document.createElement('canvas'); mapImg.width = map.width; mapImg.height = map.height;
   const mb = tr.box, msc = Math.min((map.width - 30) / (mb.maxX - mb.minX), (map.height - 30) / (mb.maxZ - mb.minZ));
@@ -650,71 +1114,77 @@ async function startKart3D() {
   {
     const g = mapImg.getContext('2d');
     g.lineJoin = 'round'; g.lineCap = 'round';
-    for (const [w, c] of [[11, 'rgba(0,0,0,.35)'], [7, 'rgba(255,255,255,.9)']]) {
-      g.strokeStyle = c; g.lineWidth = w; g.beginPath();
-      for (let s = 0; s <= L; s += 6) { kartAt(tr, s, q); s === 0 ? g.moveTo(mx(q.x), my(q.z)) : g.lineTo(mx(q.x), my(q.z)); }
-      g.closePath(); g.stroke();
+    // zuerst der untere Teil, dann Brücken obendrauf; Tunnel gestrichelt
+    for (const pass of [0, 1]) for (const [w, c] of [[12, 'rgba(0,0,0,.35)'], [7, 'rgba(255,255,255,.92)']]) {
+      g.strokeStyle = c; g.lineWidth = w;
+      let open = false;
+      for (let s = 0; s <= L; s += 5) {
+        kartAt(tr, s, q);
+        const on = pass === 0 ? q.ty !== 1 : q.ty === 1;
+        if (on) { if (!open) { g.beginPath(); g.moveTo(mx(q.x), my(q.z)); open = true; } else g.lineTo(mx(q.x), my(q.z)); } else if (open) { g.stroke(); open = false; }
+      }
+      if (open) g.stroke();
     }
+    g.strokeStyle = 'rgba(80,80,90,.7)'; g.lineWidth = 7; g.setLineDash([6, 5]);
+    let open = false;
+    for (let s = 0; s <= L; s += 5) { kartAt(tr, s, q); if (q.ty === 2) { if (!open) { g.beginPath(); g.moveTo(mx(q.x), my(q.z)); open = true; } else g.lineTo(mx(q.x), my(q.z)); } else if (open) { g.stroke(); open = false; } }
+    if (open) g.stroke();
+    g.setLineDash([]);
     kartAt(tr, 0, q); g.fillStyle = '#111'; g.fillRect(mx(q.x) - 5, my(q.z) - 5, 10, 10);
   }
-  const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
   function drawMap() {
     mg.clearRect(0, 0, map.width, map.height); mg.drawImage(mapImg, 0, 0);
     for (const r of [...racers].reverse()) {
       kartAt(tr, r.p, q);
-      mg.fillStyle = hex(r.color); mg.strokeStyle = '#fff'; mg.lineWidth = r.bot ? 2 : 3;
+      mg.fillStyle = kartHex(r.color); mg.strokeStyle = '#fff'; mg.lineWidth = r.bot ? 2 : 3;
       mg.beginPath(); mg.arc(mx(q.x + q.rx * r.lat), my(q.z + q.rz * r.lat), r.bot ? 6 : 9, 0, Math.PI * 2); mg.fill(); mg.stroke();
     }
   }
   const total = KART.LAPS * L;
   const placeOf = (r) => 1 + racers.filter((o) => o !== r && (o.finished ? (!r.finished || o.finished < r.finished) : !r.finished && o.p > r.p)).length;
   function hud() {
-    const pl = placeOf(me);
-    elPlace.textContent = `${pl}.`;
-    const lap = clamp(Math.floor(Math.max(0, me.p) / L) + 1, 1, KART.LAPS);
-    elLap.textContent = `Runde ${lap}/${KART.LAPS}`;
-    const ranking = [...racers].sort((a, b) => placeOf(a) - placeOf(b));
-    elRank.innerHTML = ranking.map((r) => `<li class="${r.bot ? '' : 'me'}"><i style="background:${hex(r.color)}"></i>${esc(r.name)}</li>`).join('');
+    elPlace.textContent = `${placeOf(me)}.`;
+    elLap.textContent = `Runde ${clamp(Math.floor(Math.max(0, me.p) / L) + 1, 1, KART.LAPS)}/${KART.LAPS}`;
+    elRank.innerHTML = [...racers].sort((a, b) => placeOf(a) - placeOf(b)).map((r) => `<li class="${r.bot ? '' : 'me'}"><i style="background:${kartHex(r.color)}"></i>${esc(r.name)}</li>`).join('');
   }
 
   /* Ablauf */
-  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, lastP: me.p, ok: 0, wrong: 0, wrongs: [], fovBoost: 0 };
+  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, ok: 0, wrong: 0, wrongs: [] };
   game.kart = S;
   S.dbg = { racers, stations, tr, me: () => me }; // für Tests
   const look = new T.Vector3();
-  S.camLat = me.lat; S.camBack = 7.4; S.camY = 3.4;
-  /** Kamera hinter dir, entlang der Strecke (in Kurven schaut sie mit) */
+  S.camLat = me.lat; S.camBack = 7.6; S.camY = 3.5;
+  /** Kamera hinter dir, entlang der Strecke (in Kurven und an Steigungen schaut sie mit) */
   function camTarget(out, outLook) {
     kartAt(tr, me.p - S.camBack, q);
-    out.set(q.x + q.rx * S.camLat * 0.8, S.camY, q.z + q.rz * S.camLat * 0.8);
+    const cl = S.camLat * 0.8;
+    out.set(q.x + q.rx * cl, kartH(q, cl) + S.camY, q.z + q.rz * cl);
     kartAt(tr, me.p + 12, q2);
-    outLook.set(q2.x + q2.rx * S.camLat * 0.5, 1.35, q2.z + q2.rz * S.camLat * 0.5);
+    const ll = S.camLat * 0.5;
+    outLook.set(q2.x + q2.rx * ll, kartH(q2, ll) + 1.4, q2.z + q2.rz * ll);
   }
   const cDes = new T.Vector3(), lDes = new T.Vector3();
-  // Kameraflug zum Start
   camTarget(cDes, lDes);
-  camera.position.set(cDes.x + 60, 70, cDes.z + 40); look.copy(lDes);
+  camera.position.set(cDes.x + 70, cDes.y + 80, cDes.z + 50); look.copy(lDes);
   camera.lookAt(look);
 
   function placeKart(r, dt) {
     kartAt(tr, r.p, q);
-    r.m.g.position.set(q.x + q.rx * r.lat, 0, q.z + q.rz * r.lat);
+    r.m.g.position.copy(pt(q, r.lat));
     const yaw = Math.atan2(q.fx, q.fz) - Math.atan2(r.latV, Math.max(6, r.v)) * 0.85;
-    r.m.g.rotation.y = yaw;
-    const spin = (r.v * dt) / 0.38;
-    for (const w of r.m.wheels) { w.spin.rotation.x += spin; if (w.front) w.steer.rotation.y = clamp(-r.latV * 0.05, -0.4, 0.4); }
-    r.m.body.rotation.z = clamp(r.latV * 0.012, -0.08, 0.08);
+    r.m.g.rotation.set(-Math.atan(q.sl), yaw, Math.atan(q.b), 'YXZ');
+    const spin = r.v * dt;
+    for (const w of r.m.wheels) { w.spin.rotation.x += spin / w.r; if (w.front) w.steer.rotation.y = clamp(-r.latV * 0.045, -0.4, 0.4); }
+    r.m.body.rotation.z = clamp(r.latV * 0.01, -0.07, 0.07);
     r.m.body.position.y = r.fx === 'slow' ? Math.abs(Math.sin(st.time / 70)) * 0.06 : 0;
-    const boost = r.fx === 'turbo';
-    const fs = boost ? 0.9 + Math.random() * 0.5 : 0.01;
+    const fs = r.fx === 'turbo' ? 0.9 + Math.random() * 0.5 : 0.01;
     r.m.flames.forEach((f) => f.scale.set(fs, fs, 1));
   }
   racers.forEach((r) => placeKart(r, 0));
   hud(); drawMap();
 
-  function laneOf(lat) { return lat < -LANE / 2 ? 0 : lat > LANE / 2 ? 2 : 1; }
+  const laneOf = (lat) => (lat < -LANE / 2 ? 0 : lat > LANE / 2 ? 2 : 1);
   const lapS = (p) => ((p % L) + L) % L;
-  /** In einer Gabelung: Spur festhalten (Inseln dazwischen) */
   function zoneAt(p) {
     const s = lapS(p);
     for (const stn of stations) for (const c of [stn.s0, stn.s1]) if (Math.abs(s - c) <= KART.ZONE + 0.5) return c;
@@ -723,7 +1193,7 @@ async function startKart3D() {
   function setFx(r, kind) { r.fx = kind; r.fxUntil = st.time + KART.FX_MS; }
   function smoke(r) {
     kartAt(tr, r.p - 1.4, q);
-    burst(st, new T.Vector3(q.x + q.rx * r.lat, 0.8, q.z + q.rz * r.lat), { n: 18, colors: [0x9ca3af, 0xd1d5db, 0x6b7280], speed: 1.6, life: 0.9, size: 0.9, gravity: 1.2 });
+    burst(st, pt(q, r.lat, 0.8), { n: 18, colors: [0x9ca3af, 0xd1d5db, 0x6b7280], speed: 1.6, life: 0.9, size: 0.9, gravity: 1.2 });
   }
   function shatterCube(c) {
     const pos = c.grp.getWorldPosition(new T.Vector3());
@@ -731,7 +1201,7 @@ async function startKart3D() {
     burst(st, pos, { n: 70, colors: [0x22d3ee, 0xa78bfa, 0xf472b6, 0xffffff], speed: 7, life: 0.8, size: 0.35, gravity: -6 });
     const shards = [];
     for (let i = 0; i < 14; i++) {
-      const s = new T.Mesh(new T.BoxGeometry(rnd(0.15, 0.45), rnd(0.15, 0.45), 0.06), cubeMat);
+      const s = new T.Mesh(new T.BoxGeometry(rnd(0.15, 0.5), rnd(0.15, 0.5), 0.06), cubeMat);
       s.position.copy(pos); s.userData.v = new T.Vector3(rnd(-6, 6), rnd(2, 8), rnd(-6, 6)); s.userData.r = new T.Vector3(rnd(-9, 9), rnd(-9, 9), rnd(-9, 9));
       scene.add(s); shards.push(s);
     }
@@ -753,17 +1223,16 @@ async function startKart3D() {
     elAns.innerHTML = vals.map((v, i) => `<span class="ka" data-i="${i}"><small>${['◀', '▲', '▶'][i]}</small>${v}</span>`).join('');
     elHint.textContent = 'Fahr durch das richtige Ergebnis';
     elAsk.hidden = false; elAsk.className = 'kart-ask'; void elAsk.offsetWidth; elAsk.classList.add('pop');
-    // Zahlen über den Toren, sobald sie nah sind
     stn.label.forEach((l) => st.removeLabel(l));
     stn.label = vals.map((v, i) => {
       const el = document.createElement('div'); el.className = 'kart-num'; el.textContent = v;
       const pos = new T.Vector3();
       return st.addLabel(el, () => {
         const d = lapS(stn.s1 - me.p);
-        if (!S.ask || S.ask.stn !== stn || d > 70) return null;
+        if (!S.ask || S.ask.stn !== stn || d > 80) return null;
         kartAt(tr, stn.s1, q2);
-        return pos.set(q2.x + q2.rx * (i - 1) * LANE, 4.6, q2.z + q2.rz * (i - 1) * LANE);
-      }, { base: 1, min: 0.55, max: 1.5, dist: 22 });
+        return pos.copy(pt(q2, (i - 1) * LANE, 5.7));
+      }, { base: 1, min: 0.55, max: 1.5, dist: 26 });
     });
   }
   function answer(stn, lane) {
@@ -779,7 +1248,7 @@ async function startKart3D() {
       elTask.innerHTML = esc(taskText(a.t, true));
       bigWord(host, 'TURBO!', 'good kart-word');
       kartAt(tr, me.p + 2, q);
-      burst(st, new T.Vector3(q.x + q.rx * me.lat, 1.5, q.z + q.rz * me.lat), { n: 60, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 6, life: 0.7, size: 0.3 });
+      burst(st, pt(q, me.lat, 1.5), { n: 60, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 6, life: 0.7, size: 0.3 });
     } else {
       S.wrong++; S.wrongs.push(a.t); setFx(me, 'slow'); sfx.bad(); smoke(me); st.shake(0.25);
       elAsk.classList.add('bad'); elHint.textContent = 'Schade – das war nicht richtig';
@@ -788,12 +1257,13 @@ async function startKart3D() {
     const keep = stn;
     gLater(() => { if (!S.ask) elAsk.hidden = true; keep.label.forEach((l) => st.removeLabel(l)); keep.label = []; }, 1700);
   }
-  function botStation(r, stn, isGate) {
-    if (!isGate) return;
-    // Computer-Fahrer: richtig mit ihrer Trefferquote, angepasst an den Abstand zu dir (bleibt spannend)
-    const d = r.p - me.p;
-    const acc = clamp(r.acc - (d > 25 ? 0.18 : 0) + (d < -25 ? 0.12 : 0), 0.35, 0.95);
-    r.nextOk = Math.random() < acc;
+  /** Ideallinie der Computer-Fahrer: in Kurven nach innen, je nach Können */
+  function botLine(r) {
+    let k = 0;
+    for (let d = 6; d <= 42; d += 6) { kartAt(tr, r.p + d, q2); k += q2.k; }
+    k /= 7;
+    const inside = clamp(k * 70, -1, 1);
+    return inside * (HW - 1.6) * r.line + Math.sin(st.time / 1700 + r.phase) * 2.2 * (1 - r.line);
   }
 
   /* Rennlogik pro Bild */
@@ -801,10 +1271,9 @@ async function startKart3D() {
   st.onFrame((dt) => {
     if (st.disposed) return;
     const now = st.time;
-    // Würfel drehen, wieder auftauchen
     for (const stn of stations) for (const c of stn.cubes) {
       c.m.rotation.y += dt * 1.4; c.m.rotation.x = Math.sin(now / 900 + c.phase) * 0.25;
-      c.grp.position.y = c.base + Math.sin(now / 500 + c.phase) * 0.18;
+      c.grp.position.y = c.base + Math.sin(now / 500 + c.phase) * 0.2;
       if (!c.grp.visible && now > c.hiddenUntil) { c.grp.visible = true; c.grp.scale.setScalar(0.01); st.tween(300, (u, e) => c.grp.scale.setScalar(Math.max(0.01, e))); }
     }
     if (S.phase === 'intro') {
@@ -817,36 +1286,41 @@ async function startKart3D() {
       return;
     }
     const racing = S.phase === 'race' || S.phase === 'done';
+    // Vor dem Start steht alles still: kein Lenken, kein Losfahren
     const steer = S.phase === 'race' ? steerOf() : 0;
     $('#kpl')?.classList.toggle('on', steer < 0); $('#kpr')?.classList.toggle('on', steer > 0);
     for (const r of racers) {
       if (r.fx && now > r.fxUntil) r.fx = null;
+      kartAt(tr, r.p, q);
       let target = 0;
       if (racing) {
         target = KART.BASE * r.skill * (r.fx === 'turbo' ? KART.TURBO : r.fx === 'slow' ? KART.SLOW : 1);
+        target *= clamp(1 - q.sl * 0.9, 0.86, 1.12); // bergauf etwas langsamer, bergab schneller
         if (r.bot) {
-          // Gummiband: wer weit vorne ist, wird etwas langsamer – wer hinten ist, etwas schneller
           const d = r.p - me.p;
-          target *= 1 - clamp(d / 70, -1, 1) * 0.09;
+          target *= 1 - clamp(d / 70, -1, 1) * 0.09; // Gummiband
           if (r.finished) target *= 0.6;
         }
         if (r === me && S.phase === 'done') target *= 0.55;
-        if (Math.abs(r.lat) > HW - 0.9) target *= 0.8; // auf dem Randstein
+        if (Math.abs(r.lat) > HW - 0.2) target *= 0.9; // auf dem Randstein
       }
       r.v += (target - r.v) * Math.min(1, dt * (target > r.v ? 1.3 : 2.4));
+      if (!racing) { r.v = 0; r.latV = 0; }
       // Lenken
-      let latGoal;
-      if (r.bot) {
+      if (r.bot && racing) {
         const s = lapS(r.p);
         let lane = null;
         for (const stn of stations) {
           for (const [c, gate] of [[stn.s0, false], [stn.s1, true]]) {
             const ahead = c - s;
-            if (ahead > -KART.ZONE && ahead < 55) {
-              if (r.wantFor !== `${stn.k}${gate}${Math.floor(r.p / L)}`) {
-                r.wantFor = `${stn.k}${gate}${Math.floor(r.p / L)}`;
-                botStation(r, stn, gate);
+            if (ahead > -KART.ZONE && ahead < 60) {
+              const key = `${stn.k}${gate}${Math.floor(r.p / L)}`;
+              if (r.wantFor !== key) {
+                r.wantFor = key;
                 if (gate) {
+                  const d = r.p - me.p;
+                  const acc = clamp(r.acc - (d > 25 ? 0.18 : 0) + (d < -25 ? 0.12 : 0), 0.35, 0.95);
+                  r.nextOk = Math.random() < acc;
                   const right = stn.correct >= 0 && S.ask?.stn === stn ? stn.correct : Math.floor(Math.random() * 3);
                   const wrongs = [0, 1, 2].filter((x) => x !== right);
                   r.wantLane = r.nextOk ? right : wrongs[Math.floor(Math.random() * 2)];
@@ -857,25 +1331,30 @@ async function startKart3D() {
             }
           }
         }
-        latGoal = lane != null ? (lane - 1) * LANE : clamp(r.line + Math.sin(now / 1700 + r.phase) * 2.2, -HW + 1.4, HW - 1.4);
-        const want = clamp((latGoal - r.lat) * 2.2, -8, 8);
+        const latGoal = lane != null ? (lane - 1) * LANE : clamp(botLine(r), -HW + 1.2, HW - 1.2);
+        const want = clamp((latGoal - r.lat) * 2.2, -10, 10);
         r.latV += (want - r.latV) * Math.min(1, dt * 5);
-      } else {
-        r.latV += (steer * 11 - r.latV) * Math.min(1, dt * 7);
+      } else if (!r.bot) {
+        r.latV += (steer * 13 - r.latV) * Math.min(1, dt * 7);
       }
       const prevP = r.p;
-      r.p += r.v * dt;
+      // Fahrkönnen: Innen um die Kurve ist der Weg kürzer → schneller vorwärts
+      const gain = 1 / clamp(1 - q.k * r.lat, 0.72, 1.35);
+      r.p += r.v * dt * gain;
       r.lat += r.latV * dt;
-      // Gabelung: Spur festhalten
       const z = zoneAt(r.p);
       if (z != null) {
         if (r.zone !== z) { r.zone = z; r.zoneLane = laneOf(r.lat); }
-        const lo = (r.zoneLane - 1) * LANE - LANE / 2 + 0.95, hi = (r.zoneLane - 1) * LANE + LANE / 2 - 0.95;
+        const lo = (r.zoneLane - 1) * LANE - LANE / 2 + 1.05, hi = (r.zoneLane - 1) * LANE + LANE / 2 - 1.05;
         if (r.lat < lo) { r.lat = lo; r.latV = Math.max(0, r.latV); }
         if (r.lat > hi) { r.lat = hi; r.latV = Math.min(0, r.latV); }
       } else r.zone = null;
-      r.lat = clamp(r.lat, -HW - 0.2, HW + 0.2);
-      // Stationen überquert?
+      // Banden: anstossen bremst
+      const lim = WL - 1.0;
+      if (Math.abs(r.lat) > lim) {
+        r.lat = Math.sign(r.lat) * lim; r.latV *= -0.25; r.v *= 1 - Math.min(0.5, dt * 1.8);
+        if (r === me && now - r.wallT > 250) { r.wallT = now; kartAt(tr, r.p + 1, q2); burst(st, pt(q2, Math.sign(r.lat) * WL, 0.6), { n: 14, colors: [0xffd166, 0xffffff], speed: 3, life: 0.35, size: 0.18, gravity: -6 }); tone([180, 140], 0.05, 'square', 0.03); }
+      }
       if (racing && !r.finished) {
         const a = lapS(prevP), b = lapS(r.p);
         const crossed = (c) => (prevP < r.p) && ((a <= c && b > c) || (a > b && (c >= a || c < b)));
@@ -884,7 +1363,7 @@ async function startKart3D() {
         for (const stn of stations) {
           if (crossed(stn.s0) && once(`${lapNo}:${stn.k}:c`)) {
             const lane = laneOf(r.lat);
-            if (r === me) { shatterCube(stn.cubes[lane]); if (prevP >= -1) showAsk(stn); }
+            if (r === me) { shatterCube(stn.cubes[lane]); showAsk(stn); }
             else if (Math.abs(r.p - me.p) < 120) { const c = stn.cubes[lane]; if (c.grp.visible) burst(st, c.grp.getWorldPosition(cPos), { n: 16, colors: [0xa78bfa, 0xffffff], speed: 3, life: 0.4, size: 0.25 }); }
           }
           if (crossed(stn.s1) && once(`${lapNo}:${stn.k}:g`)) {
@@ -902,24 +1381,24 @@ async function startKart3D() {
     }
     // Rempler: Karts fahren nicht ineinander. In einer Gabelung (feste Spur) hintereinander, sonst seitlich ausweichen.
     for (let i = 0; i < racers.length; i++) for (let j = i + 1; j < racers.length; j++) {
-      const A = racers[i], B = racers[j];
-      const ds = B.p - A.p, dl = B.lat - A.lat;
-      if (Math.abs(ds) >= 2.3 || Math.abs(dl) >= 1.7) continue;
-      if (A.zone != null || B.zone != null) {
-        const [front, back] = ds > 0 ? [B, A] : [A, B];
-        back.p = front.p - 2.3; back.v = Math.min(back.v, front.v * 0.97);
+      const A = racers[i], Bk = racers[j];
+      const ds = Bk.p - A.p, dl = Bk.lat - A.lat;
+      if (Math.abs(ds) >= 2.6 || Math.abs(dl) >= 2.0) continue;
+      if (A.zone != null || Bk.zone != null) {
+        const [front, back] = ds > 0 ? [Bk, A] : [A, Bk];
+        back.p = front.p - 2.6; back.v = Math.min(back.v, front.v * 0.97);
       } else {
-        const push = (1.7 - Math.abs(dl)) * 0.5 * (dl >= 0 ? 1 : -1);
-        B.lat += push; A.lat -= push; B.latV += push * 4; A.latV -= push * 4;
-        if (ds > 0) A.v *= 0.985; else B.v *= 0.985;
+        const push = (2.0 - Math.abs(dl)) * 0.5 * (dl >= 0 ? 1 : -1);
+        Bk.lat += push; A.lat -= push; Bk.latV += push * 4; A.latV -= push * 4;
+        if (ds > 0) A.v *= 0.985; else Bk.v *= 0.985;
       }
-      if ((A === me || B === me) && (!S.bumpT || now - S.bumpT > 400)) { S.bumpT = now; tone([110, 90], 0.06, 'square', 0.03); }
+      if ((A === me || Bk === me) && racing && (!S.bumpT || now - S.bumpT > 400)) { S.bumpT = now; tone([110, 90], 0.06, 'square', 0.03); }
     }
     racers.forEach((r) => placeKart(r, dt));
-    // Kamera: folgt dir genau (kein Nachhinken), weich nur seitlich, in der Höhe und beim Turbo
+    // Kamera: folgt dir genau, weich nur seitlich, in der Höhe und beim Turbo
     S.camLat += (me.lat - S.camLat) * (1 - Math.pow(0.03, dt));
-    S.camBack += ((me.fx === 'turbo' ? 8.4 : 7.4) - S.camBack) * (1 - Math.pow(0.05, dt));
-    S.camY += ((me.fx === 'turbo' ? 3.1 : 3.4) - S.camY) * (1 - Math.pow(0.05, dt));
+    S.camBack += ((me.fx === 'turbo' ? 8.6 : 7.6) - S.camBack) * (1 - Math.pow(0.05, dt));
+    S.camY += ((me.fx === 'turbo' ? 3.2 : 3.5) - S.camY) * (1 - Math.pow(0.05, dt));
     camTarget(cDes, lDes);
     camera.position.copy(cDes);
     look.lerp(lDes, 1 - Math.pow(0.00001, dt));
@@ -928,27 +1407,24 @@ async function startKart3D() {
     camera.fov += (fovGoal - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
     elLines.classList.toggle('on', me.fx === 'turbo');
     host.classList.toggle('slow', me.fx === 'slow');
-    // Schatten folgen dir
     kartAt(tr, me.p, q);
-    sun.target.position.set(q.x, 0, q.z); sun.position.set(q.x + sunDir.x * 60, sunDir.y * 60, q.z + sunDir.z * 60);
-    if (nightLight) nightLight.position.set(q.x + q.rx * me.lat + q.fx * 3, 9, q.z + q.rz * me.lat + q.fz * 3);
+    sun.target.position.set(q.x, q.y, q.z); sun.position.set(q.x + sunDir.x * 80, q.y + sunDir.y * 80, q.z + sunDir.z * 80);
+    if (nightLight) nightLight.position.set(q.x + q.rx * me.lat + q.fx * 3, q.y + 9, q.z + q.rz * me.lat + q.fz * 3);
     if (engine) { const f = 55 + me.v * 3.2 + (me.fx === 'turbo' ? 40 : 0); engine.o.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.05); engine.o2.frequency.setTargetAtTime(f * 0.5, audioCtx.currentTime, 0.05); }
-    // Anzeige (nicht jedes Bild)
     S.hudT = (S.hudT || 0) + dt;
     if (S.hudT > 0.2) { S.hudT = 0; hud(); drawMap(); }
     if (S.phase === 'race') elTime.textContent = `${fmtSec(now - S.raceT0)} s`;
-    if (S.ask) {
-      const ln = laneOf(me.lat);
-      $$('#kans .ka').forEach((el, i) => el.classList.toggle('here', i === ln));
-    }
+    if (S.ask) { const ln = laneOf(me.lat); $$('#kans .ka').forEach((el, i) => el.classList.toggle('here', i === ln)); }
   });
 
   function countdown() {
+    elLights.classList.add('on');
     const steps = ['3', '2', '1', 'LOS!'];
     steps.forEach((t, i) => gLater(() => {
       elCount.innerHTML = `<span class="${i === 3 ? 'go' : ''}">${t}</span>`;
+      [...elLights.children].forEach((l, j) => { l.className = i === 3 ? 'go' : j <= i ? 'red' : ''; });
       tone(i === 3 ? [880, 1320] : [440], i === 3 ? 0.18 : 0.12, 'square', 0.05);
-      if (i === 3) { S.phase = 'race'; S.raceT0 = st.time; startEngine(); gLater(() => { elCount.innerHTML = ''; }, 700); }
+      if (i === 3) { S.phase = 'race'; S.raceT0 = st.time; startEngine(); gLater(() => { elCount.innerHTML = ''; elLights.classList.remove('on'); }, 900); }
     }, i * 850));
   }
   function finish() {
