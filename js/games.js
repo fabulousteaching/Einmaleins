@@ -19,6 +19,8 @@ const GAMES = [
     howto: 'Auf der Zielscheibe stehen vier Zahlen. Lege den Finger irgendwo aufs Bild – die Armbrust wird gespannt. Dann ziele durch Ziehen und lass los – der Pfeil fliegt. Triff das Feld mit dem richtigen Ergebnis!' },
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
+  { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
+    howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige und du bekommst Turbo. Ein falsches Tor bremst dich kurz.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -34,7 +36,9 @@ function stopGame() {
   clearInterval(game.tick); game.tick = null;
   clearInterval(game.runTimer); game.runTimer = null;
   if (game.keyHandler) { document.removeEventListener('keydown', game.keyHandler); game.keyHandler = null; }
+  (game.cleanups || []).forEach((f) => { try { f(); } catch { /* */ } }); game.cleanups = [];
   if (game.stage3d) { game.stage3d.dispose(); game.stage3d = null; }
+  game.kart = null;
   game.pick = null; game.pickVal = null; game.over = true; game.run = null;
 }
 function openGame(id) { if (GAME_BY_ID[id]) go('game', { game: id }); }
@@ -85,7 +89,9 @@ const GAME_MODES = {
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
     desc: (id) => `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
-    desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' : '20 richtige Antworten – so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr.') },
+    desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.'
+      : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Richtig = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
+        : '20 richtige Antworten – so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr.') },
 };
 const modesOf = (id) => GAME_BY_ID[id]?.modes || [];
 function gameModeOf(id) {
@@ -240,7 +246,7 @@ function gameBestText(id) {
   if (!mode) return null;
   const v = db.prog.best[localBestKey(boardOf(id, mode))];
   if (v == null) return null;
-  return `${GAME_MODES[mode].name}: ${mode === 'speed' ? `${fmtSec(v)} s` : `${v} richtig`}`;
+  return `${id === 'kart' ? 'Bestzeit' : GAME_MODES[mode].name}: ${mode === 'speed' ? `${fmtSec(v)} s` : `${v} richtig`}`;
 }
 function showRunResult(r) {
   stopGame();
@@ -309,6 +315,10 @@ function boardListHTML(data, { kid: forKid = false } = {}) {
 function gateOptionsHTML(id) {
   const seg = (action, cur, list) => `<div class="seg">${list.map(([v, t]) => `<button class="seg-btn" data-action="${action}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
   if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
+  if (id === 'kart' && typeof KART_TRACKS === 'object') {
+    const cur = kartTrackId();
+    return `<p class="label kart-track-label">Strecke</p><div class="kart-tracks" role="radiogroup" aria-label="Strecke">${KART_TRACKS.map((t) => `<button type="button" class="kart-track t-${t.id}" data-action="kart-track" data-v="${t.id}" role="radio" aria-checked="${t.id === cur}"><span aria-hidden="true">${t.emo}</span><b>${esc(t.name)}</b></button>`).join('')}</div>`;
+  }
   return '';
 }
 function gateModesHTML(id) {
@@ -346,7 +356,8 @@ function renderGame() {
       ${opPickHTML('game-op', 'gate-ops')}
       <p class="gate-reihen-text muted small">${esc(gateReihenText())}</p>
       ${opts ? `<div class="gate-opts">${opts}</div>` : ''}
-      ${can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
+      ${g.id === 'kart' && !webglOK() ? '<div class="gate-need"><p><b>Dieses Spiel braucht 3D-Grafik.</b><br>Auf diesem Gerät geht das leider nicht. Probier ein anderes Spiel!</p></div>'
+    : can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
         <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${c.c} ${c.c === 1 ? 'Münze' : 'Münzen'}.`}</p>`
     : `<div class="gate-need">${COIN_SVG}<p><b>Dir fehlt noch eine Münze.</b><br>Münzen verdienst du beim Üben: für jede richtige Antwort gibt es Punkte. ${coinThreshold()} Punkte = 1 Münze.</p></div>
         <button class="btn primary big" data-action="open-ex" data-id="trainer">${icon('keypad')} Zum Trainer</button>`}
@@ -354,8 +365,9 @@ function renderGame() {
     </div>
   </section>`;
 }
-const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel() };
-const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D() };
+const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel(),
+  kart: () => { toast('Das Rennen konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); } };
+const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D(), kart: () => startKart3D() };
 async function startGameNow() {
   if (!payForGame()) { renderGame(); return; }
   const id = ui.game;

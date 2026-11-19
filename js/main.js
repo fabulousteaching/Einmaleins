@@ -80,6 +80,7 @@ const actions = {
   'tf-answer': (el) => tfAnswer(el.dataset.v === '1'),
   'duel-tap': (el) => duelTap(el),
   'duel-goal': (el) => { db.settings.duelGoal = +el.dataset.v; saveDB(); renderGame(); },
+  'kart-track': (el) => { db.settings.kartTrack = el.dataset.v; saveDB(); renderGame(); },
   /* Konto */
   'login-choose': () => openLoginChooser(),
   login: (el) => openLogin(el.dataset.mode || 'login'),
