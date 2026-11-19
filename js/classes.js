@@ -27,6 +27,13 @@ const kidWordImg = (username, cls = '') => {
 const kidPwImg = (i, cls = '') => `<img class="${cls}" src="${kidSvgURL(KID_PW[i].svg)}" alt="${esc(KID_PW[i].de)}" draggable="false">`;
 const picsList = (pics) => String(pics || '').split(',').map(Number).filter((n) => n >= 0 && n < 12);
 const kidLoginUrl = (st) => `${siteUrl()}#k=${st.username}.${picsList(st.pics).join('-')}`;
+const kidInitials = (k) => `${(k.first || k.first_name || '?').trim().charAt(0).toUpperCase()}.${(k.initial ?? k.last_initial) ? ` ${(k.initial ?? k.last_initial).charAt(0).toUpperCase()}.` : ''}`;
+// Passwort wie in Vokaboom: ein Wort und eine Zahl („Teich23“), gleiche Wörter wie dort
+const KID_PW_WORDS = ['teich', 'wiese', 'wald', 'bach', 'see', 'hafen', 'garten', 'turm', 'strand', 'stein', 'regen', 'schnee', 'nebel', 'wind', 'blatt', 'nest', 'feder', 'kerze', 'lampe', 'tisch', 'stuhl', 'fenster', 'dach', 'zelt', 'kiste', 'korb', 'glocke', 'ring', 'perle', 'mantel', 'schal', 'socke', 'kappe', 'brille', 'pinsel', 'farbe', 'papier', 'karte', 'nudel', 'suppe', 'honig', 'butter', 'zucker', 'kakao', 'tomate', 'gurke', 'karotte', 'mais', 'nuss', 'beere', 'traube', 'zitrone', 'orange', 'flocke', 'welle', 'sonnenhut', 'kugel', 'besen', 'leiter', 'koffer'];
+const rndInt = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n;
+const newKidPw = () => `${KID_PW_WORDS[rndInt(KID_PW_WORDS.length)]}${10 + rndInt(90)}`;
+/** Anzeige wie beim Benutzernamen: gross geschrieben („Teich23“); beim Eintippen spielt gross/klein keine Rolle */
+const showPw = (pw) => (pw ? pw.charAt(0).toUpperCase() + pw.slice(1) : '');
 function progHash(p) {
   const str = JSON.stringify(p);
   let h = 0x811c9dc5;
@@ -370,7 +377,9 @@ async function loadClasses() {
         c.from('einmaleins_classes').select(`id,name,settings,created_at${link ? ',vokaboom_class' : ''}`).order('created_at'),
         c.from('einmaleins_students').select(`id,class_id,first_name,last_initial,username,pics,created_at${link ? ',vokaboom_id' : ''}`).order('first_name'),
       ]);
+      const cfgDone = loadCardCfg(); // Kärtchen-Einstellungen (gleich wie in Vokaboom)
       let [cl, st] = await get(true);
+      await cfgDone;
       klass.noLink = false;
       if ([cl.error, st.error].some((e) => e && /vokaboom_(class|id)/.test(e.message || ''))) {
         // Datenbank noch ohne Verknüpfung zu Vokaboom (SQL-Skript nicht neu ausgeführt)
@@ -408,8 +417,8 @@ async function loadVokaboom() {
   try {
     const c = await cloudClient();
     const [a, b] = await Promise.all([
-      c.from('vokaboom_classes').select('id,name').order('created_at'),
-      c.from('vokaboom_students').select('id,class_id,first_name,last_initial,username,pics').order('first_name'),
+      c.from('vokaboom_classes').select('*').order('created_at'), // mit Klassenpasswort (class_pw)
+      c.from('vokaboom_students').select('*').order('first_name'), // mit Passwort (pw) fürs Kärtchen
     ]);
     if (a.error || b.error) return;
     const students = b.data || [];
@@ -603,7 +612,7 @@ function renderClass() {
     <div class="class-body">${body}</div>
   </section>`;
   if (klass.tab === 'kids') bindClassKids(c);
-  if (klass.tab === 'cards') renderCardPreviews(c, kids);
+  if (klass.tab === 'cards') { bindCardCfg(); renderCardPreviews(c, kids); }
   if (klass.tab === 'overview') bindOverview(c);
 }
 
@@ -621,9 +630,11 @@ function classKidsHTML(c, kids) {
     return `<li class="kid-row">
       <span class="kid-av-big" aria-hidden="true">${kidWordImg(s.username)}</span>
       <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}${s.vokaboom_id && klass.vb?.byId.get(s.vokaboom_id) ? ' <span class="vb-tag" title="Gleiches Kärtchen wie in Vokaboom">auch in Vokaboom</span>' : ''}</small></span>
-      <span class="kid-pw" aria-label="Bilder-Passwort">${picsList(s.pics).map((i) => `<span>${kidPwImg(i)}</span>`).join('')}</span>
+      ${kidSecretOf(s) === 'password' ? `<span class="kid-pw-text" aria-label="Passwort">${esc(showPw(vbOf(s)?.pw))}</span>`
+        : kidSecretOf(s) === 'class' ? '<span class="kid-pw-text muted" title="Klassenpasswort">Klassenpasswort</span>'
+          : `<span class="kid-pw" aria-label="Bilder-Passwort">${picsList(s.pics).map((i) => `<span>${kidPwImg(i)}</span>`).join('')}</span>`}
       <span class="kid-actions">
-        <button class="icon-btn subtle" data-action="kid-newpics" data-id="${s.id}" title="Neue Bilder (neues Passwort)" aria-label="Neue Bilder für ${esc(kidName(s))}">${icon('shuffle')}</button>
+        <button class="icon-btn subtle" data-action="kid-newpics" data-id="${s.id}" title="Neues Passwort (neue Bilder)" aria-label="Neues Passwort für ${esc(kidName(s))}">${icon('shuffle')}</button>
         <button class="icon-btn subtle" data-action="kid-delete" data-id="${s.id}" title="Löschen" aria-label="${esc(kidName(s))} löschen">${icon('trash')}</button>
       </span>
     </li>`;
@@ -767,18 +778,20 @@ async function kidNewPics(id) {
   while (pics === s.pics) pics = randomPics();
   try {
     const cl = await cloudClient();
+    const v = s.vokaboom_id ? klass.vb?.byId.get(s.vokaboom_id) : null;
+    const pw = newKidPw();
     if (s.vokaboom_id) {
-      const r = await cl.from('vokaboom_students').update({ pics }).eq('id', s.vokaboom_id);
+      // wie in Vokaboom: neue Bilder und neues Passwort, das alte Kärtchen gilt nicht mehr
+      const r = await cl.from('vokaboom_students').update(v?.pw ? { pics, pw, ...('pw_prev' in v ? { pw_prev: null } : {}) } : { pics }).eq('id', s.vokaboom_id);
       if (r.error) throw r.error;
-      const v = klass.vb?.byId.get(s.vokaboom_id);
-      if (v) v.pics = pics;
+      if (v) { v.pics = pics; if (v.pw) v.pw = pw; if ('pw_prev' in v) v.pw_prev = null; }
     }
     const { error } = await cl.from('einmaleins_students').update({ pics }).eq('id', id);
     if (error) throw error;
     s.pics = pics;
     render();
     toast(s.vokaboom_id
-      ? `${kidName(s)} hat neue Bilder – in Teilmal und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
+      ? `${kidName(s)} hat ${v?.pw ? 'ein neues Passwort und neue Bilder' : 'neue Bilder'} – in Teilmal und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
       : `${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
@@ -886,12 +899,129 @@ function classCardsHTML(c, kids) {
   return `<div class="panel">
     <div class="cards-head">
       <div><h2>Login-Kärtchen</h2>
-        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen.</p>
-        <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Teilmal – ein Kärtchen für beide Tools. Ihre alten Vokaboom-Kärtchen gelten weiterhin.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Teilmal.'}</p></div>
+        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen – oder mit Passwort, wenn du das unten so eingestellt hast.</p>
+        <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Teilmal – ein Kärtchen für beide Tools.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Teilmal.'}</p></div>
       <button class="btn primary" data-action="cards-pdf" id="cards-pdf">${icon('down')} PDF herunterladen</button>
     </div>
+    ${cardCfgHTML(c, kids)}
     <div class="card-previews">${kids.map((s) => `<figure class="card-prev" data-sid="${s.id}"><span class="spinner"></span></figure>`).join('')}</div>
   </div>`;
+}
+/** „Kärtchen anpassen“: dieselben Einstellungen wie in Vokaboom (Menü → Login-Kärtchen), sie gelten in beiden Tools */
+function cardCfgHTML(c, kids) {
+  const cc = cardCfg();
+  const vc = c.vokaboom_class ? vbClassById(c.vokaboom_class) : null;
+  const noPwKids = cc.secret !== 'pics' ? kids.filter((x) => kidSecretOf(x) === 'pics').length : 0;
+  return `<details class="card-cfg" id="card-cfg" ${klass.cardCfgOpen ? 'open' : ''}>
+    <summary>${icon('sliders')} Kärtchen anpassen <small class="muted">gilt auch in Vokaboom</small></summary>
+    <div class="card-cfg-body">
+      <p class="small muted">Gilt für die Kärtchen, die du ab jetzt druckst – in Teilmal und in Vokaboom gleich. Das Passwort bleibt gleich – nur die Darstellung ändert sich.</p>
+      ${CARD_SYNC.missing ? '<p class="banner bad small">Damit diese Einstellung auch in Vokaboom gilt, <code>supabase/avatar.sql</code> in Supabase nochmals ganz ausführen. Bis dahin gilt sie nur in diesem Browser.</p>' : ''}
+      <div class="field"><span class="label">Passwort auf dem Kärtchen</span>
+        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="pics" ${cc.secret === 'pics' ? 'checked' : ''}><span><b>Bilder</b> – die Kinder tippen 3 Bilder an (ideal für Unterstufe)</span></label>
+        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="password" ${cc.secret === 'password' ? 'checked' : ''}><span><b>Passwort pro Kind</b> – jedes Kind hat ein eigenes einfaches Passwort aus einem Wort und einer Zahl, z. B. „Teich23“</span></label>
+        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="class" ${cc.secret === 'class' ? 'checked' : ''}><span><b>Klassenpasswort</b> – ein Passwort für die ganze Klasse (einfach zu merken; dafür könnten sich Kinder gegenseitig anmelden)</span></label>
+      </div>
+      ${cc.secret === 'class' ? (vc ? `<label class="field class-pw-row" for="class-pw"><span class="label">Klassenpasswort für „${esc(c.name)}“</span>
+          <input type="text" id="class-pw" data-class-pw="${vc.id}" value="${esc(vc.class_pw || '')}" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. Sommer2026">
+          <small class="muted">Gilt auch in der Vokaboom-Klasse „${esc(vc.name)}“. Ohne Klassenpasswort bekommen die Kinder Kärtchen mit Bildern.</small></label>` : '') : ''}
+      ${noPwKids ? `<p class="small muted">${noPwKids === kids.length ? 'Die Kinder dieser Klasse bekommen' : `${noPwKids} ${noPwKids === 1 ? 'Kind bekommt' : 'Kinder bekommen'}`} trotzdem Kärtchen mit Bildern: Passwörter gibt es für Kinder, die mit Vokaboom verbunden sind${cc.secret === 'class' ? ' und deren Klasse ein Klassenpasswort hat' : ''}.${c.vokaboom_class || klass.noLink ? '' : ' Verbinden: Reiter „Kinder“ → „Mit Vokaboom verbinden“.'}</p>` : ''}
+      <div class="field"><span class="label">Name auf dem Kärtchen</span>
+        <label class="radio"><input type="radio" name="card-names" data-card="names" value="full" ${cc.names === 'full' ? 'checked' : ''}><span>Vorname und Anfangsbuchstabe („Lena M.“)</span></label>
+        <label class="radio"><input type="radio" name="card-names" data-card="names" value="initials" ${cc.names === 'initials' ? 'checked' : ''}><span>Nur Initialen („L. M.“) – datensparsam, z. B. für Kärtchen, die herumliegen</span></label>
+      </div>
+      <label class="switch"><input type="checkbox" data-card="qr" ${cc.qr ? 'checked' : ''}><span>QR-Code aufs Kärtchen (Anmelden ohne Tippen)</span></label>
+      <label class="switch"><input type="checkbox" data-card="cls" ${cc.cls ? 'checked' : ''}><span>Klassenname oben aufs Kärtchen</span></label>
+    </div>
+  </details>`;
+}
+function bindCardCfg() {
+  const box = $('#card-cfg');
+  if (!box || box.dataset.bound) return;
+  box.dataset.bound = '1';
+  box.addEventListener('toggle', () => { klass.cardCfgOpen = box.open; });
+  box.addEventListener('change', async (e) => {
+    const t = e.target;
+    if (t.dataset.card) {
+      db.settings.cards = { ...cardCfg(), [t.dataset.card]: t.type === 'checkbox' ? t.checked : t.value };
+      saveDB(); saveCardCfg(); render();
+      return;
+    }
+    if (t.dataset.classPw && await saveVbClassPw(t.dataset.classPw, t.value)) { render(); toast('Klassenpasswort gespeichert.'); }
+  });
+}
+/** Klassenpasswort der verbundenen Vokaboom-Klasse (dort steht es, Teilmal prüft es beim Anmelden mit); leer = keines */
+async function saveVbClassPw(vid, raw) {
+  const vc = vbClassById(vid);
+  if (!vc) return false;
+  const v = String(raw || '').trim().slice(0, 40);
+  if (v && v.replace(/[^a-z0-9äöü]/gi, '').length < 4) { toast('Das Klassenpasswort braucht mindestens 4 Buchstaben oder Zahlen.', 'bad'); return false; }
+  try {
+    const cl = await cloudClient();
+    const { error } = await cl.from('vokaboom_classes').update({ class_pw: v || null }).eq('id', vid);
+    if (error) throw error;
+    vc.class_pw = v || null;
+    return true;
+  } catch (e) {
+    toast(/class_pw/.test(e?.message || '') ? 'Dafür zuerst in Vokaboom supabase/vokabelwelt.sql in Supabase nochmals ausführen.' : classErrorText(e), 'bad');
+    return false;
+  }
+}
+/* ---------- Kärtchen-Einstellungen: gleich wie in Vokaboom ----------
+ * Gespeichert bei der Lehrperson in fab_teacher_settings.cards (supabase/avatar.sql), dazu in diesem Browser. */
+const CARD_DEFAULTS = { secret: 'pics', names: 'full', qr: true, cls: true };
+const cardCfg = () => {
+  const c = { ...CARD_DEFAULTS, ...(db.settings.cards || {}) };
+  if (!['pics', 'password', 'class'].includes(c.secret)) c.secret = 'pics';
+  if (!['full', 'initials'].includes(c.names)) c.names = 'full';
+  return c;
+};
+const CARD_SYNC = { uid: '', at: 0, missing: false };
+async function loadCardCfg(force = false) {
+  if (!cloud.uid || isKid()) return false;
+  if (!force && CARD_SYNC.uid === cloud.uid && Date.now() - CARD_SYNC.at < 20000) return false;
+  try {
+    const c = await cloudClient();
+    const { data, error } = await c.from('fab_teacher_settings').select('cards').eq('teacher_id', cloud.uid).maybeSingle();
+    if (error) throw error;
+    CARD_SYNC.uid = cloud.uid; CARD_SYNC.at = Date.now(); CARD_SYNC.missing = false;
+    const remote = data?.cards && typeof data.cards === 'object' ? data.cards : {};
+    if (Object.keys(remote).length) {
+      const before = JSON.stringify(cardCfg());
+      db.settings.cards = { ...CARD_DEFAULTS, ...remote };
+      if (JSON.stringify(cardCfg()) !== before) { saveDB(); return true; }
+    } else if (db.settings.cards && Object.keys(db.settings.cards).length) saveCardCfg();
+  } catch (e) { CARD_SYNC.missing = /cards|column|schema cache|fab_teacher_settings/i.test(e?.message || ''); }
+  return false;
+}
+let cardSaveTimer = null;
+function saveCardCfg() {
+  clearTimeout(cardSaveTimer);
+  cardSaveTimer = setTimeout(async () => {
+    if (!cloud.uid) return;
+    try {
+      const c = await cloudClient();
+      const { error } = await c.from('fab_teacher_settings').upsert({ teacher_id: cloud.uid, cards: cardCfg(), updated_at: new Date().toISOString() }, { onConflict: 'teacher_id' });
+      if (error) throw error;
+      CARD_SYNC.missing = false; CARD_SYNC.uid = cloud.uid; CARD_SYNC.at = Date.now();
+    } catch (e) {
+      CARD_SYNC.missing = /cards|column|schema cache|fab_teacher_settings/i.test(e?.message || '');
+      if (CARD_SYNC.missing) { if (ui.view === 'class' && klass.tab === 'cards') render(); } else toast('Die Kärtchen-Einstellung konnte nicht gespeichert werden. Bist du online?', 'bad');
+    }
+  }, 300);
+}
+/** Das Vokaboom-Kind mit demselben Login (Benutzername und Bilder kommen von dort) */
+function vbOf(st) {
+  const v = st?.vokaboom_id && klass.vb?.byId.get(st.vokaboom_id);
+  return v && v.username === st.username ? v : null;
+}
+/** Was auf dem Kärtchen steht: 'pics' (3 Bilder), 'password' (Passwort des Kindes aus Vokaboom) oder 'class'
+ *  (Klassenpasswort der verbundenen Vokaboom-Klasse). Fehlt das Passwort, gelten die Bilder – wie in Vokaboom. */
+function kidSecretOf(st) {
+  const m = cardCfg().secret, v = vbOf(st);
+  if (m === 'password' && v?.pw) return 'password';
+  if (m === 'class' && v && vbClassById(v.class_id)?.class_pw) return 'class';
+  return 'pics';
 }
 const CARD_W = 85, CARD_H = 54;
 // Gleiche Farben wie in Vokaboom: Ein Kind bekommt in beiden Tools genau dasselbe Kärtchen
@@ -929,9 +1059,9 @@ function fitText(ctx, text, maxW, font, size) {
 }
 /** Für den zweiten QR-Code: Ist das Kind mit Vokaboom verknüpft und hat dort dasselbe Login? */
 function vbLoginOf(st) {
-  const v = st.vokaboom_id && klass.vb?.byId.get(st.vokaboom_id);
+  const v = vbOf(st);
   const base = String(CLOUD_CFG.vokaboomUrl || '').trim();
-  if (!v || !base || v.username !== st.username) return '';
+  if (!v || !base) return '';
   return `${base}#k=${v.username}.${picsList(v.pics).join('-')}`;
 }
 function drawQR(ctx, url, qx, qy, qs, X, Y, L) {
@@ -960,14 +1090,17 @@ function drawQRLabel(ctx, cx, y, tag, text, accent, X, Y, L, body) {
   ctx.fillText(text, x0 + tw + L(1), Y(y));
 }
 /**
- * Login-Kärtchen ohne Logo und ohne Namen eines Tools: Es gilt für alle Tools, in denen das Kind dasselbe Login hat.
- * Ein QR-Code pro Fach: „1×1 Rechnen“ (Einmaleins) und bei Kindern mit Vokaboom-Login zusätzlich „ABC Vokabeln“.
+ * Zeichnet ein Login-Kärtchen (x, y in mm; s = Pixel pro mm). Ohne Logo und ohne Namen eines Tools:
+ * Es gilt für alle Tools, in denen das Kind dasselbe Login hat. Ein QR-Code pro Fach: „1×1 Rechnen“ (Teilmal)
+ * und bei Kindern mit Vokaboom-Login zusätzlich „ABC Vokabeln“. Gleiches Kärtchen wie in Vokaboom.
  */
 async function drawKidCard(ctx, x, y, s, st, className) {
   const [accent, wash] = cardColor(st.username);
   const X = (mm) => (x + mm) * s, Y = (mm) => (y + mm) * s, L = (mm) => mm * s;
   const disp = "'Bricolage Grotesque', Lexend, system-ui, sans-serif", body = 'Lexend, system-ui, sans-serif';
-  const vbUrl = vbLoginOf(st);
+  const cc = { ...cardCfg(), secret: kidSecretOf(st) };
+  const vbUrl = cc.qr ? vbLoginOf(st) : '';
+  const pwW = !cc.qr ? CARD_W - 8 : vbUrl ? 40 : 54; // Platz fürs Passwort (links neben den QR-Codes)
   ctx.save();
   rrect(ctx, X(0), Y(0), L(CARD_W), L(CARD_H), L(3.5));
   ctx.fillStyle = '#fff'; ctx.fill();
@@ -981,21 +1114,33 @@ async function drawKidCard(ctx, x, y, s, st, className) {
   ctx.fillStyle = '#fff'; ctx.font = `800 ${L(3.4)}px ${disp}`;
   ctx.fillText('Mein Login', X(4), Y(6.2));
   ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.9)';
-  ctx.fillText(fitText(ctx, className, L(44), (z) => `500 ${z}px ${body}`, L(2.8)), X(CARD_W - 4), Y(6));
+  if (cc.cls) ctx.fillText(fitText(ctx, className, L(44), (z) => `500 ${z}px ${body}`, L(2.8)), X(CARD_W - 4), Y(6));
   ctx.textAlign = 'left';
   // Bild, Name, Benutzername
   rrect(ctx, X(4), Y(12), L(16), L(16), L(3.5)); ctx.fillStyle = wash; ctx.fill();
   const wimg = await svgImage(KID_WORDS[kidWordOf(st.username)] || '');
   if (wimg) ctx.drawImage(wimg, X(5.5), Y(13.5), L(13), L(13));
   ctx.fillStyle = '#1E293B';
-  ctx.fillText(fitText(ctx, kidName(st), L(56), (z) => `600 ${z}px ${body}`, L(3.4)), X(23.5), Y(16.6));
+  ctx.fillText(fitText(ctx, cc.names === 'initials' ? kidInitials(st) : kidName(st), L(56), (z) => `600 ${z}px ${body}`, L(3.4)), X(23.5), Y(16.6));
   ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`; ctx.fillText('Benutzername', X(23.5), Y(21));
   ctx.fillStyle = accent;
   ctx.fillText(fitText(ctx, displayUser(st.username), L(56), (z) => `800 ${z}px ${disp}`, L(6.2)), X(23.5), Y(27.8));
-  // Bilder-Passwort
-  ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`;
-  ctx.fillText('Passwort: diese 3 Bilder antippen', X(4), Y(34.6));
+  // Passwort: Bilder, eigenes Passwort oder Klassenpasswort
   const pics = picsList(st.pics);
+  ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`;
+  if (cc.secret === 'password' || cc.secret === 'class') {
+    const v = vbOf(st);
+    const pwTxt = cc.secret === 'class' ? vbClassById(v?.class_id)?.class_pw || '' : showPw(v?.pw);
+    ctx.fillText(cc.secret === 'class' ? 'Passwort (für die ganze Klasse)' : 'Passwort', X(4), Y(35.2));
+    rrect(ctx, X(4), Y(37.4), L(pwW), L(11.2), L(2.4));
+    ctx.fillStyle = wash; ctx.fill(); ctx.lineWidth = L(0.4); ctx.strokeStyle = accent; ctx.stroke();
+    ctx.fillStyle = '#1E293B';
+    ctx.fillText(fitText(ctx, pwTxt, L(pwW - 5), (z) => `700 ${z}px ui-monospace, Menlo, Consolas, monospace`, L(5)), X(6.5), Y(44.8));
+    ctx.restore();
+    if (cc.qr) drawCardQRs(ctx, st, vbUrl, accent, X, Y, L, body);
+    return;
+  }
+  ctx.fillText('Passwort: diese 3 Bilder antippen', X(4), Y(34.6));
   for (let k = 0; k < 3; k++) {
     const bx = 4 + k * 13, by = 37;
     rrect(ctx, X(bx), Y(by), L(11), L(11), L(2.2));
@@ -1006,7 +1151,12 @@ async function drawKidCard(ctx, x, y, s, st, className) {
     ctx.fillStyle = '#fff'; ctx.font = `700 ${L(2.5)}px ${body}`; ctx.textAlign = 'center';
     ctx.fillText(String(k + 1), X(bx + 0.4), Y(by + 1.3)); ctx.textAlign = 'left';
   }
-  // QR-Codes: einer pro Fach
+  ctx.restore();
+  if (cc.qr) drawCardQRs(ctx, st, vbUrl, accent, X, Y, L, body);
+}
+/** QR-Codes: einer pro Fach, gleiche Plätze wie in Vokaboom (links „ABC Vokabeln“, rechts „1×1 Rechnen“) */
+function drawCardQRs(ctx, st, vbUrl, accent, X, Y, L, body) {
+  ctx.save();
   if (vbUrl) {
     drawQR(ctx, vbUrl, 46.5, 30.5, 17.5, X, Y, L);
     drawQR(ctx, kidLoginUrl(st), 65, 30.5, 17.5, X, Y, L);
