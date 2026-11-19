@@ -57,6 +57,7 @@ function renderShell() {
         </button>
         <nav class="crumbs" id="crumbs" aria-label="Wo du gerade bist"></nav>
         <div class="topbar-actions">
+          ${isKid() ? `<span id="av-coin-slot">${typeof avCoinPillHTML === 'function' ? avCoinPillHTML() : ''}</span>` : ''}
           <span id="coin-slot">${coinPillHTML()}</span>
           <span id="account-slot">${accountButtonHTML()}</span>
           <button class="icon-btn" data-action="settings" aria-label="Einstellungen" title="Einstellungen">${icon('sliders')}</button>
@@ -90,6 +91,7 @@ function renderCrumbs() {
   if (ui.view === 'ex') html = `${sep}<span class="crumb current">${esc(EXERCISE_BY_ID[ui.mode]?.name || '')}</span>`;
   else if (ui.view === 'game') html = `${sep}<span class="crumb current">${esc(GAME_BY_ID[ui.game]?.name || '')}</span>`;
   else if (ui.view === 'stand') html = `${sep}<span class="crumb current">Mein Stand</span>`;
+  else if (ui.view === 'avatar') html = `${sep}<span class="crumb current">Mein Avatar</span>`;
   else if (ui.view === 'classes' || ui.view === 'class') html = classesCrumbs();
   el.innerHTML = html;
 }
@@ -97,6 +99,7 @@ function renderCrumbs() {
 function render() {
   const v = $('#view');
   if (isKid() && ['classes', 'class'].includes(ui.view)) ui.view = 'home';
+  if (ui.view === 'avatar' && !isKid()) ui.view = 'home';
   if (ui.view !== 'home') stopHeroFlip();
   renderCrumbs();
   switch (ui.view) {
@@ -105,6 +108,7 @@ function render() {
     case 'stand': renderStand(); break;
     case 'classes': renderClasses(); break;
     case 'class': renderClass(); break;
+    case 'avatar': renderAvatar(); break;
     default: v.innerHTML = viewHome(); bindHome();
   }
 }
