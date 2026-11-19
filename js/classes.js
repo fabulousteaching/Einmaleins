@@ -27,7 +27,13 @@ const kidWordImg = (username, cls = '') => {
 const kidPwImg = (i, cls = '') => `<img class="${cls}" src="${kidSvgURL(KID_PW[i].svg)}" alt="${esc(KID_PW[i].de)}" draggable="false">`;
 const picsList = (pics) => String(pics || '').split(',').map(Number).filter((n) => n >= 0 && n < 12);
 const kidLoginUrl = (st) => `${siteUrl()}#k=${st.username}.${picsList(st.pics).join('-')}`;
-const kidInitials = (k) => `${(k.first || k.first_name || '?').trim().charAt(0).toUpperCase()}.${(k.initial ?? k.last_initial) ? ` ${(k.initial ?? k.last_initial).charAt(0).toUpperCase()}.` : ''}`;
+// Kurzform fürs Kärtchen: die ersten zwei Buchstaben des Vornamens und der Anfangsbuchstabe („Le. M.“) –
+// so sind Kinder mit gleichen Initialen trotzdem auseinanderzuhalten
+const kidInitials = (k) => {
+  const f = Array.from(String(k.first || k.first_name || '?').trim());
+  const li = String((k.initial ?? k.last_initial) || '');
+  return `${(f[0] || '?').toUpperCase()}${(f[1] || '').toLowerCase()}.${li ? ` ${li.charAt(0).toUpperCase()}.` : ''}`;
+};
 // Passwort wie in Vokaboom: ein Wort und eine Zahl („Teich23“), gleiche Wörter wie dort
 const KID_PW_WORDS = ['teich', 'wiese', 'wald', 'bach', 'see', 'hafen', 'garten', 'turm', 'strand', 'stein', 'regen', 'schnee', 'nebel', 'wind', 'blatt', 'nest', 'feder', 'kerze', 'lampe', 'tisch', 'stuhl', 'fenster', 'dach', 'zelt', 'kiste', 'korb', 'glocke', 'ring', 'perle', 'mantel', 'schal', 'socke', 'kappe', 'brille', 'pinsel', 'farbe', 'papier', 'karte', 'nudel', 'suppe', 'honig', 'butter', 'zucker', 'kakao', 'tomate', 'gurke', 'karotte', 'mais', 'nuss', 'beere', 'traube', 'zitrone', 'orange', 'flocke', 'welle', 'sonnenhut', 'kugel', 'besen', 'leiter', 'koffer'];
 const rndInt = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n;
