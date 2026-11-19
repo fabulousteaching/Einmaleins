@@ -54,6 +54,38 @@ alter table public.einmaleins_classes add column if not exists vokaboom_class uu
 alter table public.einmaleins_students add column if not exists vokaboom_id uuid;
 create unique index if not exists einmaleins_students_vokaboom on public.einmaleins_students (vokaboom_id) where vokaboom_id is not null;
 
+-- Passwort zum Eintippen (Alternative zu den Bildern), wie in Vokaboom: ein Wort und eine Zahl, z. B. „teich23“.
+-- Jedes Kind hat beides: Bilder und Passwort. Was aufs Kärtchen kommt, wählt die Lehrperson (gleich wie in Vokaboom).
+create or replace function public.einmaleins_new_pw()
+returns text
+language sql volatile set search_path = '' as $$
+  select (array['teich', 'wiese', 'wald', 'bach', 'see', 'hafen', 'garten', 'turm', 'strand', 'stein', 'regen', 'schnee', 'nebel', 'wind', 'blatt', 'nest', 'feder', 'kerze', 'lampe', 'tisch', 'stuhl', 'fenster', 'dach', 'zelt', 'kiste', 'korb', 'glocke', 'ring', 'perle', 'mantel', 'schal', 'socke', 'kappe', 'brille', 'pinsel', 'farbe', 'papier', 'karte', 'nudel', 'suppe', 'honig', 'butter', 'zucker', 'kakao', 'tomate', 'gurke', 'karotte', 'mais', 'nuss', 'beere', 'traube', 'zitrone', 'orange', 'flocke', 'welle', 'sonnenhut', 'kugel', 'besen', 'leiter', 'koffer'])[1 + floor(random() * 60)::integer]
+    || (10 + floor(random() * 90)::integer)::text;
+$$;
+-- Eingabe prüfen: Gross/klein, Leerzeichen, Bindestriche und ä/ö/ü (statt ae/oe/ue) spielen keine Rolle
+create or replace function public.einmaleins_pw_norm(t text)
+returns text
+language sql immutable set search_path = '' as $$
+  select regexp_replace(replace(replace(replace(replace(lower(coalesce(t, '')), 'ä', 'ae'), 'ö', 'oe'), 'ü', 'ue'), 'ß', 'ss'), '[^a-z0-9]', '', 'g');
+$$;
+create or replace function public.einmaleins_pw_ok(p_pw text, p_input text)
+returns boolean
+language sql immutable set search_path = '' as $$
+  select p_pw is not null and p_input is not null and length(p_input) <= 80
+    and length(public.einmaleins_pw_norm(p_pw)) >= 4 and public.einmaleins_pw_norm(p_pw) = public.einmaleins_pw_norm(p_input);
+$$;
+-- Klassenpasswort: eines für alle Kinder der Klasse, von der Lehrperson festgelegt (leer = keines)
+alter table public.einmaleins_classes add column if not exists class_pw text;
+alter table public.einmaleins_classes drop constraint if exists einmaleins_classes_class_pw_check;
+alter table public.einmaleins_classes add constraint einmaleins_classes_class_pw_check
+  check (class_pw is null or (char_length(class_pw) <= 40 and length(public.einmaleins_pw_norm(class_pw)) >= 4));
+alter table public.einmaleins_students add column if not exists pw text;
+alter table public.einmaleins_students drop constraint if exists einmaleins_students_pw_check;
+update public.einmaleins_students set pw = public.einmaleins_new_pw() where pw is null or pw !~ '^[a-z]{3,12}[0-9]{2}$';
+alter table public.einmaleins_students alter column pw set default public.einmaleins_new_pw();
+alter table public.einmaleins_students alter column pw set not null;
+alter table public.einmaleins_students add constraint einmaleins_students_pw_check check (pw ~ '^[a-z]{3,12}[0-9]{2}$');
+
 create table if not exists public.einmaleins_login_fails (
   username text primary key,
   fails integer not null default 0,
@@ -71,9 +103,9 @@ alter table public.einmaleins_login_fails enable row level security;
 revoke all on public.einmaleins_classes, public.einmaleins_students, public.einmaleins_usernames,
   public.einmaleins_sessions, public.einmaleins_progress, public.einmaleins_login_fails from anon, authenticated;
 grant select, insert, delete on public.einmaleins_classes to authenticated;
-grant update (name, settings) on public.einmaleins_classes to authenticated;
+grant update (name, settings, class_pw) on public.einmaleins_classes to authenticated;
 grant select, delete on public.einmaleins_students to authenticated;
-grant update (first_name, last_initial, pics) on public.einmaleins_students to authenticated;
+grant update (first_name, last_initial, pics, pw) on public.einmaleins_students to authenticated;
 grant select on public.einmaleins_progress to authenticated;
 
 drop policy if exists "einmaleins klassen eigene" on public.einmaleins_classes;
@@ -151,9 +183,10 @@ create or replace function public.einmaleins_take_vokaboom_kid(p_class uuid, p_v
 returns text
 language plpgsql set search_path = '' as $$
 declare
-  v record; e public.einmaleins_students; u text;
+  v record; e public.einmaleins_students; u text; vpw text;
 begin
-  select s.id, s.first_name, s.last_initial, s.username, s.pics into v from public.vokaboom_students s where s.id = p_vid;
+  select s.id, s.first_name, s.last_initial, s.username, s.pics, to_jsonb(s)->>'pw' as pw into v from public.vokaboom_students s where s.id = p_vid;
+  vpw := case when v.pw ~ '^[a-z]{3,12}[0-9]{2}$' then v.pw end; -- gleiches Passwort wie in Vokaboom (falls es dort eines gibt)
   if not found then return 'gone'; end if;
   if exists (select 1 from public.einmaleins_students x where x.vokaboom_id = p_vid) then return 'linked'; end if;
   select * into e from public.einmaleins_students x
@@ -163,15 +196,15 @@ begin
   if found then
     u := case when exists (select 1 from public.einmaleins_students x where x.username = v.username and x.id <> e.id) then e.username else v.username end;
     insert into public.einmaleins_usernames (username) values (u) on conflict do nothing;
-    update public.einmaleins_students x set vokaboom_id = v.id, username = u, pics = v.pics, first_name = v.first_name where x.id = e.id;
+    update public.einmaleins_students x set vokaboom_id = v.id, username = u, pics = v.pics, first_name = v.first_name, pw = coalesce(vpw, x.pw) where x.id = e.id;
     return 'matched';
   end if;
   if (select count(*) from public.einmaleins_students x where x.class_id = p_class) >= 60 then return 'full'; end if;
   u := v.username;
   if exists (select 1 from public.einmaleins_students x where x.username = u) then u := public.einmaleins_new_username(); end if;
   insert into public.einmaleins_usernames (username) values (u) on conflict do nothing;
-  insert into public.einmaleins_students (class_id, first_name, last_initial, username, pics, vokaboom_id)
-    values (p_class, v.first_name, v.last_initial, u, v.pics, v.id);
+  insert into public.einmaleins_students (class_id, first_name, last_initial, username, pics, vokaboom_id, pw)
+    values (p_class, v.first_name, v.last_initial, u, v.pics, v.id, coalesce(vpw, public.einmaleins_new_pw()));
   return case when u = v.username then 'same' else 'newlogin' end;
 end;
 $$;
@@ -201,6 +234,10 @@ begin
   insert into public.vokaboom_usernames (username) values (e.username) on conflict do nothing;
   insert into public.vokaboom_students (class_id, first_name, last_initial, username, pics)
     values (p_vclass, e.first_name, e.last_initial, e.username, e.pics) returning id into vid;
+  begin -- Vokaboom kennt Passwörter (neueres vokabelwelt.sql): dasselbe Passwort wie hier
+    execute 'update public.vokaboom_students set pw = $1 where id = $2' using e.pw, vid;
+  exception when others then null;
+  end;
   update public.einmaleins_students set vokaboom_id = vid where id = e.id;
   return 'pushed';
 end;
@@ -318,7 +355,16 @@ end;
 $$;
 revoke execute on function public.einmaleins_vk_pw_ok(uuid, text) from public, anon, authenticated;
 
--- Kind: anmelden (p_pics: Bilder oder – bei Kindern mit Vokaboom-Kärtchen – Passwort). Liefert einen Anmelde-Schlüssel oder null (falsch). Nach 8 Fehlversuchen 5 Minuten Pause.
+-- Hilfe: Passwort eines Teilmal-Kindes prüfen – eigenes Passwort oder Klassenpasswort
+create or replace function public.einmaleins_kid_pw_ok(p_eid uuid, p_input text)
+returns boolean
+language sql stable security definer set search_path = '' as $$
+  select coalesce((select public.einmaleins_pw_ok(s.pw, p_input) or public.einmaleins_pw_ok(c.class_pw, p_input)
+    from public.einmaleins_students s join public.einmaleins_classes c on c.id = s.class_id where s.id = p_eid), false);
+$$;
+revoke execute on function public.einmaleins_kid_pw_ok(uuid, text) from public, anon, authenticated;
+
+-- Kind: anmelden (p_pics: Bilder „3,7,11“ oder Passwort – eigenes, Klassenpasswort oder das vom Vokaboom-Kärtchen). Liefert einen Anmelde-Schlüssel oder null (falsch). Nach 8 Fehlversuchen 5 Minuten Pause.
 -- Kinder aus einer verbundenen Vokaboom-Klasse, die hier noch fehlen, werden dabei übernommen.
 create or replace function public.einmaleins_student_login(p_username text, p_pics text)
 returns jsonb
@@ -348,7 +394,7 @@ begin
     select coalesce((select s.pics from public.vokaboom_students s where s.id = st.vokaboom_id), st.pics) into vp;
     st.pics := vp;
   end if;
-  if st.id is null or (st.pics is distinct from p_pics and not public.einmaleins_vk_pw_ok(st.vokaboom_id, p_pics)) then
+  if st.id is null or (st.pics is distinct from p_pics and not public.einmaleins_kid_pw_ok(st.id, p_pics) and not public.einmaleins_vk_pw_ok(st.vokaboom_id, p_pics)) then
     insert into public.einmaleins_login_fails as lf (username, fails, last_at) values (p_username, 1, now())
       on conflict (username) do update set
         fails = case when lf.last_at < now() - interval '5 minutes' then 1 else lf.fails + 1 end,

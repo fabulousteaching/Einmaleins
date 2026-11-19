@@ -103,6 +103,28 @@ async function cloudLogout() {
   forgetCloudUser();
   try { await cloud.client?.auth.signOut({ scope: 'local' }); } catch { /* */ }
 }
+async function cloudResetPassword(email) {
+  const c = await cloudClient();
+  const { error } = await c.auth.resetPasswordForEmail(email, { redirectTo: siteUrl() });
+  if (error) throw error;
+}
+async function cloudChangeEmail(newEmail, password) {
+  const c = await cloudClient();
+  // Zur Sicherheit: aktuelles Passwort prüfen (z. B. an einem offenen Schulcomputer)
+  const check = await c.auth.signInWithPassword({ email: cloud.user, password });
+  if (check.error) {
+    if (check.error.code === 'invalid_credentials' || /invalid login/i.test(check.error.message)) throw Object.assign(new Error('pw'), { code: 'wrong_password' });
+    throw check.error;
+  }
+  const { data, error } = await c.auth.updateUser({ email: newEmail }, { emailRedirectTo: siteUrl() });
+  if (error) throw error;
+  if (data?.user?.email && normEmail(data.user.email) === newEmail) {
+    setCloudUser(data.user);
+    renderAccountSlot();
+    return 'done';
+  }
+  return 'confirm';
+}
 async function cloudChangePassword(password) {
   const c = await cloudClient();
   const { error } = await c.auth.updateUser({ password });
@@ -118,6 +140,7 @@ function cloudErrorText(e) {
   if (/error sending|sending (recovery|confirmation)|smtp/i.test(msg)) return 'Die E-Mail konnte nicht verschickt werden. Dafür muss in Supabase ein E-Mail-Versand (SMTP) eingerichtet sein – siehe supabase/ANLEITUNG.md.';
   if (code === 'weak_password' || /password.*(least|short|weak|characters)/i.test(msg)) return 'Das Passwort ist zu schwach. Nimm mindestens 8 Zeichen.';
   if (code === 'same_password') return 'Das ist schon dein Passwort.';
+  if (code === 'wrong_password') return 'Das aktuelle Passwort stimmt nicht.';
   if (code === 'signup_disabled' || /signups? not allowed/i.test(msg)) return 'Neue Konten sind gerade ausgeschaltet.';
   if (code === 'over_request_rate_limit' || e?.status === 429) return 'Zu viele Versuche. Warte einen Moment und versuch es nochmal.';
   if (code === '42P01' || code === 'PGRST205' || code === 'PGRST202' || /relation .* does not exist|could not find the (table|function)/i.test(msg)) return 'In Supabase fehlen die Tabellen für Teilmal: Bitte supabase/einmaleins.sql im SQL Editor ausführen.';
@@ -148,6 +171,7 @@ window.addEventListener('focus', () => ssoCheck());
 
 /* ---------- Oberfläche ---------- */
 function accountButtonHTML() {
+  if (!isKid() && typeof menuButtonHTML === 'function') return menuButtonHTML(); // ein Knopf „Menü“ mit Konto drin
   if (isKid()) return kidAccountButtonHTML();
   if (cloud.user) {
     return `<button class="account-btn in" data-action="account" title="Konto: ${esc(cloud.user)}" aria-label="Konto ${esc(cloud.user)}">${icon('user')}<span class="account-name">${esc(shortName(cloud.user))}</span></button>`;
@@ -173,8 +197,7 @@ function openLoginChooser() {
         <strong>Ich bin Lehrperson</strong><small>mit E-Mail und Passwort</small>
       </button>
     </div>
-    <p class="small center role-foot">Alle Übungen und Spiele gehen auch ohne Anmeldung.</p>
-    <p class="small center">Noch kein Konto? <button type="button" class="link-btn" data-action="login" data-mode="create">Als Lehrperson registrieren</button></p>`, { label: 'Anmelden', cls: 'auth-modal role-modal' });
+    <p class="small center role-foot">Noch kein Konto? <button type="button" class="link-btn" data-action="login" data-mode="create">Als Lehrperson registrieren</button></p>`, { label: 'Anmelden', cls: 'auth-modal role-modal' });
 }
 
 function openLogin(mode = 'login') {
@@ -186,15 +209,16 @@ function openLogin(mode = 'login') {
     return;
   }
   const create = mode === 'create';
-  openModal(`${modalHead(create ? 'Konto erstellen' : 'Anmelden als Lehrperson')}
+  const prevEmail = $('#auth-email')?.value || '';
+  openModal(`${modalHead(create ? 'Konto erstellen' : 'Anmelden')}
     <form class="auth-form" id="auth-form" autocomplete="on" novalidate>
       <label class="field" for="auth-email"><span class="label">E-Mail-Adresse</span>
-        <input id="auth-email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="200" required autofocus placeholder="name@schule.ch"></label>
+        <input id="auth-email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="200" required autofocus placeholder="name@schule.ch" value="${esc(prevEmail)}"></label>
       <label class="field" for="auth-pass"><span class="label">Passwort</span>
         <input id="auth-pass" name="password" type="password" autocomplete="${create ? 'new-password' : 'current-password'}" minlength="8" required></label>
       ${create ? `<label class="field" for="auth-pass2"><span class="label">Passwort wiederholen</span>
         <input id="auth-pass2" type="password" autocomplete="new-password" minlength="8" required></label>
-        <p class="muted small">Mindestens 8 Zeichen.</p>` : '<p class="muted small">Du hast ein Vokaboom-Konto? Dann melde dich einfach mit denselben Angaben an.</p>'}
+        <p class="muted small">Mindestens 8 Zeichen.</p>` : ''}
       <p class="form-error" id="auth-error" role="alert"></p>
       <p class="form-info" id="auth-info" role="status"></p>
       <button class="btn primary big" type="submit" id="auth-submit">${create ? 'Konto erstellen' : 'Anmelden'}</button>
@@ -203,12 +227,13 @@ function openLogin(mode = 'login') {
     <p class="small center role-foot">${create
       ? 'Schon ein Konto? <button type="button" class="link-btn" data-action="login" data-mode="login">Anmelden</button>'
       : 'Noch kein Konto? <button type="button" class="link-btn" data-action="login" data-mode="create">Registrieren</button>'}
-      · <button type="button" class="link-btn" data-action="login-choose">Zurück</button></p>`, { label: create ? 'Konto erstellen' : 'Anmelden', cls: 'auth-modal' });
+      · <button type="button" class="link-btn" data-action="login-choose">Zurück</button></p>
+    <p class="muted small">Es ist dasselbe Konto wie bei Vokaboom (gleiche E-Mail-Adresse, gleiches Passwort). Damit legst du Klassen an, druckst Login-Kärtchen und siehst, welche Rechnungen den Kindern Mühe machen.</p>`, { label: create ? 'Konto erstellen' : 'Anmelden', cls: 'auth-modal' });
   $('#auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = $('#auth-error'), info = $('#auth-info'), btn = $('#auth-submit');
     const email = normEmail($('#auth-email').value), pw = $('#auth-pass').value;
-    const problem = emailProblem(email) || (pw.length < 8 && create ? 'Das Passwort braucht mindestens 8 Zeichen.' : !pw ? 'Gib dein Passwort ein.' : '')
+    const problem = emailProblem(email) || (pw.length < 8 ? 'Das Passwort braucht mindestens 8 Zeichen.' : '')
       || (create && pw !== $('#auth-pass2').value ? 'Die beiden Passwörter sind nicht gleich.' : '');
     if (problem) { err.textContent = problem; return; }
     err.textContent = ''; info.textContent = '';
@@ -217,8 +242,10 @@ function openLogin(mode = 'login') {
     try {
       const res = await cloudLogin(email, pw, create);
       if (res === 'confirm') {
+        if (!$('#auth-info')) return;
         info.textContent = `Fast geschafft! Wir haben dir eine E-Mail an ${email} geschickt. Klicke auf den Link darin, dann bist du angemeldet.`;
-        btn.disabled = false; btn.textContent = 'Konto erstellen';
+        btn.disabled = false;
+        btn.textContent = 'Konto erstellen';
         return;
       }
       closeModal(true);
@@ -240,11 +267,13 @@ async function forgotPassword() {
   if (problem) { err.textContent = `${problem} Dann schicken wir dir einen Link für ein neues Passwort.`; $('#auth-email').focus(); return; }
   err.textContent = ''; info.textContent = 'E-Mail wird verschickt …';
   try {
-    const c = await cloudClient();
-    const { error } = await c.auth.resetPasswordForEmail(email, { redirectTo: siteUrl() });
-    if (error) throw error;
-    info.textContent = `Wenn es ein Konto mit ${email} gibt, ist jetzt eine E-Mail unterwegs. Klicke auf den Link darin und wähle ein neues Passwort.`;
-  } catch (ex) { info.textContent = ''; err.textContent = cloudErrorText(ex); }
+    await cloudResetPassword(email);
+    if ($('#auth-info')) info.textContent = `Wenn es ein Konto mit ${email} gibt, ist jetzt eine E-Mail unterwegs. Klicke auf den Link darin und wähle ein neues Passwort.`;
+  } catch (ex) {
+    if (!$('#auth-error')) return;
+    info.textContent = '';
+    err.textContent = cloudErrorText(ex);
+  }
 }
 function openNewPassword() {
   openModal(`${modalHead('Neues Passwort')}
@@ -261,18 +290,28 @@ function openNewPassword() {
     const a = $('#newpw-1').value, b = $('#newpw-2').value, err = $('#newpw-error');
     if (a.length < 8) { err.textContent = 'Das Passwort braucht mindestens 8 Zeichen.'; return; }
     if (a !== b) { err.textContent = 'Die beiden Passwörter sind nicht gleich.'; return; }
-    try { await cloudChangePassword(a); closeModal(true); toast('Neues Passwort gespeichert.'); } catch (ex) { err.textContent = cloudErrorText(ex); }
+    try {
+      await cloudChangePassword(a);
+      closeModal(true);
+      toast('Neues Passwort gespeichert. Du bist angemeldet.');
+    } catch (ex) { err.textContent = cloudErrorText(ex); }
   });
 }
 function openAccount() {
-  openModal(`${modalHead('Dein Konto')}
+  if (typeof openMenu === 'function') { openMenu('konto'); return; }
+  openModal(`${modalHead('Dein Konto')}${accountSectionHTML()}`, { label: 'Konto' });
+  bindAccountForms();
+}
+/** Konto: Karte, Klassen, Abmelden, Passwort und E-Mail ändern (im Menü, wie in Vokaboom) */
+function accountSectionHTML() {
+  return `
     <div class="account-card">
       <span class="account-avatar" aria-hidden="true">${esc(cloud.user.charAt(0).toUpperCase())}</span>
-      <div><strong>${esc(cloud.user)}</strong><p class="small muted">Lehrperson</p></div>
+      <div><strong>${esc(cloud.user)}</strong><p class="small" id="acct-status">Lehrperson · dasselbe Konto wie bei Vokaboom</p></div>
     </div>
-    <p class="muted small">Dasselbe Konto wie bei Vokaboom${SSO.DOMAIN ? ' – du bist dort auf diesem Gerät auch angemeldet' : ''}. Deine eigenen Übungen auf diesem Gerät bleiben nur hier gespeichert.</p>
+    <p class="muted small">Deine Klassen und die Kinder-Logins sind in deinem Konto gespeichert${SSO.DOMAIN ? '. In Vokaboom bist du auf diesem Gerät auch angemeldet' : ''}. Deine eigenen Übungen auf diesem Gerät bleiben nur hier gespeichert.</p>
     <div class="row">
-      <button type="button" class="btn primary" data-action="classes">${icon('users')} Klassen & Übersicht</button>
+      <button type="button" class="btn secondary" data-action="classes">${icon('users')} Klassen & Übersicht</button>
       ${CLOUD_CFG.vokaboomUrl ? `<a class="btn ghost" href="${esc(CLOUD_CFG.vokaboomUrl)}"><span class="ot-tag">ABC</span> Zu Vokaboom</a>` : ''}
       <button type="button" class="btn ghost" data-action="logout">Abmelden</button>
     </div>
@@ -283,8 +322,47 @@ function openAccount() {
         <p class="form-error" id="pw-error" role="alert"></p>
         <button type="submit" class="btn small primary">Speichern</button>
       </form>
-    </details>`, { label: 'Konto' });
-  $('#pw-form').addEventListener('submit', async (e) => {
+    </details>
+    <details class="pw-change"><summary>E-Mail-Adresse ändern</summary>
+      <form id="mail-form" class="auth-form" novalidate>
+        <label class="field" for="mail-new"><span class="label">Neue E-Mail-Adresse</span>
+          <input id="mail-new" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="200" placeholder="name@schule.ch"></label>
+        <label class="field" for="mail-pw"><span class="label">Aktuelles Passwort</span><input id="mail-pw" type="password" autocomplete="current-password"></label>
+        <p class="form-error" id="mail-error" role="alert"></p>
+        <p class="form-info" id="mail-info" role="status"></p>
+        <button type="submit" class="btn small primary" id="mail-submit">E-Mail-Adresse ändern</button>
+      </form>
+    </details>`;
+}
+function bindAccountForms() {
+  $('#mail-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('#mail-error'), info = $('#mail-info'), btn = $('#mail-submit');
+    const email = normEmail($('#mail-new').value), pw = $('#mail-pw').value;
+    const problem = emailProblem(email) || (email === normEmail(cloud.user) ? 'Das ist schon deine E-Mail-Adresse.' : '') || (!pw ? 'Gib zur Sicherheit dein aktuelles Passwort ein.' : '');
+    if (problem) { err.textContent = problem; info.textContent = ''; return; }
+    err.textContent = ''; info.textContent = '';
+    btn.disabled = true;
+    try {
+      const res = await cloudChangeEmail(email, pw);
+      if (res === 'done') {
+        if (typeof openMenu === 'function') openMenu('konto'); else openAccount();
+        toast(`Deine E-Mail-Adresse ist jetzt ${email}. Melde dich ab jetzt damit an.`);
+        return;
+      }
+      if (!$('#mail-info')) return;
+      $('#mail-pw').value = '';
+      info.textContent = `Fast geschafft! Wir haben eine E-Mail an ${email} geschickt (eventuell auch eine an deine bisherige Adresse). Klicke auf den Link darin – erst dann gilt die neue Adresse. Bis dahin meldest du dich weiter mit ${cloud.user} an.`;
+    } catch (ex) {
+      if (!$('#mail-error')) return;
+      err.textContent = ['email_exists', 'user_already_exists'].includes(ex?.code) || /already (registered|exists)/i.test(ex?.message || '')
+        ? 'Diese E-Mail-Adresse gehört schon zu einem anderen Konto.'
+        : cloudErrorText(ex);
+    } finally {
+      if ($('#mail-submit')) btn.disabled = false;
+    }
+  });
+  $('#pw-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const pw = $('#pw-new').value, err = $('#pw-error');
     if (pw.length < 8) { err.textContent = 'Das Passwort braucht mindestens 8 Zeichen.'; return; }

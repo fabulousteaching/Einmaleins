@@ -95,7 +95,7 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
 
 1. **Klasse anlegen**, z. B. „3a Mathe“.
 2. **Kinder** eintragen: Vorname und erster Buchstabe des Nachnamens, einzeln oder als Liste (auch aus Excel).
-3. Jedes Kind bekommt wie bei Vokaboom einen **Benutzernamen** (z. B. `Baum34`) und ein **Bilder-Passwort** aus 3 Bildern.
+3. Jedes Kind bekommt wie bei Vokaboom einen **Benutzernamen** (z. B. `Baum34`), ein **Bilder-Passwort** aus 3 Bildern und ein **Passwort zum Eintippen** (ein Wort und eine Zahl, z. B. „Teich23“). Anmelden geht mit beidem, auch mit einem Klassenpasswort, wenn du eines festlegst.
 
    **Mit Vokaboom verbinden – in beide Richtungen:**
    - „Meine Klassen → Aus Vokaboom übernehmen“ macht aus einer Vokaboom-Klasse eine Teilmal-Klasse.
@@ -104,8 +104,8 @@ Anmelden oben rechts → „Ich bin Lehrperson“. **Es ist dasselbe Konto wie b
    - Löschen: Bei verbundenen Kindern fragt Teilmal „Nur in Teilmal“ oder „Auch in Vokaboom“. Nur hier gelöschte Kinder holt der automatische Abgleich nicht zurück.
 4. **Reihen**: **Kleines** oder **Grosses Einmaleins**, welche Reihen und Aufgabenarten die Klasse übt, wie viele **Rechnungen pro Runde** (10, 15, 20 oder 30) und ob die Kinder innerhalb dieser Auswahl selbst wählen dürfen. Ohne eigene Wahl üben die Kinder alle erlaubten Aufgabenarten gemischt.
 5. **Kärtchen**: Login-Kärtchen als PDF (10 pro A4-Seite). Die Kärtchen sind **neutral, ohne Logo** und sehen in Teilmal und Vokaboom gleich aus: oben „Mein Login“ und die Klasse, dann Name, Benutzername und das Passwort. Dazu ein QR-Code pro Fach: **1×1 Rechnen** öffnet Teilmal, bei Kindern, die auch in Vokaboom sind, zusätzlich **ABC Vokabeln**. QR-Code scannen = angemeldet.
-   - **Kärtchen anpassen** (gleiche Einstellungen wie in Vokaboom, sie gelten in beiden Tools): Passwort als **3 Bilder**, **Passwort pro Kind** („Teich23“) oder **Klassenpasswort**; Name ganz oder nur Initialen; QR-Code und Klassenname ein oder aus. Passwörter kommen aus Vokaboom: Kinder ohne Vokaboom-Login bekommen immer Kärtchen mit Bildern. Ein Klassenpasswort gilt für die verbundene Vokaboom-Klasse gleich mit. „Neues Passwort“ bei einem Kind gibt neue Bilder und ein neues Passwort, in beiden Tools.
-   - Gespeichert wird die Einstellung bei der Lehrperson (Tabelle `fab_teacher_settings`, Spalte `cards`). Dafür `supabase/avatar.sql` nochmals ganz ausführen; bis dahin gilt sie nur im jeweiligen Browser.
+   - **Kärtchen anpassen** (Menü → Login-Kärtchen, gleiche Einstellungen wie in Vokaboom, sie gelten in beiden Tools): Passwort als **3 Bilder**, **Passwort pro Kind** („Teich23“) oder **Klassenpasswort**; Name ganz oder nur Initialen; QR-Code und Klassenname ein oder aus. Bei Kindern, die auch in Vokaboom sind, gilt das Passwort vom Vokaboom-Kärtchen; ein Klassenpasswort gilt für die verbundene Vokaboom-Klasse gleich mit. „Neues Passwort“ bei einem Kind gibt neue Bilder und ein neues Passwort, in beiden Tools.
+   - Gespeichert wird die Einstellung bei der Lehrperson (Tabelle `fab_teacher_settings`, Spalte `cards`). Dafür `supabase/avatar.sql` nochmals ganz ausführen; bis dahin gilt sie nur im jeweiligen Browser. Für die Passwörter `supabase/einmaleins.sql` nochmals ganz ausführen.
 6. **Übersicht**:
    - pro Kind: gelöste Rechnungen (auch diese Woche), Anteil richtig, Zeit pro Rechnung, wie viele Rechnungen sitzen, die 3 schwierigsten Rechnungen, zuletzt aktiv
    - Antippen eines Kindes: seine Einmaleins-Tafel, die Reihen, die häufigsten Fehler mit den typischen falschen Antworten und seine Münzen
@@ -135,7 +135,14 @@ Laufen beide Tools unter **fabulousteaching.ch** (`vokaboom.fabulousteaching.ch`
 
 - Ohne Anmeldung wird alles nur im Browser gespeichert (localStorage).
 - Mit Kinder-Login wird der Übungsstand ein paar Sekunden nach dem Üben ins Konto der Lehrperson gemeldet. Übt ein Kind auf mehreren Geräten, werden die Stände zusammengeführt.
-- Einstellungen (Zahnrad oben rechts): Malzeichen `·` (wie im Schweizer Zahlenbuch) oder `×`, automatisch prüfen oder mit OK bestätigen, Töne, helle/dunkle Darstellung.
+- **Menü** oben rechts (gleich aufgebaut wie in Vokaboom):
+  - **Konto**: anmelden (Lehrperson oder Kind), Passwort und E-Mail-Adresse ändern, abmelden
+  - **Klassenübersicht**: alle Klassen mit Direktlinks (Übersicht, Kinder, Reihen, Kärtchen) und Kleines/Grosses 1×1 pro Klasse
+  - **Login-Kärtchen**: Bilder, Passwort pro Kind oder Klassenpasswort, Name, QR-Code, Klassenname (gilt auch in Vokaboom)
+  - **Avatar & Münzen**: wie in Vokaboom, gilt in beiden Tools, mit Bonus-Münzen für einzelne Kinder oder die ganze Klasse
+  - **Rechnen** (nur Teilmal): Malzeichen `·` (wie im Schweizer Zahlenbuch) oder `×`, automatisch prüfen oder mit OK bestätigen
+  - **Ton & Darstellung** (nur Teilmal): Töne, helle/dunkle Darstellung, Übungsstand auf dem Gerät löschen
+- Angemeldete Kinder haben statt des Menüs ihren Konto-Knopf und das Zahnrad mit denselben Einstellungen zum Rechnen und zur Darstellung.
 
 ## Einrichten
 

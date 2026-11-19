@@ -11,7 +11,7 @@ function refreshReihenPanel() {
 const actions = {
   home: () => go('home'),
   back: () => { const t = backTarget(); if (t) go(t.view); },
-  settings: () => openSettings(),
+  settings: () => (isKid() || typeof openMenu !== 'function' ? openSettings() : openMenu('rechnen')),
   'close-modal': () => closeModal(),
   'set-setting': (el) => {
     db.settings[el.dataset.key] = el.dataset.val;
@@ -19,6 +19,7 @@ const actions = {
     if (el.dataset.key === 'theme') applyTheme();
     saveDB();
     if (el.dataset.key === 'sign' && ['home', 'stand'].includes(ui.view)) render();
+    if (typeof menuSaved === 'function') menuSaved();
   },
   'reset-prog': () => {
     if (!confirm('Wirklich den ganzen Übungsstand auf diesem Gerät löschen?')) return;
@@ -86,6 +87,7 @@ const actions = {
   account: () => openAccount(),
   logout: async () => { closeModal(true); await cloudLogout(); toast('Abgemeldet.'); },
   ...classActions,
+  ...(typeof menuActions === 'object' ? menuActions : {}),
 };
 if (typeof avatarActions === 'object') Object.assign(actions, avatarActions); // Mein Avatar (js/avatar.js, gemeinsam mit Vokaboom)
 

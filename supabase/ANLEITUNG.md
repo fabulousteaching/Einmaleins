@@ -18,6 +18,8 @@ Alle Übungen und Spiele funktionieren auch ohne diese Einrichtung. Es braucht s
 
 Hast du die Datei schon einmal ausgeführt, bevor es die Übernahme aus Vokaboom gab? Dann einfach nochmals ganz ausführen. Bis dahin zeigt Teilmal bei „Aus Vokaboom übernehmen“ einen Hinweis.
 
+**Neu: Passwörter für Kinder** (wie in Vokaboom: Passwort pro Kind und Klassenpasswort). Dafür `supabase/einmaleins.sql` **nochmals ganz** ausführen – bestehende Kinder bekommen dabei automatisch ein Passwort, ihre Bilder bleiben gleich. Für Kärtchen-Einstellungen, die in beiden Tools gelten, und Bonus-Münzen für Teilmal-Kinder zusätzlich `supabase/avatar.sql` nochmals ausführen.
+
 **Neu: Bestenlisten der Spiele.** Dafür braucht es eine zusätzliche Tabelle (`einmaleins_scores`). Hast du die Datei vor dieser Neuerung ausgeführt, führe sie einfach **nochmals ganz** aus (auch nötig, damit das Spiel „Zielscheibe“ in der Bestenliste erscheint; weitere neue Spiele brauchen danach keine SQL-Änderung mehr). Bis dahin funktionieren alle Spiele, nur die Bestenliste wird nicht angezeigt (die Klassenübersicht zeigt dann einen Hinweis).
 
 ## 2. Adresse von Teilmal erlauben
@@ -41,10 +43,10 @@ Fertig. Oben rechts **Anmelden → Ich bin Lehrperson**.
   - Es gelten immer die aktuellen Bilder aus Vokaboom; „Neue Bilder“ in Teilmal ändert sie auch dort.
   - Löschen in Teilmal: „Nur in Teilmal“ (das Kind bleibt in Vokaboom und wird nicht automatisch wieder geholt; „… hier gelöschte wieder holen“ holt es zurück) oder „Auch in Vokaboom“.
 - Neue Kinder bekommen einen Benutzernamen, den es in keinem der beiden Tools gibt.
-- Jedes Kind bekommt einen **Benutzernamen** (z. B. `Baum34`, nie doppelt vergeben) und ein **Bilder-Passwort** aus 3 Bildern – genau wie bei Vokaboom.
+- Jedes Kind bekommt einen **Benutzernamen** (z. B. `Baum34`, nie doppelt vergeben), ein **Bilder-Passwort** aus 3 Bildern und ein **Passwort zum Eintippen** („Teich23“) – genau wie bei Vokaboom. Dazu kannst du pro Klasse ein **Klassenpasswort** festlegen (Menü → Login-Kärtchen).
 - **Reihen**: kleines oder grosses Einmaleins, welche Reihen und Aufgabenarten die Klasse übt und wie viele Rechnungen eine Runde hat. Diese Einstellungen sind Teil der Klasse; dafür muss das SQL-Skript nicht nochmals ausgeführt werden.
 - **Kärtchen**: als PDF herunterladen (10 pro A4-Seite), ausdrucken, ausschneiden. Die Kärtchen haben kein Logo und sind in Teilmal und Vokaboom gleich, auch die Einstellungen unter „Kärtchen anpassen“ (Bilder, Passwort pro Kind oder Klassenpasswort, Name, QR-Code, Klasse). Damit diese Einstellungen in beiden Tools gelten: `supabase/avatar.sql` nochmals ganz ausführen. Kinder, die in beiden Tools sind, bekommen zwei QR-Codes („ABC Vokabeln“ für Vokaboom, „1×1 Rechnen“ für Teilmal). Ältere Vokaboom-Kärtchen gelten weiterhin.
-- **Kind anmelden**: QR-Code auf dem Kärtchen scannen – oder **Anmelden → Ich bin ein Kind**, Benutzernamen eintippen und die 3 Bilder der Reihe nach antippen. Nach 8 falschen Versuchen ist 5 Minuten Pause. Auf einem Gerät, auf dem eine Lehrperson angemeldet ist, geht das Kinder-Login erst nach dem Abmelden.
+- **Kind anmelden**: QR-Code auf dem Kärtchen scannen – oder **Anmelden → Ich bin ein Kind**, Benutzernamen eintippen und die 3 Bilder der Reihe nach antippen oder das Passwort eintippen (eigenes oder Klassenpasswort; gross/klein und Leerzeichen spielen keine Rolle). Nach 8 falschen Versuchen ist 5 Minuten Pause. Auf einem Gerät, auf dem eine Lehrperson angemeldet ist, geht das Kinder-Login erst nach dem Abmelden.
 - **Kärtchen verloren?** Beim Kind auf das Symbol mit den gekreuzten Pfeilen tippen: Es bekommt neue Bilder, das alte Kärtchen gilt nicht mehr.
 
 ## Gemeinsam angemeldet mit Vokaboom

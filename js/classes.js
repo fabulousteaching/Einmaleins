@@ -231,7 +231,7 @@ async function kidLoginFromHash() {
 function openTeacherBlocks() {
   openModal(`${modalHead('Kinder-Login')}
     <p>Auf diesem Gerät ist gerade eine Lehrperson angemeldet${cloud.user ? ` (<strong>${esc(cloud.user)}</strong>)` : ''}.</p>
-    <p class="muted">Damit sich ein Kind anmelden kann, zuerst abmelden.</p>
+    <p class="muted">Damit sich ein Kind anmelden kann, zuerst abmelden. Die Klassen der Lehrperson bleiben in ihrem Konto.</p>
     <footer class="modal-foot"><button type="button" class="btn ghost" data-action="close-modal">Abbrechen</button><button type="button" class="btn primary" data-action="logout">Lehrperson abmelden</button></footer>`, { label: 'Kinder-Login' });
 }
 
@@ -245,8 +245,8 @@ function openKidLogin() {
       <label class="field" for="kid-user"><span class="label">Dein Benutzername</span>
         <input id="kid-user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" placeholder="z. B. Baum34" enterkeyhint="next"></label>
       <div class="seg kid-mode" role="group" aria-label="Wie meldest du dich an?">
-        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="pics" aria-pressed="true">Mit Bildern</button>
-        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="password" aria-pressed="false">Mit Passwort</button>
+        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="pics" aria-pressed="true">${icon('image')} Mit Bildern</button>
+        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="password" aria-pressed="false">${icon('edit')} Mit Passwort</button>
       </div>
       <div class="kid-pw-pics" id="kid-pw-pics">
         <p class="label">Tippe deine 3 Bilder der Reihe nach an</p>
@@ -254,12 +254,11 @@ function openKidLogin() {
         <div class="kid-grid">${KID_PW.map((p, i) => `<button type="button" class="kid-pic" data-action="kid-pick" data-i="${i}" aria-label="${esc(p.de)}">${kidPwImg(i)}</button>`).join('')}</div>
       </div>
       <label class="field kid-pw-words" for="kid-pw" hidden><span class="label">Dein Passwort</span>
-        <input id="kid-pw" type="text" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="60" placeholder="steht auf deinem Kärtchen" enterkeyhint="go">
-        <small class="muted">Das Passwort von deinem Vokaboom-Kärtchen.</small></label>
+        <input id="kid-pw" type="text" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="60" placeholder="steht auf deinem Kärtchen" enterkeyhint="go"></label>
       <p class="form-error" id="kid-error" role="alert"></p>
       <button class="btn primary big" type="submit" id="kid-submit">Los geht's ${icon('right')}</button>
     </form>
-    <p class="muted small">Oder scanne den QR-Code auf deinem Kärtchen mit der Kamera. Hast du ein Vokaboom-Kärtchen? Das geht hier auch, wenn deine Lehrperson deine Klasse übernommen hat.</p>
+    <p class="muted small">${icon('image')} Oder scanne den QR-Code auf deinem Kärtchen mit der Kamera.</p>
     <p class="small"><button type="button" class="link-btn" data-action="login-choose">Zurück</button></p>`, { label: 'Kinder-Login', cls: 'auth-modal kid-modal' });
   renderKidSlots();
   let mode = 'pics'; try { mode = localStorage.getItem(KID_MODE_KEY) || 'pics'; } catch { /* */ }
@@ -309,6 +308,7 @@ async function submitKidLogin() {
       err.textContent = typed ? 'Benutzername oder Passwort stimmt leider nicht. Schau genau auf dein Kärtchen und probier es nochmal.' : 'Das stimmt leider nicht. Schau genau auf dein Kärtchen und probier es nochmal.';
       sfx.bad();
       kidForm.picks = []; renderKidSlots();
+      if (typed) $('#kid-pw')?.select();
       btn.disabled = false; btn.innerHTML = `Los geht's ${icon('right')}`;
       return;
     }
@@ -373,18 +373,21 @@ async function loadClasses() {
   klass.loading = (async () => {
     try {
       const c = await cloudClient();
-      const get = (link) => Promise.all([
-        c.from('einmaleins_classes').select(`id,name,settings,created_at${link ? ',vokaboom_class' : ''}`).order('created_at'),
-        c.from('einmaleins_students').select(`id,class_id,first_name,last_initial,username,pics,created_at${link ? ',vokaboom_id' : ''}`).order('first_name'),
+      // lvl 2: mit Verknüpfung zu Vokaboom und Passwörtern, 1: ohne Passwörter, 0: ohne beides (älteres SQL-Skript)
+      const get = (lvl) => Promise.all([
+        c.from('einmaleins_classes').select(`id,name,settings,created_at${lvl ? ',vokaboom_class' : ''}${lvl > 1 ? ',class_pw' : ''}`).order('created_at'),
+        c.from('einmaleins_students').select(`id,class_id,first_name,last_initial,username,pics,created_at${lvl ? ',vokaboom_id' : ''}${lvl > 1 ? ',pw' : ''}`).order('first_name'),
       ]);
       const cfgDone = loadCardCfg(); // Kärtchen-Einstellungen (gleich wie in Vokaboom)
-      let [cl, st] = await get(true);
+      let [cl, st] = await get(2);
       await cfgDone;
-      klass.noLink = false;
-      if ([cl.error, st.error].some((e) => e && /vokaboom_(class|id)/.test(e.message || ''))) {
+      klass.noLink = false; klass.noPw = false;
+      const missing = (re) => [cl.error, st.error].some((e) => e && re.test(e.message || ''));
+      if (missing(/class_pw|\.pw\b|"pw"|column pw/)) { klass.noPw = true; [cl, st] = await get(1); }
+      if (missing(/vokaboom_(class|id)/)) {
         // Datenbank noch ohne Verknüpfung zu Vokaboom (SQL-Skript nicht neu ausgeführt)
-        klass.noLink = true;
-        [cl, st] = await get(false);
+        klass.noLink = true; klass.noPw = true;
+        [cl, st] = await get(0);
       }
       if (cl.error) throw cl.error;
       if (st.error) throw st.error;
@@ -612,7 +615,7 @@ function renderClass() {
     <div class="class-body">${body}</div>
   </section>`;
   if (klass.tab === 'kids') bindClassKids(c);
-  if (klass.tab === 'cards') { bindCardCfg(); renderCardPreviews(c, kids); }
+  if (klass.tab === 'cards') renderCardPreviews(c, kids);
   if (klass.tab === 'overview') bindOverview(c);
 }
 
@@ -630,7 +633,7 @@ function classKidsHTML(c, kids) {
     return `<li class="kid-row">
       <span class="kid-av-big" aria-hidden="true">${kidWordImg(s.username)}</span>
       <span class="kid-who"><strong>${esc(kidName(s))}</strong><small>${esc(displayUser(s.username))}${s.vokaboom_id && klass.vb?.byId.get(s.vokaboom_id) ? ' <span class="vb-tag" title="Gleiches Kärtchen wie in Vokaboom">auch in Vokaboom</span>' : ''}</small></span>
-      ${kidSecretOf(s) === 'password' ? `<span class="kid-pw-text" aria-label="Passwort">${esc(showPw(vbOf(s)?.pw))}</span>`
+      ${kidSecretOf(s) === 'password' ? `<span class="kid-pw-text" aria-label="Passwort">${esc(showPw(kidPwOf(s)))}</span>`
         : kidSecretOf(s) === 'class' ? '<span class="kid-pw-text muted" title="Klassenpasswort">Klassenpasswort</span>'
           : `<span class="kid-pw" aria-label="Bilder-Passwort">${picsList(s.pics).map((i) => `<span>${kidPwImg(i)}</span>`).join('')}</span>`}
       <span class="kid-actions">
@@ -786,13 +789,13 @@ async function kidNewPics(id) {
       if (r.error) throw r.error;
       if (v) { v.pics = pics; if (v.pw) v.pw = pw; if ('pw_prev' in v) v.pw_prev = null; }
     }
-    const { error } = await cl.from('einmaleins_students').update({ pics }).eq('id', id);
+    const { error } = await cl.from('einmaleins_students').update('pw' in s ? { pics, pw } : { pics }).eq('id', id);
     if (error) throw error;
-    s.pics = pics;
+    s.pics = pics; if ('pw' in s) s.pw = pw;
     render();
     toast(s.vokaboom_id
-      ? `${kidName(s)} hat ${v?.pw ? 'ein neues Passwort und neue Bilder' : 'neue Bilder'} – in Teilmal und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
-      : `${kidName(s)} hat neue Bilder. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
+      ? `${kidName(s)} hat ein neues Passwort und neue Bilder – in Teilmal und Vokaboom. Das alte Kärtchen gilt nicht mehr, druck ein neues aus.`
+      : `${kidName(s)} hat ${'pw' in s ? 'ein neues Passwort und neue Bilder' : 'neue Bilder'}. Das alte Kärtchen gilt nicht mehr – druck ein neues aus.`);
   } catch (e) { toast(classErrorText(e), 'bad'); }
 }
 async function kidDelete(id, where = '') {
@@ -854,14 +857,14 @@ function classSettingsHTML(c) {
   </div>`;
 }
 let clsSaveT = null;
-function saveClassSettingsSoon(c) {
+function saveClassSettingsSoon(c, quiet = false) {
   clearTimeout(clsSaveT);
   clsSaveT = setTimeout(async () => {
     try {
       const cl = await cloudClient();
       const { error } = await cl.from('einmaleins_classes').update({ settings: c.settings }).eq('id', c.id);
       if (error) throw error;
-      toast('Gespeichert.');
+      if (!quiet) toast('Gespeichert.');
     } catch (e) { toast(classErrorText(e), 'bad'); }
   }, 500);
 }
@@ -899,71 +902,34 @@ function classCardsHTML(c, kids) {
   return `<div class="panel">
     <div class="cards-head">
       <div><h2>Login-Kärtchen</h2>
-        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen – oder mit Passwort, wenn du das unten so eingestellt hast.</p>
+        <p class="hint">Ausdrucken, ausschneiden und verteilen. Anmelden: QR-Code scannen – oder Benutzername eintippen und die 3 Bilder der Reihe nach antippen – oder mit Passwort, wenn du das im Menü so eingestellt hast.</p>
         <p class="hint">Die Kärtchen sind neutral, ohne Logo. ${kids.some((x) => vbLoginOf(x)) ? 'Kinder mit Vokaboom-Login bekommen zwei QR-Codes: <strong>ABC Vokabeln</strong> öffnet Vokaboom, <strong>1×1 Rechnen</strong> öffnet Teilmal – ein Kärtchen für beide Tools.' : 'Der QR-Code <strong>1×1 Rechnen</strong> öffnet Teilmal.'}</p></div>
-      <button class="btn primary" data-action="cards-pdf" id="cards-pdf">${icon('down')} PDF herunterladen</button>
+      <span class="row"><button class="btn secondary" data-action="menu-sec" data-sec="klassen">${icon('sliders')} Kärtchen anpassen</button>
+      <button class="btn primary" data-action="cards-pdf" id="cards-pdf">${icon('down')} PDF herunterladen</button></span>
     </div>
-    ${cardCfgHTML(c, kids)}
     <div class="card-previews">${kids.map((s) => `<figure class="card-prev" data-sid="${s.id}"><span class="spinner"></span></figure>`).join('')}</div>
   </div>`;
 }
-/** „Kärtchen anpassen“: dieselben Einstellungen wie in Vokaboom (Menü → Login-Kärtchen), sie gelten in beiden Tools */
-function cardCfgHTML(c, kids) {
-  const cc = cardCfg();
-  const vc = c.vokaboom_class ? vbClassById(c.vokaboom_class) : null;
-  const noPwKids = cc.secret !== 'pics' ? kids.filter((x) => kidSecretOf(x) === 'pics').length : 0;
-  return `<details class="card-cfg" id="card-cfg" ${klass.cardCfgOpen ? 'open' : ''}>
-    <summary>${icon('sliders')} Kärtchen anpassen <small class="muted">gilt auch in Vokaboom</small></summary>
-    <div class="card-cfg-body">
-      <p class="small muted">Gilt für die Kärtchen, die du ab jetzt druckst – in Teilmal und in Vokaboom gleich. Das Passwort bleibt gleich – nur die Darstellung ändert sich.</p>
-      ${CARD_SYNC.missing ? '<p class="banner bad small">Damit diese Einstellung auch in Vokaboom gilt, <code>supabase/avatar.sql</code> in Supabase nochmals ganz ausführen. Bis dahin gilt sie nur in diesem Browser.</p>' : ''}
-      <div class="field"><span class="label">Passwort auf dem Kärtchen</span>
-        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="pics" ${cc.secret === 'pics' ? 'checked' : ''}><span><b>Bilder</b> – die Kinder tippen 3 Bilder an (ideal für Unterstufe)</span></label>
-        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="password" ${cc.secret === 'password' ? 'checked' : ''}><span><b>Passwort pro Kind</b> – jedes Kind hat ein eigenes einfaches Passwort aus einem Wort und einer Zahl, z. B. „Teich23“</span></label>
-        <label class="radio"><input type="radio" name="card-secret" data-card="secret" value="class" ${cc.secret === 'class' ? 'checked' : ''}><span><b>Klassenpasswort</b> – ein Passwort für die ganze Klasse (einfach zu merken; dafür könnten sich Kinder gegenseitig anmelden)</span></label>
-      </div>
-      ${cc.secret === 'class' ? (vc ? `<label class="field class-pw-row" for="class-pw"><span class="label">Klassenpasswort für „${esc(c.name)}“</span>
-          <input type="text" id="class-pw" data-class-pw="${vc.id}" value="${esc(vc.class_pw || '')}" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="z. B. Sommer2026">
-          <small class="muted">Gilt auch in der Vokaboom-Klasse „${esc(vc.name)}“. Ohne Klassenpasswort bekommen die Kinder Kärtchen mit Bildern.</small></label>` : '') : ''}
-      ${noPwKids ? `<p class="small muted">${noPwKids === kids.length ? 'Die Kinder dieser Klasse bekommen' : `${noPwKids} ${noPwKids === 1 ? 'Kind bekommt' : 'Kinder bekommen'}`} trotzdem Kärtchen mit Bildern: Passwörter gibt es für Kinder, die mit Vokaboom verbunden sind${cc.secret === 'class' ? ' und deren Klasse ein Klassenpasswort hat' : ''}.${c.vokaboom_class || klass.noLink ? '' : ' Verbinden: Reiter „Kinder“ → „Mit Vokaboom verbinden“.'}</p>` : ''}
-      <div class="field"><span class="label">Name auf dem Kärtchen</span>
-        <label class="radio"><input type="radio" name="card-names" data-card="names" value="full" ${cc.names === 'full' ? 'checked' : ''}><span>Vorname und Anfangsbuchstabe („Lena M.“)</span></label>
-        <label class="radio"><input type="radio" name="card-names" data-card="names" value="initials" ${cc.names === 'initials' ? 'checked' : ''}><span>Nur Initialen („L. M.“) – datensparsam, z. B. für Kärtchen, die herumliegen</span></label>
-      </div>
-      <label class="switch"><input type="checkbox" data-card="qr" ${cc.qr ? 'checked' : ''}><span>QR-Code aufs Kärtchen (Anmelden ohne Tippen)</span></label>
-      <label class="switch"><input type="checkbox" data-card="cls" ${cc.cls ? 'checked' : ''}><span>Klassenname oben aufs Kärtchen</span></label>
-    </div>
-  </details>`;
-}
-function bindCardCfg() {
-  const box = $('#card-cfg');
-  if (!box || box.dataset.bound) return;
-  box.dataset.bound = '1';
-  box.addEventListener('toggle', () => { klass.cardCfgOpen = box.open; });
-  box.addEventListener('change', async (e) => {
-    const t = e.target;
-    if (t.dataset.card) {
-      db.settings.cards = { ...cardCfg(), [t.dataset.card]: t.type === 'checkbox' ? t.checked : t.value };
-      saveDB(); saveCardCfg(); render();
-      return;
-    }
-    if (t.dataset.classPw && await saveVbClassPw(t.dataset.classPw, t.value)) { render(); toast('Klassenpasswort gespeichert.'); }
-  });
-}
-/** Klassenpasswort der verbundenen Vokaboom-Klasse (dort steht es, Teilmal prüft es beim Anmelden mit); leer = keines */
-async function saveVbClassPw(vid, raw) {
-  const vc = vbClassById(vid);
-  if (!vc) return false;
+/** Klassenpasswort (eines für alle Kinder der Klasse); leer = keines. Ist die Klasse mit Vokaboom verbunden,
+ *  gilt es dort gleich mit (ein Kärtchen für beide Tools). */
+async function saveClassPw(cid, raw) {
+  const c = klass.list.find((x) => x.id === cid);
+  if (!c) return false;
   const v = String(raw || '').trim().slice(0, 40);
   if (v && v.replace(/[^a-z0-9äöü]/gi, '').length < 4) { toast('Das Klassenpasswort braucht mindestens 4 Buchstaben oder Zahlen.', 'bad'); return false; }
   try {
     const cl = await cloudClient();
-    const { error } = await cl.from('vokaboom_classes').update({ class_pw: v || null }).eq('id', vid);
+    const { error } = await cl.from('einmaleins_classes').update({ class_pw: v || null }).eq('id', cid);
     if (error) throw error;
-    vc.class_pw = v || null;
+    c.class_pw = v || null;
+    const vc = c.vokaboom_class && vbClassById(c.vokaboom_class);
+    if (vc) {
+      const r = await cl.from('vokaboom_classes').update({ class_pw: v || null }).eq('id', vc.id);
+      if (!r.error) vc.class_pw = v || null;
+    }
     return true;
   } catch (e) {
-    toast(/class_pw/.test(e?.message || '') ? 'Dafür zuerst in Vokaboom supabase/vokabelwelt.sql in Supabase nochmals ausführen.' : classErrorText(e), 'bad');
+    toast(/class_pw/.test(e?.message || '') ? 'Dafür zuerst supabase/einmaleins.sql in Supabase nochmals ausführen.' : classErrorText(e), 'bad');
     return false;
   }
 }
@@ -1015,14 +981,22 @@ function vbOf(st) {
   const v = st?.vokaboom_id && klass.vb?.byId.get(st.vokaboom_id);
   return v && v.username === st.username ? v : null;
 }
-/** Was auf dem Kärtchen steht: 'pics' (3 Bilder), 'password' (Passwort des Kindes aus Vokaboom) oder 'class'
- *  (Klassenpasswort der verbundenen Vokaboom-Klasse). Fehlt das Passwort, gelten die Bilder – wie in Vokaboom. */
+/** Was auf dem Kärtchen steht: 'pics' (3 Bilder), 'password' (eigenes Passwort pro Kind) oder 'class'
+ *  (Klassenpasswort). Fehlt das Passwort, gelten die Bilder – wie in Vokaboom. */
 function kidSecretOf(st) {
-  const m = cardCfg().secret, v = vbOf(st);
-  if (m === 'password' && v?.pw) return 'password';
-  if (m === 'class' && v && vbClassById(v.class_id)?.class_pw) return 'class';
+  const m = cardCfg().secret;
+  if (m === 'password' && kidPwOf(st)) return 'password';
+  if (m === 'class' && classPwOf(st)) return 'class';
   return 'pics';
 }
+/** Passwort des Kindes: bei verbundenen Kindern das vom Vokaboom-Kärtchen (gilt in beiden Tools), sonst das eigene */
+const kidPwOf = (st) => vbOf(st)?.pw || st?.pw || '';
+/** Klassenpasswort einer Klasse: verbunden das der Vokaboom-Klasse (falls gesetzt), sonst das eigene */
+const classPwOfClass = (c) => (c?.vokaboom_class && vbClassById(c.vokaboom_class)?.class_pw) || c?.class_pw || '';
+const classPwOf = (st) => {
+  const v = vbOf(st);
+  return (v && vbClassById(v.class_id)?.class_pw) || klass.list.find((c) => c.id === st?.class_id)?.class_pw || '';
+};
 const CARD_W = 85, CARD_H = 54;
 // Gleiche Farben wie in Vokaboom: Ein Kind bekommt in beiden Tools genau dasselbe Kärtchen
 const CARD_COLORS = [['#4F46E5', '#EEF0FF'], ['#DB2777', '#FDE7F1'], ['#D97706', '#FFF2D9'], ['#0891B2', '#DDF6FB'], ['#059669', '#DCF7EC'], ['#7C3AED', '#F1EAFF'], ['#E8730C', '#FFEDD8'], ['#0E7490', '#DFF5F9'], ['#BE185D', '#FCE7F3'], ['#4D7C0F', '#ECFCCB']];
@@ -1129,8 +1103,7 @@ async function drawKidCard(ctx, x, y, s, st, className) {
   const pics = picsList(st.pics);
   ctx.fillStyle = '#64748B'; ctx.font = `500 ${L(2.2)}px ${body}`;
   if (cc.secret === 'password' || cc.secret === 'class') {
-    const v = vbOf(st);
-    const pwTxt = cc.secret === 'class' ? vbClassById(v?.class_id)?.class_pw || '' : showPw(v?.pw);
+    const pwTxt = cc.secret === 'class' ? classPwOf(st) : showPw(kidPwOf(st));
     ctx.fillText(cc.secret === 'class' ? 'Passwort (für die ganze Klasse)' : 'Passwort', X(4), Y(35.2));
     rrect(ctx, X(4), Y(37.4), L(pwW), L(11.2), L(2.4));
     ctx.fillStyle = wash; ctx.fill(); ctx.lineWidth = L(0.4); ctx.strokeStyle = accent; ctx.stroke();

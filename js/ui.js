@@ -31,6 +31,8 @@ const ICONS = {
   back: '<path d="M10 7 5 12l5 5"/><path d="M5 12h9a5 5 0 0 1 0 10h-2"/>',
   clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5M12 2.5V5"/>',
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  speaker: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
   dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 8.5h.01M15.5 15.5h.01M12 12h.01M15.5 8.5h.01M8.5 15.5h.01"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 };
@@ -60,7 +62,7 @@ function renderShell() {
           ${isKid() ? `<span id="av-coin-slot">${typeof avCoinPillHTML === 'function' ? avCoinPillHTML() : ''}</span>` : ''}
           <span id="coin-slot">${coinPillHTML()}</span>
           <span id="account-slot">${accountButtonHTML()}</span>
-          <button class="icon-btn" data-action="settings" aria-label="Einstellungen" title="Einstellungen">${icon('sliders')}</button>
+          ${isKid() || typeof menuButtonHTML !== 'function' ? `<button class="icon-btn" data-action="settings" aria-label="Einstellungen" title="Einstellungen">${icon('sliders')}</button>` : ''}
         </div>
       </div>
     </header>
