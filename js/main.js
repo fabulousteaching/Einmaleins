@@ -87,6 +87,8 @@ const actions = {
   logout: async () => { closeModal(true); await cloudLogout(); toast('Abgemeldet.'); },
   ...classActions,
 };
+if (typeof avatarActions === 'object') Object.assign(actions, avatarActions); // Mein Avatar (js/avatar.js, gemeinsam mit Vokaboom)
+
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
 const FAST = new Set(['meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);

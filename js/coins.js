@@ -46,6 +46,7 @@ function earnPoints(pts, from = null) {
   saveDB();
   updateCoinUI();
   if (gained) coinGainFx(gained, from);
+  if (gained && typeof avatarEarnCoins === 'function') avatarEarnCoins(gained); // auch fürs Avatar-Konto (gemeinsam mit Vokaboom)
   return gained;
 }
 /** Ein Spiel bezahlen. Liefert true, wenn gespielt werden darf. */

@@ -109,6 +109,7 @@ async function kidRefresh() {
   saveNow();
   renderShell();
   render();
+  if (typeof avatarLoad === 'function') avatarLoad(true).then(() => { if (ui.view === 'home' && isKid()) render(); });
 }
 async function kidPushNow() {
   if (!isKid()) return;
@@ -144,6 +145,7 @@ async function kidLogout() {
 function kidForget(rerender = true) {
   try { localStorage.removeItem(KID_KEY); localStorage.removeItem(KID_DB_KEY); } catch { /* */ }
   Object.assign(kid, { token: '', first: '', initial: '', username: '', cls: '', settings: null, sent: '', status: 'ok', sso: false, vb: false });
+  if (typeof AV === 'object') { AV.state = null; AV.draft = null; }
   STORE_KEY = MAIN_STORE_KEY;
   db = { settings: structuredClone(DEFAULT_SETTINGS), prog: emptyProg() };
   loadDB();
@@ -307,7 +309,13 @@ function kidHelloHTML() {
     <span class="kid-hello-pic" aria-hidden="true">${kidWordImg(kid.username)}</span>
     <div><p class="eyebrow">${esc(kid.cls)}</p><h1>Hallo ${esc(kid.first)}!</h1><p class="lead">Such dir eine Übung oder ein Spiel aus.</p>
       ${kid.vb && CLOUD_CFG.vokaboomUrl ? `<button class="btn small secondary other-tool" data-action="go-vokaboom"><span class="ot-tag">ABC</span> Vokabeln üben</button>` : ''}</div>
-  </div>`;
+  </div>
+  ${typeof avatarSVG === 'function' ? `<button class="av-home-card" data-action="avatar-open">
+      <span class="av-home-fig">${AV.state ? avatarSVG(AV.state.avatar, { idle: true, label: 'Mein Avatar' }) : ''}</span>
+      <span><strong>Mein Avatar${AV.state?.fresh ? '<span class="av-new">Neu</span>' : ''}</strong>
+        <span class="muted">${AV.state?.fresh ? 'Gestalte deine eigene Figur!' : 'Frisur, Kleider, Haustier …'}</span><br>
+        ${AV_COIN_SVG} <b class="av-coin-n">${AV.state?.coins ?? '…'}</b> Avatar-Münzen – verdiene mehr beim Üben</span>
+    </button>` : ''}`;
 }
 
 /* =========================================================

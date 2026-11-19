@@ -67,3 +67,10 @@ Kläre mit deiner Schule, ob das so erlaubt ist.
 - **Pause bei Gratis-Projekten:** Supabase pausiert Gratis-Projekte nach etwa 7 Tagen ohne Nutzung (das gilt für Vokaboom und Teilmal gemeinsam). Beim Projekt in Supabase **Restore** klicken. Während der Pause meldet Teilmal «Keine Verbindung zum Server»; Üben geht trotzdem, der Stand wird später gemeldet.
 - **Passwort vergessen:** wie bei Vokaboom (siehe dort `supabase/ANLEITUNG.md`), es ist dasselbe Konto.
 - Ein Kind, eine Klasse oder alle Daten lassen sich auch direkt in Supabase unter **Table Editor** (Tabellen `einmaleins_…`) ansehen oder löschen. Wird eine Klasse gelöscht, sind auch ihre Kinder und deren Übungsstand weg.
+
+## Mein Avatar (gemeinsam mit Vokaboom)
+
+Kinder mit Login-Kärtchen gestalten unter **Mein Avatar** eine eigene Figur. Das Basic-Set ist gratis, besondere Teile kosten Avatar-Münzen. Jede Münze, die ein Kind in den Teilmal-Übungen verdient, kommt zusätzlich aufs Avatar-Konto (die Teilmal-Münzen für die Spiele bleiben, wie sie sind). Verbundene Kinder haben in Teilmal und Vokaboom denselben Avatar und dieselben Avatar-Münzen.
+
+**Einrichten:** `supabase/avatar.sql` einmal im SQL Editor ausführen (gilt für beide Tools). Details: `supabase/AVATAR.md`.
+
