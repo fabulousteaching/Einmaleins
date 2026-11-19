@@ -308,19 +308,169 @@ function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8 } = {}) {
 }
 
 /* ---------------- Kart ---------------- */
+/* ---------------- Garage-Optik ----------------
+   Nur das Aussehen: Lack, Lackart, Muster, Felgen, Spoiler, Auspuff, Turbo-Flammen, Unterboden-Licht, Helm.
+   Alle Karts fahren gleich schnell – die Fahrphysik schaut sich diese Werte nie an. */
+const KART_LOOK0 = { paint: 0xff5a36, paint2: 0xffffff, finish: 'gloss', pattern: 'none', rims: 'classic', wing: 'standard', exhaust: 'chrome', flames: 'classic', glow: 'none', helmet: 0xffffff, visor: 'dark', num: 1 };
+const KART_FLAMES = {
+  classic: ['rgba(255,240,180,1)', 'rgba(255,90,20,0)', 0xffffff],
+  blue: ['rgba(220,250,255,1)', 'rgba(30,120,255,0)', 0xbfe9ff],
+  green: ['rgba(235,255,200,1)', 'rgba(40,220,90,0)', 0xd9ffb0],
+  violet: ['rgba(255,225,255,1)', 'rgba(160,60,255,0)', 0xf0c8ff],
+  plasma: ['rgba(255,255,255,1)', 'rgba(255,60,190,0)', 0xffd6f3],
+  rainbow: ['rgba(255,255,255,1)', 'rgba(255,255,255,0)', 0xff4040],
+};
+const KART_GLOWS = { cyan: 0x22d3ee, pink: 0xf472b6, green: 0x4ade80, gold: 0xfacc15, violet: 0xa78bfa, rainbow: 0xff4040 };
+const kartLookOf = (look) => ({ ...KART_LOOK0, ...(look || {}) });
+
+function kartRimTex(style = 'classic') {
+  return canvasTex(128, 128, (g, w) => {
+    const r = w / 2, P2 = Math.PI * 2;
+    g.fillStyle = '#17181c'; g.fillRect(0, 0, w, w);
+    const disc = (c0, c1) => { const gr = g.createRadialGradient(r, r, 4, r, r, r * 0.62); gr.addColorStop(0, c0); gr.addColorStop(1, c1); g.fillStyle = gr; g.beginPath(); g.arc(r, r, r * 0.62, 0, P2); g.fill(); };
+    const hub = (c) => { g.fillStyle = c; g.beginPath(); g.arc(r, r, r * 0.12, 0, P2); g.fill(); };
+    if (style === 'star' || style === 'gold') {
+      disc(style === 'gold' ? '#fff3b0' : '#f1f5f9', style === 'gold' ? '#c98a00' : '#94a3b8');
+      g.fillStyle = style === 'gold' ? '#7a5200' : '#334155';
+      for (let i = 0; i < 5; i++) {                                         // Löcher zwischen den Sternspeichen
+        const a = (i / 5) * P2 + Math.PI / 5;
+        g.beginPath(); g.moveTo(r + Math.cos(a - 0.42) * r * 0.2, r + Math.sin(a - 0.42) * r * 0.2);
+        g.lineTo(r + Math.cos(a - 0.3) * r * 0.55, r + Math.sin(a - 0.3) * r * 0.55); g.lineTo(r + Math.cos(a + 0.3) * r * 0.55, r + Math.sin(a + 0.3) * r * 0.55);
+        g.lineTo(r + Math.cos(a + 0.42) * r * 0.2, r + Math.sin(a + 0.42) * r * 0.2); g.closePath(); g.fill();
+      }
+      hub(style === 'gold' ? '#fff3b0' : '#e2e8f0');
+    } else if (style === 'turbine') {
+      disc('#e5e7eb', '#6b7280');
+      g.strokeStyle = '#1f2937'; g.lineWidth = 4;
+      for (let i = 0; i < 14; i++) { const a = (i / 14) * P2; g.beginPath(); g.moveTo(r + Math.cos(a) * r * 0.16, r + Math.sin(a) * r * 0.16); g.quadraticCurveTo(r + Math.cos(a + 0.5) * r * 0.42, r + Math.sin(a + 0.5) * r * 0.42, r + Math.cos(a + 0.75) * r * 0.6, r + Math.sin(a + 0.75) * r * 0.6); g.stroke(); }
+      hub('#f97316');
+    } else if (style === 'spoke') {
+      disc('#f8fafc', '#cbd5e1');
+      g.strokeStyle = '#475569'; g.lineWidth = 2;
+      for (let i = 0; i < 24; i++) { const a = (i / 24) * P2; g.beginPath(); g.moveTo(r + Math.cos(a) * r * 0.12, r + Math.sin(a) * r * 0.12); g.lineTo(r + Math.cos(a + 0.35) * r * 0.6, r + Math.sin(a + 0.35) * r * 0.6); g.stroke(); }
+      g.lineWidth = 5; g.strokeStyle = '#e2e8f0'; g.beginPath(); g.arc(r, r, r * 0.6, 0, P2); g.stroke();
+      hub('#94a3b8');
+    } else if (style === 'black') {
+      disc('#4b5563', '#111827');
+      g.fillStyle = '#030712';
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * P2; g.beginPath(); g.ellipse(r + Math.cos(a) * r * 0.36, r + Math.sin(a) * r * 0.36, r * 0.14, r * 0.08, a, 0, P2); g.fill(); }
+      hub('#ef4444');
+    } else if (style === 'neon') {
+      g.fillStyle = '#0b1020'; g.beginPath(); g.arc(r, r, r * 0.62, 0, P2); g.fill();
+      g.strokeStyle = '#22d3ee'; g.lineWidth = 7; g.beginPath(); g.arc(r, r, r * 0.55, 0, P2); g.stroke();
+      g.lineWidth = 4; g.strokeStyle = '#f472b6';
+      for (let i = 0; i < 3; i++) { const a = (i / 3) * P2; g.beginPath(); g.moveTo(r, r); g.lineTo(r + Math.cos(a) * r * 0.5, r + Math.sin(a) * r * 0.5); g.stroke(); }
+      hub('#a5f3fc');
+    } else {
+      disc('#f1f5f9', '#94a3b8');
+      g.fillStyle = '#334155';
+      for (let i = 0; i < 5; i++) { const a = (i / 5) * P2 + 0.3; g.beginPath(); g.ellipse(r + Math.cos(a) * r * 0.34, r + Math.sin(a) * r * 0.34, r * 0.13, r * 0.07, a, 0, P2); g.fill(); }
+      hub('#e2e8f0');
+    }
+  });
+}
+
+/** Wanne: UV-Koordinaten als Atlas – oben im Bild die Ansicht von oben, unten die Seitenansicht.
+    Beide Bereiche haben gleich viele Bildpunkte pro Meter, so bleiben Sterne und Punkte rund. */
+function kartBodyUV(T, geo) {
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, p = geo.attributes.position, n = p.count;
+  const sx = bb.max.x - bb.min.x, sy = bb.max.y - bb.min.y, sz = bb.max.z - bb.min.z;
+  const ht = sx / (sx + sy);                                      // Anteil der Draufsicht an der Bildhöhe
+  const uv = new Float32Array(n * 2);
+  const a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), e = new T.Vector3(), nn = new T.Vector3();
+  for (let i = 0; i < n; i += 3) {
+    a.fromBufferAttribute(p, i); b.fromBufferAttribute(p, i + 1); c.fromBufferAttribute(p, i + 2);
+    nn.subVectors(c, b).cross(e.subVectors(a, b)).normalize();
+    const side = Math.abs(nn.x) > 0.62;
+    for (let k = 0; k < 3; k++) {
+      const v = k === 0 ? a : k === 1 ? b : c;
+      uv[(i + k) * 2] = (v.z - bb.min.z) / sz;
+      uv[(i + k) * 2 + 1] = side ? (1 - ht) * (v.y - bb.min.y) / sy : 1 - ht * (v.x - bb.min.x) / sx;
+    }
+  }
+  geo.setAttribute('uv', new T.BufferAttribute(uv, 2));
+  geo.userData.dims = { sx, sy, sz };
+  return geo;
+}
+/** Lack mit Muster als Bild (Grundfarbe + zweite Farbe). a: 0 hinten … 1 vorne; c: quer; h: Höhe */
+function kartPaintTex(L, dims) {
+  const c1 = kartHex(L.paint), c2 = kartHex(L.paint2);
+  const W = 1024, H = Math.round((W * (dims.sx + dims.sy)) / dims.sz), Ht = Math.round((H * dims.sx) / (dims.sx + dims.sy)), Hs = H - Ht;
+  return canvasTex(W, H, (g) => {
+    g.fillStyle = c1; g.fillRect(0, 0, W, H);
+    const TP = (a, c) => [a * W, c * Ht];                          // Draufsicht
+    const SP = (a, h) => [a * W, Ht + (1 - h) * Hs];               // Seite
+    const poly = (pts) => { g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.fill(); };
+    const band = (P, a0, a1, b0, b1) => poly([P(a0, b0), P(a1, b0), P(a1, b1), P(a0, b1)]);
+    const star = ([x, y], s, rot = 0) => { g.beginPath(); for (let i = 0; i < 10; i++) { const an = rot - Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? s * 0.45 : s; g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr); } g.closePath(); g.fill(); };
+    const dot = ([x, y], s) => { g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill(); };
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    g.fillStyle = c2; g.strokeStyle = c2; g.lineJoin = 'round'; g.lineCap = 'round';
+    switch (L.pattern) {
+      case 'racing':
+        band(TP, 0, 1, 0.34, 0.44); band(TP, 0, 1, 0.56, 0.66);
+        band(SP, 0, 1, 0.46, 0.56); band(SP, 0, 1, 0.6, 0.64);
+        break;
+      case 'center':
+        band(TP, 0, 1, 0.38, 0.62); g.fillStyle = c1; band(TP, 0, 1, 0.41, 0.59); g.fillStyle = c2; band(TP, 0, 1, 0.45, 0.55);
+        band(SP, 0.05, 1, 0.62, 0.66);
+        break;
+      case 'duo':
+        poly([TP(0.62, 0), TP(1, 0), TP(1, 1), TP(0.62, 1), TP(0.54, 0.5)]);
+        poly([SP(0.66, 0), SP(1, 0), SP(1, 1), SP(0.54, 1)]);
+        break;
+      case 'checker': {
+        const s = Ht / 7;
+        for (let i = 0; i * s < W * 0.4; i++) for (let j = 0; j < 7; j++) if ((i + j) % 2) g.fillRect(W - (i + 1) * s, j * s, s, s);
+        for (let i = 0; i * s < W * 0.4; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2) g.fillRect(W - (i + 1) * s, Ht + Hs * 0.3 + j * s, s, s);
+        break;
+      }
+      case 'stars':
+        for (let i = 0; i < 34; i++) star(TP(rnd(), 0.06 + rnd() * 0.88), 14 + rnd() * 18, rnd());
+        for (let i = 0; i < 30; i++) star(SP(rnd(), 0.2 + rnd() * 0.7), 12 + rnd() * 16, rnd());
+        break;
+      case 'dots':
+        for (let y = 0; y < 6; y++) for (let x = 0; x < 15; x++) dot(TP((x + (y % 2) * 0.5 + 0.3) / 15, (y + 0.5) / 6), 15);
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 15; x++) dot(SP((x + (y % 2) * 0.5 + 0.3) / 15, 0.12 + y * 0.19), 13);
+        break;
+      case 'lightning': {
+        const bolt = (pts, w) => { g.lineWidth = w; g.lineJoin = 'miter'; g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.stroke(); };
+        bolt([TP(0, 0.5), TP(0.2, 0.34), TP(0.38, 0.66), TP(0.58, 0.34), TP(0.78, 0.66), TP(1, 0.5)], 30);
+        bolt([SP(0, 0.5), SP(0.18, 0.7), SP(0.36, 0.34), SP(0.56, 0.7), SP(0.76, 0.34), SP(1, 0.55)], 22);
+        break;
+      }
+      case 'flames': {
+        // Flammenzungen von der Nase nach hinten
+        const tongue = (P, c0, w, len, wav) => {
+          g.beginPath(); g.moveTo(...P(1, c0 - w));
+          g.bezierCurveTo(...P(1 - len * 0.4, c0 - w * 1.3), ...P(1 - len * 0.75, c0 + wav), ...P(1 - len, c0 + wav * 0.6));
+          g.bezierCurveTo(...P(1 - len * 0.7, c0 + w * 0.2 + wav * 0.5), ...P(1 - len * 0.35, c0 + w * 1.2), ...P(1, c0 + w)); g.fill();
+        };
+        const lens = [0.42, 0.62, 0.78, 0.84, 0.66, 0.46];
+        const all = (col, f) => { g.fillStyle = col; for (let i = 0; i < 6; i++) tongue(TP, 0.09 + i * 0.165, 0.09 * f, lens[i] * f, (i % 2 ? 0.05 : -0.05)); for (let i = 0; i < 4; i++) tongue(SP, 0.25 + i * 0.17, 0.1 * f, (0.5 + (i % 2) * 0.18) * f, 0.06); };
+        all(c2, 1);
+        g.globalAlpha = 0.9; all('#ffd34d', 0.55); g.globalAlpha = 1;
+        break;
+      }
+      default: break;
+    }
+  });
+}
+function kartPaintMat(T, L, map) {
+  const o = { color: map ? 0xffffff : L.paint, map: map || null };
+  switch (L.finish) {
+    case 'matte': return new T.MeshPhysicalMaterial({ ...o, metalness: 0, roughness: 0.82 });
+    case 'metal': return new T.MeshPhysicalMaterial({ ...o, metalness: 0.85, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.12 });
+    case 'pearl': return new T.MeshPhysicalMaterial({ ...o, metalness: 0.25, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05, iridescence: 1, iridescenceIOR: 1.35, iridescenceThicknessRange: [180, 620] });
+    case 'chrome': return new T.MeshPhysicalMaterial({ ...o, metalness: 1, roughness: 0.07, clearcoat: 1 });
+    case 'glow': return new T.MeshPhysicalMaterial({ ...o, metalness: 0.2, roughness: 0.35, clearcoat: 1, emissive: L.paint, emissiveIntensity: 0.45, emissiveMap: map || null });
+    default: return new T.MeshPhysicalMaterial({ ...o, metalness: 0.35, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 });
+  }
+}
+
 function kartTireTex() {
   return canvasTex(64, 256, (g, w, h) => { g.fillStyle = '#17181c'; g.fillRect(0, 0, w, h); g.fillStyle = '#2a2c33'; for (let y = 0; y < h; y += 16) { g.fillRect(0, y, w / 2 - 3, 7); g.fillRect(w / 2 + 3, y + 8, w / 2 - 3, 7); } });
-}
-function kartRimTex() {
-  return canvasTex(128, 128, (g, w) => {
-    g.fillStyle = '#17181c'; g.fillRect(0, 0, w, w);
-    const r = w / 2;
-    const gr = g.createRadialGradient(r, r, 4, r, r, r * 0.62); gr.addColorStop(0, '#f1f5f9'); gr.addColorStop(1, '#94a3b8');
-    g.fillStyle = gr; g.beginPath(); g.arc(r, r, r * 0.62, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#334155';
-    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + 0.3; g.beginPath(); g.ellipse(r + Math.cos(a) * r * 0.34, r + Math.sin(a) * r * 0.34, r * 0.13, r * 0.07, a, 0, Math.PI * 2); g.fill(); }
-    g.fillStyle = '#e2e8f0'; g.beginPath(); g.arc(r, r, r * 0.12, 0, Math.PI * 2); g.fill();
-  });
 }
 function kartNumTex(n, color) {
   return canvasTex(128, 128, (g, w, h) => {
@@ -330,18 +480,24 @@ function kartNumTex(n, color) {
   });
 }
 const KART_SHARED = {};
-function kartModel(T, color, helmetColor, num) {
+/** Ein Kart mit Fahrerin/Fahrer. look (optional): Garage-Optik, sonst Standard mit color/helmetColor/num */
+function kartModel(T, color, helmetColor, num, look = null) {
   const S = KART_SHARED;
   if (!S.tire || S.T !== T) {
     S.T = T;
-    const rim = new T.MeshStandardMaterial({ map: kartRimTex(), roughness: 0.35, metalness: 0.6 });
-    S.tireMat = [new T.MeshStandardMaterial({ map: kartTireTex(), roughness: 0.85 }), rim, rim];
+    S.rims = {};
+    S.treadMat = new T.MeshStandardMaterial({ map: kartTireTex(), roughness: 0.85 });
     S.tire = new T.CylinderGeometry(0.42, 0.42, 0.38, 26, 1);
     S.dark = new T.MeshStandardMaterial({ color: 0x1b1d22, metalness: 0.3, roughness: 0.6 });
     S.carbon = new T.MeshStandardMaterial({ color: 0x2b2f38, metalness: 0.5, roughness: 0.35 });
     S.chrome = new T.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 1, roughness: 0.15 });
+    S.gold = new T.MeshStandardMaterial({ color: 0xf5b400, metalness: 1, roughness: 0.2 });
+    S.blackPipe = new T.MeshStandardMaterial({ color: 0x111827, metalness: 0.6, roughness: 0.4 });
     S.glove = new T.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
     S.visor = new T.MeshPhysicalMaterial({ color: 0x0f172a, metalness: 0.5, roughness: 0.05, clearcoat: 1 });
+    S.visorGold = new T.MeshPhysicalMaterial({ color: 0xf5b400, metalness: 1, roughness: 0.08, clearcoat: 1 });
+    S.visorMirror = new T.MeshPhysicalMaterial({ color: 0x60a5fa, metalness: 1, roughness: 0.05, clearcoat: 1 });
+    S.visorRainbow = new T.MeshPhysicalMaterial({ color: 0xcbd5e1, metalness: 0.9, roughness: 0.08, iridescence: 1, iridescenceIOR: 1.8, iridescenceThicknessRange: [200, 900] });
     S.light = new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff4cc, emissiveIntensity: 1.6 });
     S.tail = new T.MeshStandardMaterial({ color: 0xff2020, emissive: 0xff1010, emissiveIntensity: 1.2 });
     // Wanne: Seitenprofil (vorne = +x im Profil), in der Breite ausgezogen, mit runden Kanten
@@ -351,33 +507,71 @@ function kartModel(T, color, helmetColor, num) {
     sh.lineTo(-1.32, 0.82); sh.closePath();
     const bg = new T.ExtrudeGeometry(sh, { depth: 0.9, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.1, bevelSegments: 4, curveSegments: 10 });
     bg.rotateY(-Math.PI / 2); bg.translate(0.45, 0, 0);
-    S.body = bg;
+    S.body = kartBodyUV(T, bg);
     S.pod = new T.CapsuleGeometry(0.2, 0.6, 6, 12); S.pod.rotateX(Math.PI / 2);
     S.bumper = new T.CapsuleGeometry(0.12, 1.4, 4, 10); S.bumper.rotateZ(Math.PI / 2);
+    S.glowTex = glowTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
   }
+  const L = kartLookOf(look || { paint: color, helmet: helmetColor, num });
+  if (!S.rims[L.rims]) {
+    const tex = kartRimTex(L.rims);
+    S.rims[L.rims] = L.rims === 'neon' ? new T.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.3, roughness: 0.4 })
+      : new T.MeshStandardMaterial({ map: tex, roughness: L.rims === 'gold' ? 0.2 : 0.35, metalness: L.rims === 'black' ? 0.4 : 0.7 });
+  }
+  const tireMat = [S.treadMat, S.rims[L.rims], S.rims[L.rims]];
   const g = new T.Group();
-  const paint = new T.MeshPhysicalMaterial({ color, metalness: 0.35, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 });
-  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, parent = g) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; parent.add(m); return m; };
+  const own = [];                                                 // eigene Materialien und Bilder (zum Aufräumen)
+  const mat = (m) => { own.push(m); return m; };
+  const paintTex = L.pattern !== 'none' ? kartPaintTex(L, S.body.userData.dims) : null;
+  if (paintTex) own.push(paintTex);
+  const paintBody = mat(kartPaintMat(T, L, paintTex));
+  const paint = paintTex ? mat(kartPaintMat(T, L, null)) : paintBody;
+  const paint2 = mat(kartPaintMat(T, { ...L, paint: L.paint2 }, null));
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0, parent = g) => { const o = new T.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; parent.add(o); return o; };
   const body = new T.Group(); g.add(body);
-  add(S.body, paint, 0, 0.02, 0, 0, 0, 0, body);                                            // Wanne
+  add(S.body, paintBody, 0, 0.02, 0, 0, 0, 0, body);                                        // Wanne
   for (const sx of [1, -1]) {
-    add(S.pod, paint, sx * 0.82, 0.42, 0, 0, 0, 0, body);                                     // Seitenkästen
+    add(S.pod, L.pattern === 'duo' ? paint2 : paint, sx * 0.82, 0.42, 0, 0, 0, 0, body);      // Seitenkästen
     add(new T.BoxGeometry(0.3, 0.24, 0.06), S.dark, sx * 0.82, 0.42, 0.52, 0, 0, 0, body);   // Lufteinlass
   }
   add(S.bumper, S.carbon, 0, 0.28, 1.84, 0, 0, 0, body);                                     // Stossstange
   add(new T.BoxGeometry(2.05, 0.06, 0.4), S.carbon, 0, 0.24, 1.7, 0, 0, 0, body);            // Frontflügel
   for (const x of [1.02, -1.02]) add(new T.BoxGeometry(0.05, 0.26, 0.46), S.carbon, x, 0.32, 1.7, 0, 0, 0, body);
-  add(new T.BoxGeometry(1.85, 0.07, 0.5), paint, 0, 1.2, -1.3, -0.08, 0, 0, body);             // Heckflügel
-  for (const x of [0.93, -0.93]) add(new T.BoxGeometry(0.05, 0.42, 0.62), S.carbon, x, 1.1, -1.3, 0, 0, 0, body);
-  for (const x of [0.4, -0.4]) add(new T.BoxGeometry(0.06, 0.5, 0.14), S.carbon, x, 0.9, -1.22, 0, 0, 0, body);
+  // Heckflügel: Standard, gross, doppelt, mit Haifischflosse oder als kurzer Entenbürzel
+  if (L.wing === 'big') {
+    add(new T.BoxGeometry(2.15, 0.08, 0.62), paint2, 0, 1.52, -1.34, -0.12, 0, 0, body);
+    for (const x of [1.08, -1.08]) add(new T.BoxGeometry(0.06, 0.62, 0.74), paint, x, 1.38, -1.34, 0, 0, 0, body);
+    for (const x of [0.38, -0.38]) add(new T.BoxGeometry(0.07, 0.86, 0.14), S.carbon, x, 1.05, -1.24, 0, 0, 0, body);
+  } else if (L.wing === 'double') {
+    add(new T.BoxGeometry(1.9, 0.07, 0.48), paint, 0, 1.16, -1.3, -0.06, 0, 0, body);
+    add(new T.BoxGeometry(1.9, 0.07, 0.4), paint2, 0, 1.42, -1.38, -0.16, 0, 0, body);
+    for (const x of [0.96, -0.96]) add(new T.BoxGeometry(0.05, 0.62, 0.66), S.carbon, x, 1.22, -1.32, 0, 0, 0, body);
+    for (const x of [0.4, -0.4]) add(new T.BoxGeometry(0.06, 0.5, 0.14), S.carbon, x, 0.9, -1.22, 0, 0, 0, body);
+  } else if (L.wing === 'duck') {
+    add(new T.BoxGeometry(1.5, 0.1, 0.42), paint, 0, 1.0, -1.36, -0.32, 0, 0, body);
+    add(new T.BoxGeometry(1.5, 0.05, 0.12), paint2, 0, 1.08, -1.56, -0.32, 0, 0, body);
+  } else {
+    add(new T.BoxGeometry(1.85, 0.07, 0.5), paint, 0, 1.2, -1.3, -0.08, 0, 0, body);
+    for (const x of [0.93, -0.93]) add(new T.BoxGeometry(0.05, 0.42, 0.62), S.carbon, x, 1.1, -1.3, 0, 0, 0, body);
+    for (const x of [0.4, -0.4]) add(new T.BoxGeometry(0.06, 0.5, 0.14), S.carbon, x, 0.9, -1.22, 0, 0, 0, body);
+    if (L.wing === 'fin') {
+      // Haifischflosse: auf der Motorhaube, hinten am höchsten
+      const fin = new T.Shape(); fin.moveTo(0, 0); fin.lineTo(0.78, 0); fin.lineTo(0.76, 0.62); fin.quadraticCurveTo(0.42, 0.16, 0, 0);
+      const fg = new T.ExtrudeGeometry(fin, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1 }); fg.translate(0, 0, -0.025); fg.rotateY(Math.PI / 2);
+      add(fg, paint2, 0, 0.9, -0.62, 0, 0, 0, body);
+    }
+  }
   add(new T.BoxGeometry(0.86, 0.42, 0.6), S.dark, 0, 0.7, -0.98, 0, 0, 0, body);              // Motor
-  add(new T.CylinderGeometry(0.24, 0.24, 0.5, 14), S.chrome, 0, 0.98, -0.95, 0, 0, Math.PI / 2, body);
+  const pipeMat = L.exhaust === 'gold' ? S.gold : L.exhaust === 'black' ? S.blackPipe : S.chrome;
+  add(new T.CylinderGeometry(0.24, 0.24, 0.5, 14), pipeMat, 0, 0.98, -0.95, 0, 0, Math.PI / 2, body);
   const pipe = new T.CylinderGeometry(0.08, 0.1, 0.62, 12);
-  add(pipe, S.chrome, 0.26, 0.72, -1.42, Math.PI / 2 - 0.35, 0, 0, body); add(pipe, S.chrome, -0.26, 0.72, -1.42, Math.PI / 2 - 0.35, 0, 0, body); // Auspuff
+  const pipes = L.exhaust === 'quad' ? [0.38, 0.16, -0.16, -0.38] : [0.26, -0.26];
+  for (const x of pipes) add(pipe, pipeMat, x, 0.72, -1.42, Math.PI / 2 - 0.35, 0, 0, body);   // Auspuff
   for (const x of [0.3, -0.3]) add(new T.CircleGeometry(0.08, 16), S.light, x, 0.3, 1.745, 0, 0, 0, body);           // Scheinwerfer
   for (const x of [0.55, -0.55]) add(new T.BoxGeometry(0.2, 0.08, 0.04), S.tail, x, 0.62, -1.47, 0, 0, 0, body);      // Rücklichter
   // Startnummer vorne und an den Seitenkästen
-  const numMat = new T.MeshStandardMaterial({ map: kartNumTex(num, color), roughness: 0.4, transparent: true });
+  const numTex = kartNumTex(L.num, L.paint); own.push(numTex);
+  const numMat = mat(new T.MeshStandardMaterial({ map: numTex, roughness: 0.4, transparent: true }));
   add(new T.CircleGeometry(0.22, 24), numMat, 0, 0.6, 1.07, -1.15, 0, 0, body);
   add(new T.CircleGeometry(0.17, 24), numMat, 1.025, 0.43, 0, 0, Math.PI / 2, 0, body);
   add(new T.CircleGeometry(0.17, 24), numMat, -1.025, 0.43, 0, 0, -Math.PI / 2, 0, body);
@@ -385,28 +579,45 @@ function kartModel(T, color, helmetColor, num) {
   add(new T.TorusGeometry(0.21, 0.035, 8, 24), S.dark, 0, 0.97, 0.36, -1.05, 0, 0, body);      // Lenkrad
   add(new T.CylinderGeometry(0.04, 0.04, 0.4, 8), S.dark, 0, 0.85, 0.5, -1.05, 0, 0, body);
   // Fahrerin/Fahrer: Anzug, Arme, Handschuhe, Helm mit Visier und Streifen
-  const suit = new T.MeshStandardMaterial({ color: new T.Color(color).multiplyScalar(0.55), roughness: 0.6 });
+  const suit = mat(new T.MeshStandardMaterial({ color: new T.Color(L.paint).multiplyScalar(0.55), roughness: 0.6 }));
   add(new T.CapsuleGeometry(0.28, 0.34, 6, 14), suit, 0, 1.02, -0.28, -0.18, 0, 0, body);
   for (const sx of [1, -1]) {
     add(new T.CapsuleGeometry(0.08, 0.42, 4, 8), suit, sx * 0.26, 1.03, 0.04, -1.1, 0, sx * 0.35, body);
     add(new T.SphereGeometry(0.085, 10, 8), S.glove, sx * 0.17, 1.0, 0.33, 0, 0, 0, body);
   }
-  const helmet = new T.MeshPhysicalMaterial({ color: helmetColor, metalness: 0.2, roughness: 0.25, clearcoat: 1 });
+  const helmet = mat(new T.MeshPhysicalMaterial({ color: L.helmet, metalness: 0.2, roughness: 0.25, clearcoat: 1 }));
   add(new T.SphereGeometry(0.31, 24, 18), helmet, 0, 1.46, -0.18, 0, 0, 0, body);
-  add(new T.SphereGeometry(0.315, 24, 12, Math.PI / 2 - 1.15, 2.3, 1.05, 0.75), S.visor, 0, 1.46, -0.18, 0, 0, 0, body);
+  const visor = { gold: S.visorGold, mirror: S.visorMirror, rainbow: S.visorRainbow }[L.visor] || S.visor;
+  add(new T.SphereGeometry(0.315, 24, 12, Math.PI / 2 - 1.15, 2.3, 1.05, 0.75), visor, 0, 1.46, -0.18, 0, 0, 0, body);
   add(new T.TorusGeometry(0.31, 0.03, 8, 30, Math.PI), paint, 0, 1.46, -0.18, 0, Math.PI / 2, 0, body);
   // Räder (vorne lenkbar) mit Profil und Felgen
   const wheels = [];
   for (const [x, z, front, r] of [[0.95, 1.05, 1, 0.92], [-0.95, 1.05, 1, 0.92], [1.0, -0.95, 0, 1], [-1.0, -0.95, 0, 1]]) {
     const steer = new T.Group(); steer.position.set(x, 0.42 * r, z); g.add(steer);
     const spin = new T.Group(); steer.add(spin);
-    const w = add(S.tire, S.tireMat, 0, 0, 0, 0, 0, Math.PI / 2, spin); w.scale.set(r, front ? 0.85 : 1, r);
+    const w = add(S.tire, tireMat, 0, 0, 0, 0, 0, Math.PI / 2, spin); w.scale.set(r, front ? 0.85 : 1, r);
     wheels.push({ steer, spin, front, r: 0.42 * r });
   }
-  // Turbo-Flammen
-  const flameMat = new T.SpriteMaterial({ map: glowTex('rgba(255,240,180,1)', 'rgba(255,90,20,0)'), color: 0xffffff, transparent: true, depthWrite: false, blending: T.AdditiveBlending });
-  const flames = [0.26, -0.26].map((x) => { const s = new T.Sprite(flameMat); s.position.set(x, 0.82, -1.8); s.scale.set(0.01, 0.01, 1); g.add(s); return s; });
-  return { g, body, wheels, flames };
+  // Turbo-Flammen (Farbe aus der Garage)
+  const F = KART_FLAMES[L.flames] || KART_FLAMES.classic;
+  const flameTex = glowTex(F[0], F[1]); own.push(flameTex);
+  const flameMat = mat(new T.SpriteMaterial({ map: flameTex, color: F[2], transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+  const flames = pipes.filter((x, i) => pipes.length === 2 || i === 0 || i === 3).map((x) => { const s = new T.Sprite(flameMat); s.position.set(x * (pipes.length === 4 ? 0.85 : 1), 0.82, -1.8); s.scale.set(0.01, 0.01, 1); g.add(s); return s; });
+  // Unterboden-Licht
+  let glow = null;
+  if (KART_GLOWS[L.glow]) {
+    const gm = mat(new T.MeshBasicMaterial({ map: S.glowTex, color: KART_GLOWS[L.glow], transparent: true, opacity: 0.85, depthWrite: false, blending: T.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2 }));
+    glow = new T.Mesh(new T.PlaneGeometry(2.8, 4.4), gm); glow.rotation.x = -Math.PI / 2; glow.position.y = 0.04; glow.renderOrder = 2;
+    g.add(glow);
+  }
+  const rainbow = L.flames === 'rainbow', glowRainbow = L.glow === 'rainbow';
+  /** pro Bild: Regenbogen-Farben und Leuchten pulsieren lassen */
+  const tick = (t) => {
+    if (rainbow) flameMat.color.setHSL((t * 0.6) % 1, 1, 0.6);
+    if (glow) { glow.material.opacity = 0.7 + Math.sin(t * 3) * 0.15; if (glowRainbow) glow.material.color.setHSL((t * 0.25) % 1, 1, 0.55); }
+  };
+  const dispose = () => { own.forEach((o) => o.dispose?.()); };
+  return { g, body, wheels, flames, glow, tick, look: L, dispose };
 }
 
 /* ---------------- Spiel ---------------- */
@@ -1049,11 +1260,13 @@ async function startKart3D() {
   }
 
   /* Fahrerinnen und Fahrer */
+  const myLook = typeof garageLook === 'function' ? garageLook() : null;  // Optik aus der Garage (fährt gleich schnell)
   const racers = KART_RACERS.map((r, i) => {
-    const m = kartModel(T, r.color, r.helmet, r.num);
+    const look = i === 0 && myLook ? myLook : null;
+    const m = kartModel(T, r.color, r.helmet, r.num, look);
     scene.add(m.g);
     return {
-      i, name: r.name, color: r.color, bot: i > 0, m,
+      i, name: r.name, color: look ? m.look.paint : r.color, bot: i > 0, m,
       p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
       skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0,
     };
@@ -1179,6 +1392,7 @@ async function startKart3D() {
     r.m.body.position.y = r.fx === 'slow' ? Math.abs(Math.sin(st.time / 70)) * 0.06 : 0;
     const fs = r.fx === 'turbo' ? 0.9 + Math.random() * 0.5 : 0.01;
     r.m.flames.forEach((f) => f.scale.set(fs, fs, 1));
+    r.m.tick?.(st.time / 1000);
   }
   racers.forEach((r) => placeKart(r, 0));
   hud(); drawMap();
