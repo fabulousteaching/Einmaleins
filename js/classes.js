@@ -73,7 +73,7 @@ function mergeProg(a, b) {
 async function kidLogin(username, pics) {
   const c = await cloudClient();
   const user = String(username || '').trim().toLowerCase();
-  const { data, error } = await c.rpc('einmaleins_student_login', { p_username: user, p_pics: pics.join(',') });
+  const { data, error } = await c.rpc('einmaleins_student_login', { p_username: user, p_pics: Array.isArray(pics) ? pics.join(',') : String(pics || '').trim().slice(0, 80) });
   if (error) throw error;
   if (!data || !data.token) return false;
   await kidStart(data.token, user);
@@ -237,17 +237,39 @@ function openKidLogin() {
     <form id="kid-form" class="auth-form kid-form" autocomplete="off" novalidate>
       <label class="field" for="kid-user"><span class="label">Dein Benutzername</span>
         <input id="kid-user" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" placeholder="z. B. Baum34" enterkeyhint="next"></label>
-      <p class="label">Tippe deine 3 Bilder der Reihe nach an</p>
-      <div class="kid-slots" id="kid-slots" aria-live="polite"></div>
-      <div class="kid-grid">${KID_PW.map((p, i) => `<button type="button" class="kid-pic" data-action="kid-pick" data-i="${i}" aria-label="${esc(p.de)}">${kidPwImg(i)}</button>`).join('')}</div>
+      <div class="seg kid-mode" role="group" aria-label="Wie meldest du dich an?">
+        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="pics" aria-pressed="true">Mit Bildern</button>
+        <button type="button" class="seg-btn" data-action="kid-pw-mode" data-mode="password" aria-pressed="false">Mit Passwort</button>
+      </div>
+      <div class="kid-pw-pics" id="kid-pw-pics">
+        <p class="label">Tippe deine 3 Bilder der Reihe nach an</p>
+        <div class="kid-slots" id="kid-slots" aria-live="polite"></div>
+        <div class="kid-grid">${KID_PW.map((p, i) => `<button type="button" class="kid-pic" data-action="kid-pick" data-i="${i}" aria-label="${esc(p.de)}">${kidPwImg(i)}</button>`).join('')}</div>
+      </div>
+      <label class="field kid-pw-words" for="kid-pw" hidden><span class="label">Dein Passwort</span>
+        <input id="kid-pw" type="text" autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="60" placeholder="steht auf deinem Kärtchen" enterkeyhint="go">
+        <small class="muted">Das Passwort von deinem Vokaboom-Kärtchen.</small></label>
       <p class="form-error" id="kid-error" role="alert"></p>
       <button class="btn primary big" type="submit" id="kid-submit">Los geht's ${icon('right')}</button>
     </form>
     <p class="muted small">Oder scanne den QR-Code auf deinem Kärtchen mit der Kamera. Hast du ein Vokaboom-Kärtchen? Das geht hier auch, wenn deine Lehrperson deine Klasse übernommen hat.</p>
     <p class="small"><button type="button" class="link-btn" data-action="login-choose">Zurück</button></p>`, { label: 'Kinder-Login', cls: 'auth-modal kid-modal' });
   renderKidSlots();
+  let mode = 'pics'; try { mode = localStorage.getItem(KID_MODE_KEY) || 'pics'; } catch { /* */ }
+  setKidLoginMode(mode === 'password' ? 'password' : 'pics', false);
   setTimeout(() => $('#kid-user')?.focus(), 60);
   $('#kid-form').addEventListener('submit', (e) => { e.preventDefault(); submitKidLogin(); });
+}
+const KID_MODE_KEY = 'vokaboom.kidLoginMode'; // gleich wie in Vokaboom
+function setKidLoginMode(mode, focus = true) {
+  const w = $('.kid-pw-words'), p = $('#kid-pw-pics');
+  if (!w) return;
+  w.hidden = mode !== 'password'; p.hidden = mode === 'password';
+  $$('.kid-mode .seg-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  try { localStorage.setItem(KID_MODE_KEY, mode); } catch { /* */ }
+  kidForm.picks = []; renderKidSlots();
+  const e = $('#kid-error'); if (e) e.textContent = '';
+  if (focus) (!$('#kid-user')?.value.trim() ? $('#kid-user') : mode === 'password' ? $('#kid-pw') : null)?.focus();
 }
 function renderKidSlots() {
   const box = $('#kid-slots');
@@ -267,14 +289,17 @@ async function submitKidLogin() {
   if (!err) return;
   const user = input.value.trim().replace(/\s+/g, '');
   if (!user) { err.textContent = 'Schreib zuerst deinen Benutzernamen (er steht auf deinem Kärtchen).'; input.focus(); return; }
-  if (kidForm.picks.length < 3) { err.textContent = 'Tippe deine 3 Bilder an.'; return; }
+  const typed = !$('.kid-pw-words')?.hidden;
+  const pwText = ($('#kid-pw')?.value || '').trim();
+  if (typed && pwText.replace(/[^a-z0-9äöü]/gi, '').length < 4) { err.textContent = 'Schreib dein Passwort vom Kärtchen.'; $('#kid-pw')?.focus(); return; }
+  if (!typed && kidForm.picks.length < 3) { err.textContent = 'Tippe deine 3 Bilder an.'; return; }
   err.textContent = '';
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Anmelden …';
   try {
-    const ok = await kidLogin(user, kidForm.picks);
+    const ok = await kidLogin(user, typed ? pwText : kidForm.picks);
     if (!ok) {
       if (!$('#kid-error')) return;
-      err.textContent = 'Das stimmt leider nicht. Schau genau auf dein Kärtchen und probier es nochmal.';
+      err.textContent = typed ? 'Benutzername oder Passwort stimmt leider nicht. Schau genau auf dein Kärtchen und probier es nochmal.' : 'Das stimmt leider nicht. Schau genau auf dein Kärtchen und probier es nochmal.';
       sfx.bad();
       kidForm.picks = []; renderKidSlots();
       btn.disabled = false; btn.innerHTML = `Los geht's ${icon('right')}`;
@@ -1319,6 +1344,7 @@ const classActions = {
   'sheets-all': () => downloadAllSheets(),
   'kid-login': () => openKidLogin(),
   'kid-pick': (el) => kidPick(+el.dataset.i),
+  'kid-pw-mode': (el) => setKidLoginMode(el.dataset.mode),
   'kid-unpick': () => { kidForm.picks.pop(); renderKidSlots(); },
   'kid-account': () => openKidAccount(),
   'kid-logout': () => kidLogout(),

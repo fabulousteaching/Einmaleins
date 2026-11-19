@@ -1300,3 +1300,7 @@ td.hard-chips { display: table-cell; }
 /* Meteoriten: Lob und Serie oben im leeren Bereich der Frontscheibe, über den Meteoriten */
 .g3-word.sky { padding-top: 4.5%; gap: .2rem; font-size: clamp(1.6rem, 5vw, 2.6rem); flex-direction: row; }
 .g3-word.sky small { font-size: clamp(1rem, 2.8vw, 1.4rem); background: rgba(6, 40, 20, .78); border: 1.5px solid rgba(57, 255, 106, .6); color: #DFFFE6; }
+
+/* Kinder-Login: Bilder oder Passwort (Vokaboom-Kärtchen) */
+.kid-mode { display: flex; }
+.kid-mode .seg-btn { flex: 1; justify-content: center; }
