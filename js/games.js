@@ -20,7 +20,7 @@ const GAMES = [
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
-    howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige und du bekommst Turbo. Ein falsches Tor bremst dich kurz. Tipp: Innen um die Kurve ist der Weg kürzer!' },
+    howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige und du bekommst Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen um die Kurve ist der Weg kürzer. Fährst du 3 Sekunden dicht hinter einem Kart, bekommst du Windschatten-Schub zum Überholen!' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -98,7 +98,8 @@ function gameModeOf(id) {
   const list = modesOf(id), m = db.settings.gm?.[id];
   return list.includes(m) ? m : list[0];
 }
-const boardOf = (id, mode) => `${id}:${mode}:${practiceSettings().op}`;
+// Turbo-Rennen: seit den neuen Strecken und dem Windschatten eine neue Bestenliste («rennen»)
+const boardOf = (id, mode) => `${id === 'kart' ? 'rennen' : id}:${mode}:${practiceSettings().op}`;
 const fmtSec = (ms, d = 1) => (ms / 1000).toFixed(d).replace('.', ',');
 const fmtScore = (v, lower) => (lower ? `${fmtSec(v)} s` : String(v));
 const runOn = () => !!(game.run && !game.run.done);

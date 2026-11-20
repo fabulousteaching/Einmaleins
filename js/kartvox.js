@@ -548,10 +548,11 @@ function kartVoxModel(T, look, driver = null, { lite = false, fig: figIn = null 
   const g = new T.Group();
   const body = new T.Group(); g.add(body);
   const own = [];
-  const { geo } = vxSmoothGeometry(T, B.s, { iter: spec.iter ?? 5 });
+  // Computer-Fahrer (lite): halbe Auflösung – etwa ein Viertel der Dreiecke
+  const { geo } = vxSmoothGeometry(T, lite ? kvDown(B.s) : B.s, { iter: lite ? 3 : spec.iter ?? 5 });
   own.push(geo);
   const mesh = new T.Mesh(geo, kvMats(T, L.finish));
-  mesh.scale.setScalar(k); mesh.position.set(-U / 2, 0, -U / 2); mesh.castShadow = true; mesh.receiveShadow = true;
+  mesh.scale.setScalar(lite ? k * 2 : k); mesh.position.set(lite ? -U : -U / 2, 0, lite ? -U : -U / 2); mesh.castShadow = true; mesh.receiveShadow = true;
   body.add(mesh);
   // Glaskuppel (UFO)
   if (spec.dome) {

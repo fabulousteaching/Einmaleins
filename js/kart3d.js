@@ -18,6 +18,7 @@ const KART = {
   TURBO: 1.5, SLOW: 0.55, FX_MS: 1800,
   STATIONS: [0.15, 0.47, 0.79], ASK: 200, ZONE: 12,
   WALL: 1.6,     // Bande: so weit ausserhalb der Fahrbahn
+  DRAFT: 3, DRAFT_BOOST: 1.15, DRAFT_HOLD: 1800,   // Windschatten: nach 3 s dicht dahinter 15 % schneller (noch 1,8 s nach dem Ausscheren)
 };
 const KART_TRACKS = [
   { id: 'circuit', name: 'Rennstrecke', emo: '🏁' },
@@ -30,17 +31,48 @@ const KART_TRACKS = [
 ];
 const kartTrackId = () => (KART_TRACKS.some((t) => t.id === db.settings.kartTrack) ? db.settings.kartTrack : 'circuit');
 
-/* Streckenformen: f(t) = [x, z, Höhe]; x/z werden auf die Rundenlänge skaliert, die Höhe bleibt in Metern.
- * Achter-Strecken kreuzen sich mit 16–18 m Höhenunterschied (Brücke). tunnel: Teil der Runde (0–1). */
-const KS = Math.sin, KC = Math.cos, KPI = Math.PI;
+/** Strecke aus Eckpunkten [x, z, Höhe]: weiche, geschlossene Kurve hindurch (zentripetaler Catmull-Rom-Spline).
+ *  Liefert f(t) für t = 0 … 2π (ein Abschnitt je Eckpunkt). */
+function kartSpline(P) {
+  const n = P.length;
+  const d = (a, b) => Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-3, 0.5);
+  const lin = (a, b, ta, tb, x) => a.map((v, k) => ((tb - x) / (tb - ta)) * v + ((x - ta) / (tb - ta)) * b[k]);
+  return (t) => {
+    const u = ((((t / (2 * Math.PI)) % 1) + 1) % 1) * n;
+    const i = Math.floor(u), f = u - i;
+    const p0 = P[(i - 1 + n) % n], p1 = P[i % n], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    const t1 = d(p0, p1), t2 = t1 + d(p1, p2), t3 = t2 + d(p2, p3), tt = t1 + (t2 - t1) * f;
+    const A1 = lin(p0, p1, 0, t1, tt), A2 = lin(p1, p2, t1, t2, tt), A3 = lin(p2, p3, t2, t3, tt);
+    return lin(lin(A1, A2, 0, t2, tt), lin(A2, A3, t1, t3, tt), t1, t2, tt);
+  };
+}
+/** Streckenform aus Eckpunkten; tunnel: [von, bis] als Eckpunkt-Nummern (auch mit Komma) */
+const kartPts = (pts, { tunnel = null, bridgeY = 99, minR = 19 } = {}) => ({ phi: 0, pts, f: kartSpline(pts), tunnelPts: tunnel, bridgeY, minR });
+
+/** Ecken [x, z, Höhe, Radius?] → zwei Punkte vor und nach jeder Ecke (für Stadtkurse mit runden Ecken) */
+function kartCorners(list, r) {
+  const out = [], n = list.length;
+  for (let i = 0; i < n; i++) {
+    const a = list[(i - 1 + n) % n], b = list[i], c = list[(i + 1) % n], rr = b[3] || r;
+    const d1 = Math.hypot(a[0] - b[0], a[1] - b[1]), d2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
+    const k1 = Math.min(rr, d1 * 0.45) / d1, k2 = Math.min(rr, d2 * 0.45) / d2;
+    out.push([b[0] + (a[0] - b[0]) * k1, b[1] + (a[1] - b[1]) * k1, b[2] + (a[2] - b[2]) * k1]);
+    out.push([b[0] + (c[0] - b[0]) * k2, b[1] + (c[1] - b[1]) * k2, b[2] + (c[2] - b[2]) * k2]);
+  }
+  return out;
+}
+
+/* Streckenformen aus Eckpunkten [x, z, Höhe] (wie eine Skizze von oben). Die Strecke wird auf die Rundenlänge
+ * skaliert und zu enge Kurven werden geweitet (mindestens 19 m Radius). Wo sich die Strecke kreuzt, wird die
+ * höhere Stelle zur Brücke. tunnel: [von, bis] als Eckpunkt-Nummern. */
 const KART_SHAPES = {
-  circuit: { phi: -0.8 * KPI, tunnel: [0.52, 0.6], bridgeY: 12, f: (t) => [210 * KS(t) + 8 * KS(3 * t), 135 * KS(2 * t) + 6 * KS(4 * t), 8 + 8 * KC(t)] },
-  beach: { phi: 0, tunnel: [0.2, 0.28], bridgeY: 99, f: (t) => [200 * KC(t) + 10 * KC(3 * t), 105 * KS(t) + 18 * KS(2 * t) + 2 * KS(5 * t), 4 + 3.5 * KS(3 * t) + 6 * Math.max(0, KS(t - 1)) ** 2] },
-  forest: { phi: 0, tunnel: [0.66, 0.76], bridgeY: 16, f: (t) => [160 * KC(t) + 26 * KC(2 * t + 0.6), 125 * KS(t) - 12 * KS(3 * t), 10 + 10 * KS(2 * t + 0.4)] },
-  mars: { phi: -0.75 * KPI, tunnel: [0.52, 0.6], bridgeY: 13, f: (t) => [230 * KS(t) + 20 * KS(2 * t), 120 * KS(2 * t) + 25 * KS(3 * t), 9 + 9 * KC(t)] },
-  snow: { phi: 0, tunnel: [0.2, 0.29], bridgeY: 99, f: (t) => [190 * KC(t) + 16 * KS(2 * t), 125 * KS(t) + 10 * KC(3 * t), Math.max(0, 11 + 11 * KS(t + 0.5) + 3 * KS(4 * t))] },
-  city: { phi: -0.85 * KPI, tunnel: [0.52, 0.6], bridgeY: 12, f: (t) => [200 * KS(t) + 14 * KS(3 * t), 150 * KS(t) * KC(t) + 6 * KS(4 * t), 8 + 8 * KC(t)] },
-  candy: { phi: 0, tunnel: [0.2, 0.28], bridgeY: 11.5, f: (t) => [170 * KC(t) + 40 * KC(2 * t), 130 * KS(t) + 20 * KS(4 * t), 7 + 7 * KS(3 * t)] },
+  circuit: kartPts([[-60, -100, 2], [40, -100, 2], [110, -98, 3], [150, -75, 4], [160, -30, 6], [135, 0, 8], [95, -10, 8], [70, -40, 7], [40, -45, 6], [20, -15, 6], [35, 20, 8], [80, 30, 10], [130, 45, 12], [160, 80, 12], [135, 110, 10], [85, 100, 8], [50, 75, 7], [10, 80, 6], [-25, 105, 6], [-75, 108, 5], [-110, 85, 5], [-95, 50, 6], [-55, 35, 7], [-50, 0, 6], [-85, -20, 5], [-130, -5, 4], [-170, -30, 3], [-165, -80, 2], [-130, -100, 2]], { tunnel: [17.5, 19.6] }),
+  beach: kartPts([[-80, -100, 1], [0, -100, 1], [120, -100, 1], [160, -80, 2], [165, -40, 3], [140, -15, 4], [110, -30, 4], [85, -55, 4], [55, -50, 4], [45, -15, 5], [60, 25, 6], [55, 60, 7], [25, 75, 7], [0, 50, 6], [-5, 10, 5], [-25, -30, 4], [-55, -45, 4], [-80, -25, 5], [-75, 15, 6], [-60, 55, 8], [-85, 85, 8], [-125, 80, 6], [-140, 45, 5], [-160, 10, 4], [-180, -40, 3], [-170, -85, 2], [-140, -100, 1]], { tunnel: [10.6, 12.6] }),
+  forest: kartPts([[20, -30, 1], [70, -80, 1], [120, -95, 1], [160, -70, 2], [150, -35, 3], [185, -5, 4], [170, 45, 6], [120, 70, 9], [60, 60, 12], [0, 0, 14], [-60, -60, 12], [-120, -70, 9], [-170, -45, 6], [-185, 5, 4], [-150, 35, 3], [-160, 70, 2], [-120, 95, 1], [-70, 80, 1], [-25, 35, 0]], { tunnel: [12.4, 14.4] }),
+  mars: kartPts([[-120, -90, 2], [-20, -95, 2], [120, -90, 3], [175, -60, 4], [180, -10, 6], [150, 20, 8], [100, 10, 9], [60, -25, 9], [25, -40, 8], [0, -10, 8], [15, 35, 9], [60, 65, 10], [110, 80, 10], [150, 105, 9], [120, 135, 8], [40, 125, 7], [-20, 100, 6], [-50, 60, 5], [-80, 20, 5], [-110, 40, 6], [-120, 85, 7], [-150, 110, 6], [-190, 85, 4], [-195, 30, 3], [-185, -50, 2]], { tunnel: [16.4, 18.6] }),
+  snow: kartPts([[-80, -110, 1], [0, -110, 1], [110, -105, 2], [160, -80, 3], [150, -45, 5], [90, -40, 7], [40, -45, 8], [-10, -50, 9], [-60, -40, 10], [-90, -15, 11], [-70, 15, 12], [-20, 10, 13], [40, 15, 14], [100, 5, 15], [140, 25, 15], [130, 60, 16], [80, 55, 17], [20, 60, 17], [-40, 65, 16], [-100, 60, 14], [-140, 85, 12], [-175, 60, 9], [-185, 10, 6], [-180, -50, 3], [-150, -100, 1]], { tunnel: [16.5, 18.6] }),
+  city: kartPts(kartCorners([[-150, -100, 0], [150, -100, 0], [150, -10, 4], [70, -10, 8], [70, 50, 10], [150, 50, 12], [150, 120, 12], [10, 120, 10], [10, 30, 8], [-60, 30, 6], [-60, 100, 4], [-150, 100, 2]], 24), { tunnel: [21.3, 22.8] }),
+  candy: kartPts([[-80, -92, 1], [-20, -95, 1], [100, -90, 2], [160, -60, 3], [170, -5, 5], [130, 40, 7], [95, 10, 8], [60, 45, 9], [25, 10, 9], [-10, 45, 8], [-45, 10, 7], [-80, 45, 6], [-120, 30, 5], [-150, 60, 4], [-185, 10, 3], [-180, -55, 2], [-140, -90, 1]], { tunnel: [13, 14.6] }),
 };
 
 /* Themen: Himmel, Licht, Boden, Strasse, Randsteine, Banden, Tunnel, Kulisse */
@@ -180,15 +212,66 @@ function kartChevronTex(dir) {
 }
 
 /* ---------------- Strecke ---------------- */
+/** Zu enge Kurven weiten (Fahrbahn 21 m breit: unter ~18 m Radius würde sich der innere Rand überlappen).
+ *  pts: geschlossener Linienzug [x, y, z]; liefert einen neuen mit Punkten alle 1 m, wieder auf die Rundenlänge skaliert. */
+function kartRelax(pts, minR) {
+  const res = (P, step) => {
+    const n = P.length, cum = [0];
+    for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n]; cum.push(cum[i] + Math.hypot(b[0] - a[0], b[2] - a[2])); }
+    const L = cum[n], m = Math.max(16, Math.round(L / step)), out = [];
+    let j = 0;
+    for (let i = 0; i < m; i++) {
+      const s = (i / m) * L;
+      while (cum[j + 1] < s) j++;
+      const f = (s - cum[j]) / Math.max(1e-9, cum[j + 1] - cum[j]), a = P[j % n], b = P[(j + 1) % n];
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
+    }
+    return out;
+  };
+  let P = res(pts, 1);
+  const n = P.length, idx = (i) => ((i % n) + n) % n;
+  const radius = (i) => {
+    const a = P[idx(i - 5)], b = P[i], c = P[idx(i + 5)];
+    const A = Math.hypot(b[0] - c[0], b[2] - c[2]), Bd = Math.hypot(a[0] - c[0], a[2] - c[2]), C = Math.hypot(a[0] - b[0], a[2] - b[2]);
+    const area = Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (c[0] - a[0]) * (b[2] - a[2])) / 2;
+    return area > 1e-6 ? (A * Bd * C) / (4 * area) : 1e9;
+  };
+  for (let it = 0; it < 600; it++) {
+    const tight = [];
+    for (let i = 0; i < n; i++) if (radius(i) < minR) tight.push(i);
+    if (!tight.length) break;
+    const mark = new Float32Array(n);
+    for (const i of tight) for (let d = -8; d <= 8; d++) mark[idx(i + d)] = Math.max(mark[idx(i + d)], 1 - Math.abs(d) / 9);
+    const nxt = P.map((p) => p.slice());
+    for (let i = 0; i < n; i++) {
+      if (!mark[i]) continue;
+      const a = P[idx(i - 1)], b = P[idx(i + 1)], k = 0.5 * mark[i];
+      nxt[i][0] += ((a[0] + b[0]) / 2 - P[i][0]) * k; nxt[i][2] += ((a[2] + b[2]) / 2 - P[i][2]) * k;
+    }
+    P = nxt;
+  }
+  // wieder auf die Rundenlänge bringen (um die Mitte skalieren)
+  let plan = 0, cx = 0, cz = 0;
+  for (let i = 0; i < n; i++) { const a = P[i], b = P[idx(i + 1)]; plan += Math.hypot(b[0] - a[0], b[2] - a[2]); cx += a[0] / n; cz += a[2] / n; }
+  const k = KART.LAP / plan;
+  return res(P.map(([x, y, z]) => [cx + (x - cx) * k, y, cz + (z - cz) * k]), 0.25);
+}
 function kartBuildTrack(shape, W) {
   const HW = W / 2, WL = HW + KART.WALL;
   // 1. fein abtasten, waagrecht auf die Rundenlänge skalieren
-  const M = 8000, raw = [];
-  for (let i = 0; i < M; i++) raw.push(shape.f((i / M) * 2 * Math.PI + shape.phi));
+  const raw = [];
+  for (let i = 0; i < 8000; i++) raw.push(shape.f((i / 8000) * 2 * Math.PI + shape.phi));
   let plan = 0;
-  for (let i = 0; i < M; i++) { const a = raw[i], b = raw[(i + 1) % M]; plan += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+  for (let i = 0; i < raw.length; i++) { const a = raw[i], b = raw[(i + 1) % raw.length]; plan += Math.hypot(b[0] - a[0], b[1] - a[1]); }
   const k = KART.LAP / plan;
-  const pts = raw.map(([x, z, y]) => [x * k, y, z * k]);
+  let pts = raw.map(([x, z, y]) => [x * k, y, z * k]);
+  if (shape.tunnelPts) {   // Tunnel: Eckpunkt-Nummern → Anteil der Runde (vor dem Weiten der Kurven)
+    const c0 = [0]; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; c0.push(c0[i] + Math.hypot(b[0] - a[0], b[2] - a[2])); }
+    const n = shape.pts.length; shape.tunnel = shape.tunnelPts.map((t) => c0[Math.round((t / n) * pts.length) % pts.length] / c0[pts.length]);
+  }
+  if (shape.minR) pts = kartRelax(pts, shape.minR);
+  const M = pts.length;
+  shape.scale = k;
   const cum = new Float64Array(M + 1);
   for (let i = 0; i < M; i++) { const a = pts[i], b = pts[(i + 1) % M]; cum[i + 1] = cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
   const len = cum[M];
@@ -278,8 +361,8 @@ function kartNear(tr, x, z) {
   return { d: Math.sqrt(best), y, idx };
 }
 /** Gitter entlang der Strecke: pro Zeile (Strecke s) Spalten aus fn(q, spalte, s) → [x, y, z, u, v]. Nur Abschnitte mit keep(i). */
-function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8 } = {}) {
-  const pos = [], uv = [], ind = [];
+function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8, shade = null } = {}) {
+  const pos = [], uv = [], ind = [], col = [];
   const q = {};
   let prevKept = false;
   const N = tr.N;
@@ -292,6 +375,7 @@ function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8 } = {}) {
       const p = fn(q, c, i * tr.ds);
       pos.push(p[0], p[1], p[2]);
       uv.push(p[3] ?? c / (cols - 1), p[4] ?? (i * tr.ds) / vScale);
+      if (shade) { const k = shade(ii); col.push(k, k, k); }
     }
     if (prevKept) {
       const a0 = base - cols;
@@ -302,6 +386,7 @@ function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8 } = {}) {
   const g = new T.BufferGeometry();
   g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  if (shade) g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
   g.setIndex(ind);
   g.computeVertexNormals();
   return g;
@@ -638,17 +723,18 @@ async function startKart3D() {
   $('#view').innerHTML = gameShell('kart', `
     <div class="g3 g3-kart theme-${tid}" id="g3">
       <div class="kart-hud tl"><div class="kart-pos"><b id="kplace">–</b><small>/6</small></div><span class="kart-lap" id="klap">Runde 1/${KART.LAPS}</span><ol class="kart-rank" id="krank"></ol></div>
-      <canvas class="kart-map" id="kmap" width="240" height="240" aria-hidden="true"></canvas>
+      <canvas class="kart-map" id="kmap" width="300" height="300" aria-hidden="true"></canvas>
       <div class="kart-time" id="ktime">0,0 s</div>
       <div class="kart-ask" id="kask" hidden><small id="kaskhint">Fahr durch das richtige Ergebnis</small><b id="ktask"></b><div class="kart-ans" id="kans"></div></div>
       <div class="kart-lines" id="klines"></div>
+      <div class="kart-draft" id="kdraft" aria-hidden="true"><b>💨</b><span id="kdrafttxt">Windschatten</span><i><i id="kdraftbar"></i></i></div>
       <div class="kart-pad l" id="kpl" aria-hidden="true">◀</div><div class="kart-pad r" id="kpr" aria-hidden="true">▶</div>
       <div class="kart-lights" id="klights" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="kart-count" id="kcount"></div>
     </div>
-    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipp: Innen um die Kurve ist der Weg kürzer!</p>`);
+    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipps: Innen um die Kurve ist der Weg kürzer. 3 Sekunden dicht hinter einem Kart = Windschatten-Schub!</p>`);
   const host = $('#g3');
-  const st = createStage(host, { fov: 62, near: 0.6, far: 3600, shadows: true, clear: TH.fog });
+  const st = createStage(host, { fov: 62, near: 0.9, far: 3600, shadows: true, clear: TH.fog });
   game.stage3d = st;
   const { scene, camera, renderer } = st;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -742,16 +828,27 @@ async function startKart3D() {
   }
 
   /* Fahrbahn, Randsteine, Banden, Dämme, Brücken, Tunnel */
+  // Im Tunnel ist die Fahrbahn dunkler (fest eingefärbt, mit weichem Übergang an den Einfahrten). Der Tunnel wirft
+  // keinen Schatten mehr: Schatten reichen nur 45 m weit, sonst wandert vor einem eine helle Kante mit.
+  const tunShade = new Float32Array(tr.N).fill(1);
+  {
+    const into = new Float32Array(tr.N).fill(0);
+    for (let pass = 0; pass < 2; pass++) for (let i = 0; i < tr.N * 2; i++) { const ii = i % tr.N, prev = (ii - 1 + tr.N) % tr.N; into[ii] = tr.TY[ii] === 2 ? Math.max(into[ii], into[prev] + tr.ds) : 0; }
+    const out = new Float32Array(tr.N).fill(0);
+    for (let pass = 0; pass < 2; pass++) for (let i = tr.N * 2; i >= 0; i--) { const ii = i % tr.N, nx = (ii + 1) % tr.N; out[ii] = tr.TY[ii] === 2 ? Math.max(out[ii], out[nx] + tr.ds) : 0; }
+    for (let i = 0; i < tr.N; i++) if (tr.TY[i] === 2) tunShade[i] = 1 - 0.42 * clamp(Math.min(into[i], out[i]) / 26, 0, 1);
+  }
+  const tunnelShade = tr.TY.some((t) => t === 2) && TH.tunnel !== 'glass' ? (i) => tunShade[i] : null;
   const roadTex = kartRoadTex(TH.road); roadTex.wrapS = T.ClampToEdgeWrapping;
-  const roadMat = new T.MeshStandardMaterial({ map: roadTex, roughness: TH.road === 'ice' ? 0.25 : 0.8, metalness: TH.road === 'ice' ? 0.15 : 0.02, side: T.DoubleSide });
+  const roadMat = new T.MeshStandardMaterial({ map: roadTex, roughness: TH.road === 'ice' ? 0.25 : 0.8, metalness: TH.road === 'ice' ? 0.15 : 0.02, side: T.DoubleSide, vertexColors: !!tunnelShade });
   if (TH.road === 'nightRoad') { roadMat.emissive = new T.Color(0xffffff); roadMat.emissiveMap = roadTex; roadMat.emissiveIntensity = 0.35; }
-  const road = new T.Mesh(kartGrid(T, tr, 2, (o, c) => { const p = pt(o, c ? HW : -HW, 0.04); return [p.x, p.y, p.z, c, undefined]; }, { step: 4, vScale: 16 }), roadMat);
+  const road = new T.Mesh(kartGrid(T, tr, 2, (o, c) => { const p = pt(o, c ? HW : -HW, 0.04); return [p.x, p.y, p.z, c, undefined]; }, { step: 4, vScale: 16, shade: tunnelShade }), roadMat);
   road.receiveShadow = true; scene.add(road);
   const curbTex = kartStripeTex(TH.curb[0], TH.curb[1]); curbTex.wrapS = curbTex.wrapT = T.RepeatWrapping;
-  const curbMat = new T.MeshStandardMaterial({ map: curbTex, roughness: 0.6, side: T.DoubleSide });
+  const curbMat = new T.MeshStandardMaterial({ map: curbTex, roughness: 0.6, side: T.DoubleSide, vertexColors: !!tunnelShade });
   if (TH.night) { curbMat.emissive = new T.Color(0xffffff); curbMat.emissiveMap = curbTex; curbMat.emissiveIntensity = 0.8; }
   for (const [a, b] of [[HW, WL], [-WL, -HW]]) {
-    const c = new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, j ? b : a, 0.08); return [p.x, p.y, p.z]; }, { step: 4, vScale: 4 }), curbMat);
+    const c = new T.Mesh(kartGrid(T, tr, 2, (o, j) => { const p = pt(o, j ? b : a, 0.08); return [p.x, p.y, p.z]; }, { step: 4, vScale: 4, shade: tunnelShade }), curbMat);
     c.receiveShadow = true; scene.add(c);
   }
   // Banden (nicht im Tunnel); auf Brücken Betonbrüstung
@@ -834,7 +931,13 @@ async function startKart3D() {
       const a = (c / (cols - 1)) * Math.PI, lat = -Math.cos(a) * RW, up = Math.sin(a) * RH;
       return [o.x + o.rx * lat, o.y + up - 0.05, o.z + o.rz * lat, (c / (cols - 1)) * 3, s / 12];
     }, { keep, step: 4 }), inMat);
-    tube.castShadow = !glassy; tube.receiveShadow = !glassy; scene.add(tube);
+    tube.castShadow = false; tube.receiveShadow = false; scene.add(tube);
+    // Gehweg zwischen Randstein und Tunnelwand (sonst sieht man dort ins Leere)
+    const walkMat = new T.MeshStandardMaterial({ color: { concrete: 0x9ca3af, rock: 0x6b5b4b, glass: 0xd6d3d1, icecave: 0xc7e3f5, neon: 0x312e81, candy: 0xfbcfe8 }[tunnelStyle] || 0x9ca3af, roughness: 0.9, side: T.DoubleSide, vertexColors: !!tunnelShade });
+    for (const sg of [-1, 1]) {
+      const walk = new T.Mesh(kartGrid(T, tr, 3, (o, c) => { const lat = sg * [WL - 0.02, RW - 0.6, RW + 0.4][c], p = pt(o, lat, c === 2 ? -0.2 : 0.1); return [p.x, p.y, p.z]; }, { keep, step: 4, shade: tunnelShade }), walkMat);
+      scene.add(walk);
+    }
     if (glassy) {
       // Rippen aus Metall
       const ribs = [];
@@ -856,7 +959,7 @@ async function startKart3D() {
         const lat = -Math.cos(a) * RW2 * n, up = Math.sin(a) * RH2 * n;
         return [o.x + o.rx * lat, o.y + up - 0.4, o.z + o.rz * lat];
       }, { keep, step: 8 }), rockMat);
-      shell.castShadow = true; shell.receiveShadow = true; scene.add(shell);
+      shell.castShadow = false; shell.receiveShadow = false; scene.add(shell);
       // Portale: Wand zwischen Röhre und Berg an beiden Enden
       for (let i = 0; i < tr.N; i++) {
         const isStart = tr.TY[i] === 2 && tr.TY[(i - 1 + tr.N) % tr.N] !== 2, isEnd = tr.TY[i] === 2 && tr.TY[(i + 1) % tr.N] !== 2;
@@ -874,7 +977,7 @@ async function startKart3D() {
         shp.holes.push(hole);
         const pm = new T.Mesh(new T.ExtrudeGeometry(shp, { depth: 1.2, bevelEnabled: false }), rockMat);
         pm.position.set(q.x, q.y, q.z); pm.rotation.y = yawAt(q); pm.translateZ(isStart ? -1.2 : 0);
-        pm.castShadow = true; scene.add(pm);
+        pm.castShadow = false; scene.add(pm);
         // Rahmen um die Einfahrt
         const frame = new T.Mesh(new T.TorusGeometry(1, 0.08, 8, 32, Math.PI), new T.MeshStandardMaterial({ color: TH.night ? 0xf0abfc : 0xfacc15, emissive: TH.night ? 0xf0abfc : 0x000000, emissiveIntensity: TH.night ? 1.5 : 0, roughness: 0.4 }));
         frame.scale.set(RW, RH, 6); frame.position.set(q.x, q.y, q.z); frame.rotation.y = yawAt(q); scene.add(frame);
@@ -939,7 +1042,7 @@ async function startKart3D() {
       const m = new T.Mesh(cubeGeo, cubeMat); m.castShadow = true; grp.add(m);
       const gl = new T.Sprite(glowMat); gl.scale.set(4, 4, 1); grp.add(gl);
       scene.add(grp);
-      return { grp, m, phase: Math.random() * 6, hiddenUntil: 0, base: grp.position.y };
+      return { grp, m, phase: Math.random() * 6, hiddenUntil: 0, shotAt: -1e9, base: grp.position.y, s: s0, lane };
     });
     const s1 = s0 + KART.ASK;
     kartAt(tr, s1, q);
@@ -971,13 +1074,15 @@ async function startKart3D() {
       const x = q.x + q.rx * side * (WL + d), z = q.z + q.rz * side * (WL + d);
       const nr = kartNear(tr, x, z);
       if (nr.d < WL + avoid + Math.max(0, nr.y) * 1.8) continue;
+      if (tr.TY[nr.idx] === 2 && nr.d < WL + 32 + Math.max(0, nr.y) * 1.6) continue;   // nicht im Tunnelberg
       if (Math.hypot(x - sx, z - sz) < 30) continue;
       out.push({ x, z, s, side, rot: Math.random() * Math.PI * 2, sc: 1 });
     }
     return out;
   }
   const dummy = new T.Object3D();
-  function inst(geo, mat, list, f, { cast = true, color = null } = {}) {
+  const VP = typeof kvProp === 'function';   // Kulisse im Stil der Avatare (js/kartvox.js)
+  function inst(geo, mat, list, f, { cast = !VP, color = null } = {}) {
     if (!list.length) return null;
     const m = new T.InstancedMesh(geo, mat, list.length);
     list.forEach((p, i) => { dummy.position.set(p.x, -0.25, p.z); dummy.rotation.set(0, p.rot, 0); dummy.scale.setScalar(p.sc); f?.(dummy, p, i); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); if (color) m.setColorAt(i, new T.Color(color(p, i))); });
@@ -987,23 +1092,32 @@ async function startKart3D() {
   const trunkMat = new T.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
   // Kulisse im Stil der Avatare (js/kartvox.js): nahe an der Strecke weich gerundete Voxel-Modelle,
   // weit weg die einfachen Formen (sieht man dort kaum, spart viel Rechenarbeit)
-  const VP = typeof kvProp === 'function';
   const propMats = VP ? kvPropMats(T) : null;
+  // weiche runde Schatten unter den Voxel-Dingen (billig, und auf Tablets ohne Flimmern)
+  const blobMat = VP ? new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }) : null;
+  const blobGeo = VP ? (() => { const g2 = new T.CircleGeometry(1, 20); g2.rotateX(-Math.PI / 2); return g2; })() : null;
   const tintSoft = (p, i) => [0xffffff, 0xf1f7ec, 0xfaf6ee, 0xe9f2ea][i % 4];
   function voxSplit(kind, list, { near = 40, scale = 1, variants = [0], cast = true, tint = tintSoft, max = Infinity, lod = 0 } = {}) {
     if (!VP) return list;
     const isNear = (p) => near === Infinity || kartNear(tr, p.x, p.z).d < WL + near;
-    const nearL = list.filter(isNear).slice(0, max), farL = list.filter((p) => !isNear(p));
+    const nearAll = list.filter(isNear), nearL = nearAll.slice(0, max), farL = list.filter((p) => !isNear(p)).concat(nearAll.slice(max));
     variants.forEach((v, vi) => {
       const sub = nearL.filter((p, i) => i % variants.length === vi);
-      inst(kvProp(T, kind, v, lod), propMats, sub, (o, p) => { o.position.y = -0.25; o.scale.setScalar(p.sc * scale); }, { cast, color: tint });
+      const geo = kvProp(T, kind, v, lod);
+      inst(geo, propMats, sub, (o, p) => { o.position.y = -0.25; o.scale.setScalar(p.sc * scale); }, { cast: false, color: tint });
+      if (cast) {
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox, rad = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 0.42;
+        const bm = inst(blobGeo, blobMat, sub, (o, p) => { o.position.y = -0.2; o.scale.setScalar(p.sc * scale * rad); }, { cast: false });
+        if (bm) { bm.receiveShadow = false; bm.renderOrder = 1; }
+      }
     });
     return farL;
   }
   if (P.includes('trees') || P.includes('pines') || P.includes('snowPines')) {
     const snowy = P.includes('snowPines');
     let list = scatter(P.includes('pines') || snowy ? 620 : 300, 6, 180).map((p) => ({ ...p, sc: rnd(0.8, 1.7) }));
-    list = voxSplit('pine', list, { near: 30, scale: 1.45, variants: [snowy ? 1 : 0] });
+    list = voxSplit('pine', list, { near: 30, max: 100, scale: 1.45, variants: [snowy ? 1 : 0] });
     inst(new T.CylinderGeometry(0.35, 0.5, 3, 8), trunkMat, list, (o) => { o.position.y = 1.5 * o.scale.y - 0.25; });
     const pineMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: !VP });
     const tint = (p, i) => (snowy ? [0x2f5a46, 0x335f4a, 0x2a5240][i % 3] : [0x24552f, 0x2c6b38, 0x1f4a29, 0x356f2f][i % 4]);
@@ -1014,7 +1128,7 @@ async function startKart3D() {
   }
   if (P.includes('oaks')) {
     let list = scatter(240, 8, 170).map((p) => ({ ...p, sc: rnd(0.9, 1.6) }));
-    list = voxSplit('oak', list, { near: 32, scale: 1.3, variants: [0, 0, 1] });
+    list = voxSplit('oak', list, { near: 32, max: 36, scale: 1.3, variants: [0, 0, 1] });
     inst(new T.CylinderGeometry(0.4, 0.6, 4, 8), trunkMat, list, (o) => { o.position.y = 2 * o.scale.y - 0.25; });
     inst(new T.IcosahedronGeometry(3.2, 1), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: !VP }), list, (o) => { o.position.y = 5.6 * o.scale.y - 0.25; }, { color: (p, i) => [0x3f7d2c, 0x4d8a33, 0x6a9a2f, 0xb45309][i % 9 === 0 ? 3 : i % 3] });
   }
@@ -1074,7 +1188,7 @@ async function startKart3D() {
   }
   if (P.includes('palms')) {
     let list = scatter(190, 6, 130).map((p) => ({ ...p, sc: rnd(0.9, 1.4), lean: rnd(-0.25, 0.25) }));
-    list = voxSplit('palm', list, { near: 40 });
+    list = voxSplit('palm', list, { near: 40, max: 50 });
     inst(new T.CylinderGeometry(0.28, 0.45, 9, 8), new T.MeshStandardMaterial({ color: 0x8b6b45, roughness: 0.95 }), list, (o, p) => { o.position.y = 4.5 * o.scale.y - 0.25; o.rotation.z = p.lean; });
     const leafMat = new T.MeshStandardMaterial({ color: 0x2f8f3a, roughness: 0.75, side: T.DoubleSide, flatShading: !VP });
     const leafG = new T.ConeGeometry(0.7, 5.2, 4); leafG.rotateZ(-Math.PI / 2); leafG.translate(2.5, 0, 0); leafG.scale(1, 0.25, 1);
@@ -1317,7 +1431,7 @@ async function startKart3D() {
     return {
       i, name: r.name, color: i === 0 && myLook ? m.look.paint : r.color, bot: i > 0, m,
       p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
-      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0,
+      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0, draftT: 0, draftUntil: 0,
     };
   });
   // Startaufstellung: Du startest von Platz 4
@@ -1369,6 +1483,7 @@ async function startKart3D() {
 
   /* Anzeige */
   const elPlace = $('#kplace'), elLap = $('#klap'), elRank = $('#krank'), elTime = $('#ktime'), elAsk = $('#kask'), elTask = $('#ktask'), elAns = $('#kans'), elHint = $('#kaskhint'), elLines = $('#klines'), elCount = $('#kcount'), elLights = $('#klights');
+  const elDraft = $('#kdraft'), elDraftBar = $('#kdraftbar'), elDraftTxt = $('#kdrafttxt');
   const map = $('#kmap'), mg = map.getContext('2d');
   const mapImg = document.createElement('canvas'); mapImg.width = map.width; mapImg.height = map.height;
   const mb = tr.box, msc = Math.min((map.width - 30) / (mb.maxX - mb.minX), (map.height - 30) / (mb.maxZ - mb.minZ));
@@ -1394,20 +1509,84 @@ async function startKart3D() {
     g.setLineDash([]);
     kartAt(tr, 0, q); g.fillStyle = '#111'; g.fillRect(mx(q.x) - 5, my(q.z) - 5, 10, 10);
   }
-  function drawMap() {
+  const trail = [];
+  let mapT = 0;
+  /** Karte: jedes Bild neu – Gegner als Punkte, du als Pfeil mit Puls und Spur, Krone für die Spitze, ?-Würfel als Punkte */
+  function drawMap(dt = 0) {
+    mapT += dt;
     mg.clearRect(0, 0, map.width, map.height); mg.drawImage(mapImg, 0, 0);
-    for (const r of [...racers].reverse()) {
-      kartAt(tr, r.p, q);
-      mg.fillStyle = kartHex(r.color); mg.strokeStyle = '#fff'; mg.lineWidth = r.bot ? 2 : 3;
-      mg.beginPath(); mg.arc(mx(q.x + q.rx * r.lat), my(q.z + q.rz * r.lat), r.bot ? 6 : 9, 0, Math.PI * 2); mg.fill(); mg.stroke();
+    for (const stn of stations) {
+      kartAt(tr, stn.s0, q);
+      const on = stn.cubes.some((c) => c.grp.visible);
+      mg.fillStyle = on ? '#a78bfa' : 'rgba(167,139,250,.35)'; mg.beginPath(); mg.arc(mx(q.x), my(q.z), 4 + (on ? Math.sin(mapT * 5) * 0.8 : 0), 0, Math.PI * 2); mg.fill();
+      kartAt(tr, stn.s1, q); mg.fillStyle = '#22c55e'; mg.fillRect(mx(q.x) - 3, my(q.z) - 3, 6, 6);
     }
+    kartAt(tr, me.p, q);
+    const px = mx(q.x + q.rx * me.lat), py = my(q.z + q.rz * me.lat);
+    if (!trail.length || Math.hypot(trail[trail.length - 1][0] - px, trail[trail.length - 1][1] - py) > 2) { trail.push([px, py]); if (trail.length > 26) trail.shift(); }
+    for (let i = 1; i < trail.length; i++) {
+      mg.strokeStyle = `rgba(255,224,138,${(i / trail.length) * 0.8})`; mg.lineWidth = 2 + (i / trail.length) * 3; mg.lineCap = 'round';
+      mg.beginPath(); mg.moveTo(trail[i - 1][0], trail[i - 1][1]); mg.lineTo(trail[i][0], trail[i][1]); mg.stroke();
+    }
+    const leader = racers.reduce((a, r) => (placeOf(r) === 1 ? r : a), racers[0]);
+    for (const r of [...racers].reverse()) {
+      if (r === me) continue;
+      kartAt(tr, r.p, q);
+      const x = mx(q.x + q.rx * r.lat), y = my(q.z + q.rz * r.lat);
+      mg.fillStyle = kartHex(r.color); mg.strokeStyle = '#fff'; mg.lineWidth = 2;
+      mg.beginPath(); mg.arc(x, y, 6, 0, Math.PI * 2); mg.fill(); mg.stroke();
+      if (r.fx === 'turbo') { mg.strokeStyle = 'rgba(255,170,60,.9)'; mg.lineWidth = 2; mg.beginPath(); mg.arc(x, y, 9 + Math.sin(mapT * 20), 0, Math.PI * 2); mg.stroke(); }
+      if (r === leader) { mg.fillStyle = '#FFD84D'; mg.font = '13px system-ui'; mg.textAlign = 'center'; mg.fillText('👑', x, y - 9); }
+    }
+    // du: Pfeil in Fahrtrichtung, pulsierender Ring
+    kartAt(tr, me.p, q);
+    const ang = Math.atan2(q.fz * msc, q.fx * msc), pulse = (mapT * 1.6) % 1;
+    mg.strokeStyle = `rgba(255,224,138,${1 - pulse})`; mg.lineWidth = 3; mg.beginPath(); mg.arc(px, py, 9 + pulse * 12, 0, Math.PI * 2); mg.stroke();
+    if (st.time < me.draftUntil || me.fx === 'turbo') { mg.fillStyle = me.fx === 'turbo' ? 'rgba(255,150,40,.45)' : 'rgba(125,211,252,.5)'; mg.beginPath(); mg.arc(px, py, 15, 0, Math.PI * 2); mg.fill(); }
+    mg.save(); mg.translate(px, py); mg.rotate(ang);
+    mg.fillStyle = kartHex(me.color); mg.strokeStyle = '#fff'; mg.lineWidth = 3; mg.lineJoin = 'round';
+    mg.beginPath(); mg.moveTo(12, 0); mg.lineTo(-8, -8); mg.lineTo(-4, 0); mg.lineTo(-8, 8); mg.closePath(); mg.fill(); mg.stroke();
+    mg.restore();
+    if (me === leader) { mg.font = '14px system-ui'; mg.textAlign = 'center'; mg.fillText('👑', px, py - 12); }
   }
   const total = KART.LAPS * L;
   const placeOf = (r) => 1 + racers.filter((o) => o !== r && (o.finished ? (!r.finished || o.finished < r.finished) : !r.finished && o.p > r.p)).length;
+  const rankLis = racers.map((r) => { const li = document.createElement('li'); if (!r.bot) li.className = 'me'; li.innerHTML = `<i style="background:${kartHex(r.color)}"></i>${esc(r.name)}`; return li; });
+  let rankOrder = '', lastPlace = 0;
   function hud() {
-    elPlace.textContent = `${placeOf(me)}.`;
+    const place = placeOf(me);
+    elPlace.textContent = `${place}.`;
     elLap.textContent = `Runde ${clamp(Math.floor(Math.max(0, me.p) / L) + 1, 1, KART.LAPS)}/${KART.LAPS}`;
-    elRank.innerHTML = [...racers].sort((a, b) => placeOf(a) - placeOf(b)).map((r) => `<li class="${r.bot ? '' : 'me'}"><i style="background:${kartHex(r.color)}"></i>${esc(r.name)}</li>`).join('');
+    // Rangliste: Einträge gleiten an ihren neuen Platz
+    const order = [...racers].sort((a, b) => placeOf(a) - placeOf(b));
+    const key = order.map((r) => r.i).join(',');
+    if (key !== rankOrder) {
+      const before = new Map(rankLis.map((li) => [li, li.isConnected ? li.getBoundingClientRect().top : null]));
+      order.forEach((r) => elRank.appendChild(rankLis[r.i]));
+      if (rankOrder && !reduceMotion()) rankLis.forEach((li) => {
+        const t0 = before.get(li);
+        if (t0 == null) return;
+        const dy = t0 - li.getBoundingClientRect().top;
+        if (Math.abs(dy) > 1) li.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.9,.3,1.25)' });
+      });
+      rankOrder = key;
+    }
+    // grosse Zahl: hüpft grün nach oben bzw. wackelt rot, dazu «▲ 1» / «▼ 1»
+    if (lastPlace && place !== lastPlace && S.phase === 'race') {
+      const up = place < lastPlace, n = Math.abs(place - lastPlace);
+      const box = elPlace.parentElement;
+      box.classList.remove('up', 'down'); void box.offsetWidth; box.classList.add(up ? 'up' : 'down');
+      const tag = document.createElement('span'); tag.className = `kart-delta ${up ? 'up' : 'down'}`; tag.textContent = `${up ? '▲' : '▼'} ${n}`;
+      box.appendChild(tag); setTimeout(() => tag.remove(), 1300);
+      rankLis[me.i].classList.remove('flash'); void rankLis[me.i].offsetWidth; rankLis[me.i].classList.add('flash');
+      if (up) tone([880, 1320], 0.08, 'triangle', 0.06); else tone([330, 247], 0.1, 'sine', 0.05);
+    }
+    lastPlace = place;
+  }
+  /** Windschatten-Schub beginnt (nur für dich: Ton und Anzeige) */
+  function draftStart() {
+    noise(0.35, { freq: 900, gain: 0.05 });
+    tone([523, 784], 0.07, 'triangle', 0.05);
   }
 
   /* Ablauf */
@@ -1460,9 +1639,11 @@ async function startKart3D() {
     kartAt(tr, r.p - 1.4, q);
     burst(st, pt(q, r.lat, 0.8), { n: 18, colors: [0x9ca3af, 0xd1d5db, 0x6b7280], speed: 1.6, life: 0.9, size: 0.9, gravity: 1.2 });
   }
-  function shatterCube(c) {
+  /** Würfel zerspringt; er taucht wieder auf, sobald das nächste Kart kommt (sonst nach kurzer Zeit) */
+  function shatterCube(c, { near = true } = {}) {
     const pos = c.grp.getWorldPosition(new T.Vector3());
-    c.hiddenUntil = st.time + 2600; c.grp.visible = false;
+    c.hiddenUntil = st.time + 2600; c.shotAt = st.time; c.grp.visible = false;
+    if (!near) return;
     burst(st, pos, { n: 70, colors: [0x22d3ee, 0xa78bfa, 0xf472b6, 0xffffff], speed: 7, life: 0.8, size: 0.35, gravity: -6 });
     const shards = [];
     for (let i = 0; i < 14; i++) {
@@ -1551,7 +1732,11 @@ async function startKart3D() {
     for (const stn of stations) for (const c of stn.cubes) {
       c.m.rotation.y += dt * 1.4; c.m.rotation.x = Math.sin(now / 900 + c.phase) * 0.25;
       c.grp.position.y = c.base + Math.sin(now / 500 + c.phase) * 0.2;
-      if (!c.grp.visible && now > c.hiddenUntil) { c.grp.visible = true; c.grp.scale.setScalar(0.01); st.tween(300, (u, e) => c.grp.scale.setScalar(Math.max(0.01, e))); }
+      if (!c.grp.visible) {
+        // kommt das nächste Kart auf dieser Spur, ist der Würfel gleich wieder da
+        const coming = now - c.shotAt > 250 && racers.some((r) => { const ahead = ((c.s - lapS(r.p)) % L + L) % L; return ahead > 2 && ahead < 30 && Math.abs(r.lat - c.lane * LANE) < LANE / 2 + 0.8; });
+        if (now > c.hiddenUntil || coming) { c.grp.visible = true; c.grp.scale.setScalar(0.01); st.tween(coming ? 180 : 300, (u, e) => c.grp.scale.setScalar(Math.max(0.01, e))); }
+      }
     }
     if (S.phase === 'intro') {
       camTarget(cDes, lDes);
@@ -1569,9 +1754,16 @@ async function startKart3D() {
     for (const r of racers) {
       if (r.fx && now > r.fxUntil) r.fx = null;
       kartAt(tr, r.p, q);
+      // Windschatten: dicht hinter einem anderen Kart (2–14 m, fast gleiche Spur); nach 3 s gibt es Schub zum Überholen
+      if (S.phase === 'race' && !r.finished) {
+        let behind = false;
+        for (const o of racers) { const gap = o.p - r.p; if (o !== r && gap > 2 && gap < 14 && Math.abs(o.lat - r.lat) < 2.6) { behind = true; break; } }
+        r.draftT = behind ? r.draftT + dt : Math.max(0, r.draftT - dt * 1.5);
+        if (r.draftT >= KART.DRAFT) { if (r === me && now >= r.draftUntil) draftStart(); r.draftUntil = now + KART.DRAFT_HOLD; }
+      }
       let target = 0;
       if (racing) {
-        target = KART.BASE * r.skill * (r.fx === 'turbo' ? KART.TURBO : r.fx === 'slow' ? KART.SLOW : 1);
+        target = KART.BASE * r.skill * (r.fx === 'turbo' ? KART.TURBO : r.fx === 'slow' ? KART.SLOW : 1) * (now < r.draftUntil ? KART.DRAFT_BOOST : 1);
         target *= clamp(1 - q.sl * 0.9, 0.86, 1.12); // bergauf etwas langsamer, bergab schneller
         if (r.bot) {
           const d = r.p - me.p;
@@ -1641,7 +1833,7 @@ async function startKart3D() {
           if (crossed(stn.s0) && once(`${lapNo}:${stn.k}:c`)) {
             const lane = laneOf(r.lat);
             if (r === me) { shatterCube(stn.cubes[lane]); showAsk(stn); }
-            else if (Math.abs(r.p - me.p) < 120) { const c = stn.cubes[lane]; if (c.grp.visible) burst(st, c.grp.getWorldPosition(cPos), { n: 16, colors: [0xa78bfa, 0xffffff], speed: 3, life: 0.4, size: 0.25 }); }
+            else { const c = stn.cubes[lane]; if (c.grp.visible) shatterCube(c, { near: Math.abs(r.p - me.p) < 140 }); }
           }
           if (crossed(stn.s1) && once(`${lapNo}:${stn.k}:g`)) {
             const lane = laneOf(r.lat);
@@ -1680,16 +1872,24 @@ async function startKart3D() {
     camera.position.copy(cDes);
     look.lerp(lDes, 1 - Math.pow(0.00001, dt));
     camera.lookAt(look);
-    const fovGoal = 62 + (me.fx === 'turbo' ? 12 : me.fx === 'slow' ? -4 : 0) + (me.v / KART.BASE) * 2;
+    const fovGoal = 62 + (me.fx === 'turbo' ? 12 : me.fx === 'slow' ? -4 : 0) + (now < me.draftUntil ? 5 : 0) + (me.v / KART.BASE) * 2;
     camera.fov += (fovGoal - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
-    elLines.classList.toggle('on', me.fx === 'turbo');
+    elLines.classList.toggle('on', me.fx === 'turbo' || now < me.draftUntil);
+    elLines.classList.toggle('draft', me.fx !== 'turbo' && now < me.draftUntil);
     host.classList.toggle('slow', me.fx === 'slow');
     kartAt(tr, me.p, q);
     sun.target.position.set(q.x, q.y, q.z); sun.position.set(q.x + sunDir.x * 80, q.y + sunDir.y * 80, q.z + sunDir.z * 80);
     if (nightLight) nightLight.position.set(q.x + q.rx * me.lat + q.fx * 3, q.y + 9, q.z + q.rz * me.lat + q.fz * 3);
     if (engine) { const f = 55 + me.v * 3.2 + (me.fx === 'turbo' ? 40 : 0); engine.o.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.05); engine.o2.frequency.setTargetAtTime(f * 0.5, audioCtx.currentTime, 0.05); }
     S.hudT = (S.hudT || 0) + dt;
-    if (S.hudT > 0.2) { S.hudT = 0; hud(); drawMap(); }
+    if (S.hudT > 0.2) { S.hudT = 0; hud(); }
+    drawMap(dt);
+    {
+      const drafting = me.draftT > 0.15 && S.phase === 'race', boost = now < me.draftUntil;
+      elDraft.classList.toggle('on', drafting || boost); elDraft.classList.toggle('boost', boost);
+      elDraftBar.style.width = `${Math.round((boost ? 1 : Math.min(1, me.draftT / KART.DRAFT)) * 100)}%`;
+      if (S.draftTxt !== boost) { S.draftTxt = boost; elDraftTxt.textContent = boost ? 'Windschatten-Schub!' : 'Windschatten'; }
+    }
     if (S.phase === 'race') elTime.textContent = `${fmtSec(now - S.raceT0)} s`;
     if (S.ask) { const ln = laneOf(me.lat); $$('#kans .ka').forEach((el, i) => el.classList.toggle('here', i === ln)); }
   });
