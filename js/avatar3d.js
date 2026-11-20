@@ -1744,8 +1744,8 @@ function vxRoundAll(F, look) {
  *   bag: { id, c, c2 }, hand: id | { id, c }, pet: { id, c }, effect: { id, c } }
  * Liefert { root, parts, setAnim(name), update(dt), tris(), dispose() }
  */
-const VX_ANIMS = ['idle', 'wave', 'cheer', 'dance', 'hold', 'present', 'jump', 'clap', 'think', 'spin', 'bow', 'flex', 'sit', 'shy', 'laugh'];
-function vxFigure(T, look) {
+const VX_ANIMS = ['idle', 'wave', 'cheer', 'dance', 'hold', 'present', 'jump', 'clap', 'think', 'spin', 'bow', 'flex', 'sit', 'shy', 'laugh', 'drive'];
+function vxFigure(T, look, { lite = false } = {}) {
   const P = vxBody(look);
   const use = (reg, o, tag, ...args) => { if (o && reg[o.id]) { vxTagAll(P, tag); reg[o.id](...args, o); vxTagAll(P, null); } };
   const rainbow = look.hair?.c === 'rainbow';
@@ -1761,12 +1761,15 @@ function vxFigure(T, look) {
   use(VX_BACK, look.back, 'back', P.torso);
   use(VX_HATS, look.hat, 'hat', P.head);
   // fein aufteilen, dann Gesicht und Verzierungen
+  // lite (z. B. Computer-Fahrer im Rennen): grobe Voxel, etwa ein Viertel der Dreiecke, ohne feine Verzierungen
   const F = {};
-  for (const k of ['head', 'torso', 'armR', 'armL', 'legR', 'legL']) F[k] = vxUpscale(P[k]);
-  vxFineTextures(F, look);
-  vxFace(F.head, look);
-  for (const slot of ['hair', 'top', 'bottom', 'shoes', 'hat', 'neck', 'back', 'wrist', 'bag']) { const o = look[slot]; if (o && VX_DETAIL[o.id] && !(slot === 'bottom' && outfit)) VX_DETAIL[o.id](F, o, look); }
-  if (VOX.smooth) vxRoundAll(F, look);
+  for (const k of ['head', 'torso', 'armR', 'armL', 'legR', 'legL']) F[k] = lite ? P[k] : vxUpscale(P[k]);
+  if (!lite) {
+    vxFineTextures(F, look);
+    vxFace(F.head, look);
+    for (const slot of ['hair', 'top', 'bottom', 'shoes', 'hat', 'neck', 'back', 'wrist', 'bag']) { const o = look[slot]; if (o && VX_DETAIL[o.id] && !(slot === 'bottom' && outfit)) VX_DETAIL[o.id](F, o, look); }
+    if (VOX.smooth) vxRoundAll(F, look);
+  }
   if (rainbow) {
     const RB = [0xff5e7e, 0xffb13d, 0xffe066, 0x5bd47a, 0x4ca8ff, 0xa66bff];
     F.head.paint((v) => (v.tag === 'hair' || v.tag === 'spike' ? RB[Math.floor(((v.y + 40) / 5)) % RB.length] : null));
@@ -1776,7 +1779,11 @@ function vxFigure(T, look) {
   const root = new T.Group();
   const body = new T.Group(); root.add(body);
   body.position.y = (P.lift || 0) * 2 * S;
-  const mk = (set, x, y, z, parent = body, opts) => { const g = new T.Group(); g.position.set(x * 2 * S, y * 2 * S, z * 2 * S); g.add(vxMesh(T, set, opts)); parent.add(g); return g; };
+  const mk = (set, x, y, z, parent = body, opts) => {
+    const g = new T.Group(); g.position.set(x * 2 * S, y * 2 * S, z * 2 * S);
+    const m = vxMesh(T, set, lite ? { ...opts, iter: 5 } : opts); if (lite) m.scale.setScalar(2);
+    g.add(m); parent.add(g); return g;
+  };
   const G = {};
   G.torso = mk(F.torso, 0, VOX.HIP, 0);
   // Gesicht: Bild auf die Vorderseite des Kopfes (nur Haut, nicht Haare); je Ausdruck ein Bild
@@ -1787,9 +1794,10 @@ function vxFigure(T, look) {
     return faces.get(k);
   };
   const decalMat = new T.MeshStandardMaterial({ map: faceTex({}), transparent: true, roughness: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const decal = { test: (v) => (v.tag === 'skin' || v.tag === 'face') && v.z >= 2 && v.y >= 0, uv: (x, y) => [(x + 12) / 24, y / 24] };
+  const decal = lite ? { test: (v) => (v.tag === 'skin' || v.tag === 'face') && v.z >= 1 && v.y >= 0, uv: (x, y) => [(x * 2 + 12) / 24, (y * 2) / 24] }
+    : { test: (v) => (v.tag === 'skin' || v.tag === 'face') && v.z >= 2 && v.y >= 0, uv: (x, y) => [(x + 12) / 24, y / 24] };
   G.head = mk(F.head, 0, VOX.NECK - VOX.HIP, 0, G.torso, { decal, decalMat });
-  if (look.glasses && VX_GLASSES[look.glasses.id]) G.head.add(vxMesh(T, VX_GLASSES[look.glasses.id](look.glasses), { iter: 2 }));
+  if (look.glasses && VX_GLASSES[look.glasses.id] && !lite) G.head.add(vxMesh(T, VX_GLASSES[look.glasses.id](look.glasses), { iter: 2 }));
   G.armR = mk(F.armR, VOX.ARM_X, VOX.SHOULDER - VOX.HIP, 0, G.torso);
   G.armL = mk(F.armL, -VOX.ARM_X, VOX.SHOULDER - VOX.HIP, 0, G.torso);
   G.legR = mk(F.legR, 0, VOX.HIP, 0);
@@ -1809,7 +1817,7 @@ function vxFigure(T, look) {
   if (look.effect) { fx = vxEffect(T, look.effect.id, look.effect.c); if (fx) root.add(fx); }
 
   /* Animationen: Zielhaltung pro Bild, weich überblendet */
-  const st = { anim: 'idle', t: 0, cur: {} };
+  const st = { anim: 'idle', t: 0, cur: {}, steer: 0, mood: '' };
   const hold = item ? -0.55 : 0;
   const poses = {
     idle: (t) => ({ by: Math.sin(t * 2.2) * 0.006, hx: Math.sin(t * 1.3) * 0.03, hy: Math.sin(t * 0.6) * 0.12, arx: hold + Math.sin(t * 2.2) * 0.05, alx: -Math.sin(t * 2.2) * 0.05, arz: 0.04, alz: -0.04 }),
@@ -1827,6 +1835,8 @@ function vxFigure(T, look) {
     sit: (t) => ({ drop: 0.62, lrx: -1.5, llx: -1.5, arx: -0.7, alx: -0.7, arz: 0.15, alz: -0.15, by: Math.sin(t * 2) * 0.005, hy: Math.sin(t * 0.7) * 0.15 }),
     shy: (t) => ({ arx: 0.35, alx: 0.35, arz: -0.2, alz: 0.2, hx: 0.22, hy: Math.sin(t * 1.2) * 0.1, tz: Math.sin(t * 1.6) * 0.04 }),
     laugh: (t) => ({ tx: -0.12 + Math.abs(Math.sin(t * 9)) * 0.06, by: Math.abs(Math.sin(t * 9)) * 0.04, arx: -0.4, alx: -0.4, arz: -0.3, alz: 0.3, hx: -0.2 }),
+    // im Kart: sitzen, Beine nach vorne, beide Hände am Lenkrad; lenken mit st.steer (-1 links … 1 rechts)
+    drive: (t) => { const s = st.steer; return { lrx: -1.45, llx: -1.45, arx: -1.12 + s * 0.2, alx: -1.12 - s * 0.2, arz: -0.36, alz: 0.36, hy: -s * 0.3, tz: s * 0.09, hx: 0.04 + Math.sin(t * 9) * 0.008, by: st.mood === 'turbo' ? Math.abs(Math.sin(t * 22)) * 0.012 : 0 }; },
   };
   const keys = ['by', 'hx', 'hy', 'hz', 'tz', 'ty', 'tx', 'drop', 'arx', 'arz', 'alx', 'alz', 'lrx', 'llx'];
   function apply(p) {
@@ -1851,6 +1861,7 @@ function vxFigure(T, look) {
     flex: () => ({ mouth: 'grin', brows: 'angry' }),
     shy: () => ({ mouth: 'wavy', brows: 'sad', blush: true }),
     laugh: () => ({ mouth: 'laugh', eyes: 'happy' }),
+    drive: () => (st.mood === 'turbo' ? { mouth: 'laugh', eyes: 'happy' } : st.mood === 'oops' ? { mouth: 'o', brows: 'raised' } : st.mood === 'win' ? { mouth: 'laugh', eyes: 'happy' } : { mouth: baseMouth === 'calm' ? 'smirk' : 'grin' }),
   };
   st.blink = 1.5 + Math.random() * 2;
   function expression(dt) {
@@ -1878,6 +1889,9 @@ function vxFigure(T, look) {
   return {
     root, parts: G, item, pet,
     setAnim(name) { if (poses[name]) { st.anim = name; st.t = 0; } },
+    /** im Kart: lenken (-1 … 1) und Stimmung ('', 'turbo', 'oops', 'win') */
+    setSteer(s) { st.steer = Math.max(-1, Math.min(1, s || 0)); },
+    setMood(m) { st.mood = m || ''; },
     get anim() { return st.anim; },
     update,
     tris() { let n = 0; root.traverse((o) => { if (o.isMesh) n += o.geometry.attributes.position.count / 3; }); return n; },

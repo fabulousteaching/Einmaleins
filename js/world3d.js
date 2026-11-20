@@ -8,7 +8,7 @@
 'use strict';
 
 const W3V = {
-  page: 'avatar', cat: { avatar: 'body', garage: 'paint' }, draft: { a3: null, car: null }, saved: { a3: null, car: null },
+  page: 'avatar', cat: { avatar: 'body', garage: 'body' }, draft: { a3: null, car: null }, saved: { a3: null, car: null },
   st: null, token: 0, tryEmote: null, status: '', thumbs: new Map(), thumbQ: [], thumbBusy: false, tr: null,
 };
 const W3_PRE = { avatar: 'a3', garage: 'car' };
@@ -95,6 +95,11 @@ const A3_CATS = [
   ] },
 ];
 const CAR_CATS = [
+  { id: 'body', icon: '🚗', name: 'Form', groups: [
+    { t: 'info', html: 'Deine Figur fährt selbst! Die Grundformen sind gratis, die besonderen kosten Münzen. Alle fahren gleich schnell.' },
+    { t: 'items', slot: 'body', label: 'Karosserie' },
+    { t: 'info', html: 'Der Hotdog hat feste Farben – Lack und Muster gelten hier nicht.', when: (d) => d.body === 'hotdog' },
+  ] },
   { id: 'paint', icon: '🎨', name: 'Lack', groups: [
     { t: 'color', key: 'paint', label: 'Farbe', colors: W3_PAINT },
     { t: 'items', slot: 'finish', label: 'Lackart' },
@@ -106,11 +111,7 @@ const CAR_CATS = [
   { id: 'rims', icon: '🛞', name: 'Felgen', groups: [{ t: 'items', slot: 'rims', label: 'Felgen' }] },
   { id: 'wing', icon: '🪽', name: 'Spoiler', groups: [{ t: 'items', slot: 'wing', label: 'Heckflügel' }, { t: 'items', slot: 'exhaust', label: 'Auspuff' }] },
   { id: 'turbo', icon: '🔥', name: 'Turbo & Licht', groups: [{ t: 'items', slot: 'flames', label: 'Turbo-Flammen' }, { t: 'items', slot: 'glow', label: 'Unterboden-Licht' }] },
-  { id: 'driver', icon: '🪖', name: 'Fahrer', groups: [
-    { t: 'color', key: 'helmet', label: 'Helmfarbe', colors: W3_PAINT },
-    { t: 'items', slot: 'visor', label: 'Visier' },
-    { t: 'num', key: 'num', label: 'Startnummer' },
-  ] },
+  { id: 'num', icon: '🔢', name: 'Nummer', groups: [{ t: 'num', key: 'num', label: 'Startnummer' }] },
 ];
 const W3_ANIM_NAMES = { idle: 'Stehen', wave: '👋 Winken', cheer: '🙌 Jubeln' };
 
@@ -307,7 +308,7 @@ async function w3BuyId(id) {
   if (!ok) { w3Refresh(); return; }
   if (it.slot === 'emote') { W3V.tryEmote = null; W3V.draft.a3.emote = it.v; w3PlayAnim(it.v, 4000); }
   else if (W3V.page === 'avatar') w3PlayAnim('cheer', 2200);
-  else { w3Turbo(2200); if (W3V.st?.buddy) { W3V.st.buddy.setAnim('cheer'); setTimeout(() => W3V.st?.buddy?.setAnim('idle'), 2200); } }
+  else { w3Turbo(2200); W3V.st?.kart?.setMood('win'); setTimeout(() => W3V.st?.kart?.setMood(''), 2200); }
   if (typeof confetti === 'function') confetti();
   W3V.thumbs.forEach((_, k) => { if (k.startsWith(`${id}|`)) W3V.thumbs.delete(k); });
   w3Refresh();
@@ -323,8 +324,8 @@ function w3Random() {
     Object.assign(d, { topC: pick(W3_CLOTH), topT: pick(W3_TRIM), bottomC: pick(W3_PANTS), shoesC: pick(W3_CLOTH), shoesC2: pick(W3_TRIM), hatC: pick(W3_CLOTH), backC: pick(W3_CLOTH), neckC: pick(W3_CLOTH), bagC: pick(W3_CLOTH) });
     w3PlayAnim('cheer', 1800);
   } else {
-    for (const slot of ['finish', 'pattern', 'rims', 'wing', 'exhaust', 'flames', 'glow', 'visor']) d[slot] = pick(ownList(slot));
-    Object.assign(d, { paint: pick(W3_PAINT), paint2: pick(W3_PAINT), helmet: pick(W3_PAINT) });
+    for (const slot of ['body', 'finish', 'pattern', 'rims', 'wing', 'exhaust', 'flames', 'glow']) d[slot] = pick(ownList(slot));
+    Object.assign(d, { paint: pick(W3_PAINT), paint2: pick(W3_PAINT) });
     w3Turbo(1500);
   }
   w3Refresh(); w3Rebuild(); w3ScheduleSave(pre);
@@ -382,8 +383,7 @@ async function w3StageStart(page, pre) {
   let T;
   try {
     T = await loadThree();
-    if (page === 'avatar') await w3LoadEngine();
-    else w3LoadEngine().catch(() => null);
+    await w3LoadEngine();
     if (typeof loadNumFont === 'function') await loadNumFont().catch(() => null);
   } catch (e) {
     console.warn('3D-Welt laden', e);
@@ -405,7 +405,7 @@ async function w3StageStart(page, pre) {
   const cam = new T.PerspectiveCamera(30, 1, 0.1, 80);
   w3Lights(T, scene, renderer, page === 'garage');
   const st = W3V.st = { T, renderer, scene, cam, host, page, pre, dead: false, raf: 0, last: performance.now(), t: 0, anim: 'idle', animUntil: 0, turboUntil: 0, bounce: 0,
-    view: { yaw: page === 'garage' ? 0.75 : -0.35, zoom: 1, fit: 7.4, drag: null, pinch: null, pts: new Map(), autoUntil: 0 }, fig: null, kart: null, buddy: null, ro: null };
+    view: { yaw: page === 'garage' ? 0.75 : -0.35, zoom: 1, fit: 7.4, drag: null, pinch: null, pts: new Map(), autoUntil: 0 }, fig: null, kart: null, driver: null, ro: null };
   // Sockel
   const gar = page === 'garage';
   const pm = new T.MeshStandardMaterial({ color: gar ? 0x334155 : 0xf7c62a, roughness: gar ? 0.4 : 0.5, metalness: gar ? 0.3 : 0 });
@@ -424,7 +424,7 @@ async function w3StageStart(page, pre) {
     const w = Math.max(1, host.clientWidth), h = Math.max(1, host.clientHeight);
     renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
     const t = Math.tan((cam.fov * Math.PI) / 360);
-    st.view.fit = gar ? Math.max(2.3 / t, 4.7 / (t * cam.aspect)) : Math.max(1.85 / t, 1.55 / (t * cam.aspect));
+    st.view.fit = gar ? Math.max(1.75 / t, 2.75 / (t * cam.aspect)) : Math.max(1.85 / t, 1.55 / (t * cam.aspect));
   };
   st.ro = new ResizeObserver(size); st.ro.observe(host); size();
   const loop = (now) => {
@@ -439,16 +439,18 @@ async function w3StageStart(page, pre) {
       plate.rotation.y = v.yaw;
       const turbo = now < st.turboUntil;
       if (st.kart) {
-        st.kart.tick?.(st.t);
+        st.kart.tick?.(st.t, dt);
+        st.kart.setSteer?.(Math.sin(st.t * 0.9) * 0.5);
+        if (turbo) st.kart.setMood?.('turbo'); else if (st.kart.fig?.anim === 'drive' && !st.moodHold) st.kart.setMood?.('');
         const fs = turbo ? 0.9 + Math.random() * 0.5 : 0.01;
-        st.kart.flames.forEach((f) => f.scale.set(fs, fs, 1));
+        st.kart.flames.forEach((f) => { const k = f.userData.k || 1; f.scale.set(fs * k, fs * k, 1); });
         for (const w of st.kart.wheels) w.spin.rotation.x += (turbo ? 14 : 0) * dt;
         st.bounce = Math.max(0, st.bounce - dt * 2.5);
         st.kart.body.position.y = (turbo ? Math.abs(Math.sin(st.t * 30)) * 0.02 : 0) + Math.sin(st.bounce * Math.PI * 3) * 0.06 * st.bounce;
       }
-      st.buddy?.update(dt);
+
       const dist = v.fit * v.zoom, z = 1 - v.zoom;
-      cam.position.set(-0.6, 2.4 + z * 0.4, dist); cam.lookAt(-0.6, 0.8 + z * 0.3, 0);
+      cam.position.set(0, 2.5 + z * 0.4, dist); cam.lookAt(0, 0.85 + z * 0.35, 0);
     } else {
       st.fig?.update(dt);
       if (st.fig) st.fig.root.rotation.y = v.yaw;
@@ -489,25 +491,17 @@ function w3Rebuild(now = false) {
     st.fig = next; st.scene.add(next.root); next.setAnim(st.anim);
     next.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   } else {
+    if (typeof kartVoxModel !== 'function') { w3LoadEngine().then(() => { if (W3V.st === st) w3Rebuild(true); }).catch(() => null); }
+    // die eigene Figur sitzt am Steuer (einmal gebaut, bei jeder Änderung ins neue Kart gesetzt)
+    if (!st.driver && typeof vxFigure === 'function') { try { st.driver = vxFigure(T, kvDriverLook(a3Look(W3V.saved.a3))); st.driver.root.traverse((o) => { if (o.isMesh) o.castShadow = true; }); } catch (e) { console.warn('Figur im Kart', e); } }
     const L = { ...W3V.draft.car }; delete L.v;
-    const next = kartModel(T, L.paint, L.helmet, L.num, L);
     if (st.kart) { st.plate.remove(st.kart.g); w3DisposeKart(st.kart); }
-    st.kart = next; next.g.position.set(0.15, 0, 0); next.g.rotation.y = 0; st.plate.add(next.g);
-    if (!st.buddy && typeof vxFigure === 'function') {
-      try {
-        // die eigene Figur steht auf einem kleinen Sockel neben der Drehscheibe
-        st.buddy = vxFigure(T, a3Look(W3V.saved.a3));
-        const spot = new T.Group(); spot.position.set(-3.55, -0.16, 0.8); spot.rotation.y = 0.45; st.scene.add(spot); st.buddySpot = spot;
-        const pm2 = new T.MeshStandardMaterial({ color: 0xf7c62a, roughness: 0.5 });
-        const p1 = new T.Mesh(new T.CylinderGeometry(0.85, 0.9, 0.14, 8), pm2); p1.position.y = -0.07; p1.receiveShadow = true; p1.rotation.y = Math.PI / 8; spot.add(p1);
-        const p2 = new T.Mesh(new T.CylinderGeometry(0.9, 1.0, 0.14, 8), new T.MeshStandardMaterial({ color: 0xd9a514, roughness: 0.6 })); p2.position.y = -0.2; p2.rotation.y = Math.PI / 8; spot.add(p2);
-        st.buddy.root.scale.setScalar(0.9); spot.add(st.buddy.root); st.buddy.setAnim('idle');
-        st.buddy.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-      } catch (e) { console.warn('Avatar in der Garage', e); }
-    } else if (!st.buddy) w3LoadEngine().then(() => { if (W3V.st === st && !st.buddy) w3Rebuild(true); }).catch(() => null);
+    const next = kartModel(T, L.paint, 0xffffff, L.num, L, null, { fig: st.driver });
+    st.kart = next; next.g.position.set(0, 0, 0); next.g.rotation.y = 0; st.plate.add(next.g);
   }
 }
 function w3DisposeKart(k) {
+  if (k.voxel) { k.dispose(); return; }
   const shared = new Set(Object.values(KART_SHARED));
   k.g.traverse((o) => { if (o.isMesh && o.geometry && !shared.has(o.geometry)) o.geometry.dispose(); });
   k.dispose?.();
@@ -536,7 +530,7 @@ function stopWorld3D(keepThumbs = false) {
   const st = W3V.st;
   if (st) {
     st.dead = true; cancelAnimationFrame(st.raf); st.ro?.disconnect(); clearTimeout(st.rebuildT);
-    st.fig?.dispose(); st.buddy?.dispose(); if (st.kart) w3DisposeKart(st.kart);
+    st.fig?.dispose(); if (st.kart) w3DisposeKart(st.kart); st.driver?.dispose();
     st.scene.environment?.dispose?.();
     st.renderer.dispose(); st.renderer.forceContextLoss?.(); st.renderer.domElement.remove();
     W3V.st = null;
@@ -560,7 +554,7 @@ function w3ThumbBase() {
 function w3ThumbKey(it) {
   if (it.pre === 'a3') { const b = w3ThumbBase(); return `${it.id}|${b.skin}|${b.hair}|${b.hairC}|${b.top}|${b.topC}|${b.bottom}`; }
   const d = W3V.draft.car || CAR_DEFAULT;
-  return `${it.id}|${d.paint}|${d.paint2}|${d.helmet}|${d.finish}|${d.pattern}`;
+  return `${it.id}|${d.body}|${d.paint}|${d.paint2}|${d.finish}|${d.pattern}`;
 }
 function w3QueueThumbs() {
   const q = [];
@@ -619,8 +613,9 @@ function w3RenderThumb(it) {
     renderer.render(scene, cam);
     scene.remove(fig.root); fig.dispose();
   } else {
+    if (typeof kartVoxModel !== 'function') return null;
     const L = { ...W3V.draft.car, [it.slot]: it.v }; delete L.v;
-    const k = kartModel(T, L.paint, L.helmet, L.num, L);
+    const k = kartModel(T, L.paint, 0xffffff, L.num, L, null);
     k.tick(1.3);
     const turbo = it.slot === 'flames';
     k.flames.forEach((s) => s.scale.set(turbo ? 1.3 : 0.01, turbo ? 1.3 : 0.01, 1));
@@ -646,7 +641,7 @@ async function w3MakeSnap(pre) {
   const h = w3Hash(cfg);
   if (w3SnapGet(pre)?.h === h) return w3SnapGet(pre);
   const T = await loadThree();
-  if (pre === 'a3') await w3LoadEngine();
+  await w3LoadEngine();
   const { renderer, scene, cam, floor } = w3ThumbStage();
   renderer.setSize(220, 260, false); cam.aspect = 220 / 260; cam.updateProjectionMatrix();
   try {
@@ -663,7 +658,7 @@ async function w3MakeSnap(pre) {
       scene.remove(fig.root); fig.dispose();
     } else {
       const L = { ...cfg }; delete L.v;
-      const k = kartModel(T, L.paint, L.helmet, L.num, L); k.tick(1);
+      const k = kartModel(T, L.paint, 0xffffff, L.num, L, typeof vxFigure === 'function' ? a3Look(w3Saved('a3')) : null); k.tick(1);
       k.g.rotation.y = 0.75; scene.add(k.g); scene.add(floor);
       cam.position.set(0, 3.1, 7.2); cam.lookAt(0, 0.6, 0);
       renderer.render(scene, cam);

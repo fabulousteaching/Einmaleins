@@ -68,6 +68,9 @@ const A3_ITEMS = [
     ['dance', 'Tanzen', '💃', 15, { c: 0 }], ['spin', 'Pirouette', '🌀', 15, { c: 0 }]]),
 ];
 const CAR_ITEMS = [
+  ...w3Items('car', 'body', [['formula', 'Formel-Kart', '🏎️', 0, { c: 0 }], ['kart', 'Go-Kart', '🛞', 0, { c: 0 }], ['buggy', 'Strandbuggy', '🏖️', 0, { c: 0 }], ['bubble', 'Kugelauto', '🫧', 0, { c: 0 }],
+    ['bathtub', 'Badewanne', '🛁', 20, { c: 0 }], ['hotdog', 'Hotdog', '🌭', 25, { c: 0 }], ['duck', 'Quietscheente', '🦆', 25, { c: 0 }], ['shark', 'Hai', '🦈', 30, { c: 0 }],
+    ['rocket', 'Rakete', '🚀', 30, { c: 0 }], ['monster', 'Monster-Truck', '🛻', 30, { c: 0 }], ['carriage', 'Kutsche', '👑', 35, { c: 0 }], ['ufo', 'UFO', '🛸', 40, { c: 0, u: 50 }]]),
   ...w3Items('car', 'finish', [['gloss', 'Glanz', '✨', 0, { c: 0 }], ['matte', 'Matt', '🧱', 10, { c: 0 }], ['metal', 'Metallic', '🔩', 12, { c: 0 }], ['pearl', 'Perlmutt', '🫧', 18, { c: 0 }], ['glow', 'Leuchtlack', '💡', 20, { c: 0 }], ['chrome', 'Chrom', '🪞', 25, { c: 0, u: 40 }]]),
   ...w3Items('car', 'pattern', [['none', 'Ohne', '—', 0, { c: 0 }], ['center', 'Mittelstreifen', '▮', 8], ['racing', 'Rennstreifen', '🏁', 10], ['duo', 'Zweifarbig', '◩', 12], ['dots', 'Punkte', '⚪', 12], ['stars', 'Sterne', '⭐', 15],
     ['checker', 'Zielflagge', '🏁', 15], ['lightning', 'Blitz', '⚡', 18], ['flames', 'Flammen', '🔥', 20]]),
@@ -76,7 +79,6 @@ const CAR_ITEMS = [
   ...w3Items('car', 'exhaust', [['chrome', 'Chrom', '💨', 0, { c: 0 }], ['black', 'Schwarz', '⚫', 8, { c: 0 }], ['gold', 'Gold', '🥇', 12, { c: 0 }], ['quad', 'Vierfach', '🎺', 15, { c: 0 }]]),
   ...w3Items('car', 'flames', [['classic', 'Orange', '🔥', 0, { c: 0 }], ['blue', 'Blau', '💙', 12, { c: 0 }], ['green', 'Grün', '💚', 12, { c: 0 }], ['violet', 'Violett', '💜', 12, { c: 0 }], ['plasma', 'Plasma', '🩷', 18, { c: 0 }], ['rainbow', 'Regenbogen', '🌈', 25, { c: 0 }]]),
   ...w3Items('car', 'glow', [['none', 'Aus', '—', 0, { c: 0 }], ['cyan', 'Türkis', '🩵', 18, { c: 0 }], ['pink', 'Pink', '🩷', 18, { c: 0 }], ['green', 'Grün', '💚', 18, { c: 0 }], ['violet', 'Violett', '💜', 18, { c: 0 }], ['gold', 'Gold', '💛', 20, { c: 0 }], ['rainbow', 'Regenbogen', '🌈', 30, { c: 0, u: 50 }]]),
-  ...w3Items('car', 'visor', [['dark', 'Dunkel', '🪖', 0, { c: 0 }], ['gold', 'Gold', '🥇', 10, { c: 0 }], ['mirror', 'Spiegel', '🪞', 10, { c: 0 }], ['rainbow', 'Regenbogen', '🌈', 15, { c: 0 }]]),
 ];
 const W3_ITEM = Object.fromEntries([...A3_ITEMS, ...CAR_ITEMS].map((i) => [i.id, i]));
 const w3Item = (pre, slot, v) => W3_ITEM[`${pre}:${slot}:${v}`];
@@ -93,7 +95,7 @@ const A3_DEFAULT = {
   wrist: 'none', wristC: 0x2453d6, wristC2: 0x5eead4, bag: 'none', bagC: 0x22c55e, bagC2: 0xf5c518, back: 'none', backC: 0xe2483d, backC2: 0xf5c518,
   hand: 'none', handC: 0xe2483d, pet: 'none', petC: 0xf59e0b, effect: 'none', effectC: 0xa78bfa, emote: 'wave',
 };
-const CAR_DEFAULT = { v: 1, paint: 0xff5a36, paint2: 0xffffff, finish: 'gloss', pattern: 'none', rims: 'classic', wing: 'standard', exhaust: 'chrome', flames: 'classic', glow: 'none', helmet: 0xffffff, visor: 'dark', num: 1 };
+const CAR_DEFAULT = { v: 1, body: 'formula', paint: 0xff5a36, paint2: 0xffffff, finish: 'gloss', pattern: 'none', rims: 'classic', wing: 'standard', exhaust: 'chrome', flames: 'classic', glow: 'none', num: 1 };
 const A3_COLOR_KEYS = ['skin', 'eyeC', 'hairC2', 'topC', 'topT', 'topU', 'bottomC', 'bottomT', 'shoesC', 'shoesC2', 'hatC', 'hatC2', 'glassesC', 'neckC', 'neckC2', 'wristC', 'wristC2', 'bagC', 'bagC2', 'backC', 'backC2', 'handC', 'petC', 'effectC'];
 
 /** Gespeicherte Daten säubern: unbekannte Werte → Grundausstattung (so bricht nie etwas, auch bei alten Ständen) */
@@ -292,16 +294,20 @@ function w3Asset(path) {
   return new URL(path + v, document.baseURI).href;
 }
 let w3EngineP = null;
+const w3Script = (path) => new Promise((res, rej) => {
+  const s = document.createElement('script');
+  s.src = w3Asset(path);
+  s.onload = () => res();
+  s.onerror = () => rej(new Error(path));
+  document.head.appendChild(s);
+});
+/** Avatar-Baukasten (js/avatar3d.js) und Karts im Avatar-Stil (js/kartvox.js) erst bei Bedarf laden */
 function w3LoadEngine() {
-  if (typeof vxFigure === 'function') return Promise.resolve();
+  if (typeof vxFigure === 'function' && typeof kartVoxModel === 'function') return Promise.resolve();
   if (!w3EngineP) {
-    w3EngineP = new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = w3Asset('js/avatar3d.js');
-      s.onload = () => res();
-      s.onerror = () => { w3EngineP = null; rej(new Error('avatar3d.js')); };
-      document.head.appendChild(s);
-    });
+    w3EngineP = (typeof vxFigure === 'function' ? Promise.resolve() : w3Script('js/avatar3d.js'))
+      .then(() => (typeof kartVoxModel === 'function' ? null : w3Script('js/kartvox.js')))
+      .catch((e) => { w3EngineP = null; throw e; });
   }
   return w3EngineP;
 }

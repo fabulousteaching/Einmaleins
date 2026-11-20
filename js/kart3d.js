@@ -480,8 +480,15 @@ function kartNumTex(n, color) {
   });
 }
 const KART_SHARED = {};
-/** Ein Kart mit Fahrerin/Fahrer. look (optional): Garage-Optik, sonst Standard mit color/helmetColor/num */
-function kartModel(T, color, helmetColor, num, look = null) {
+/** Ein Kart. look: Garage-Optik (sonst Standard mit color/num); driver: Avatar-Bauplan der Person am Steuer.
+    Im Stil der Avatare (js/kartvox.js), wenn geladen; sonst das einfache Kart mit Helm-Fahrer. */
+function kartModel(T, color, helmetColor, num, look = null, driver = null, opts = {}) {
+  if (typeof kartVoxModel === 'function') {
+    try { return kartVoxModel(T, look || { paint: color, num }, driver, opts); } catch (e) { console.warn('Kart im Avatar-Stil', e); }
+  }
+  return kartModelClassic(T, color, helmetColor, num, look);
+}
+function kartModelClassic(T, color, helmetColor, num, look = null) {
   const S = KART_SHARED;
   if (!S.tire || S.T !== T) {
     S.T = T;
@@ -624,6 +631,8 @@ function kartModel(T, color, helmetColor, num, look = null) {
 async function startKart3D() {
   const T = await loadThree();
   await loadNumFont();
+  // Karts, Figuren und Kulisse im Stil der Avatare (js/avatar3d.js + js/kartvox.js, erst jetzt geladen)
+  if (typeof w3LoadEngine === 'function') await w3LoadEngine().catch((e) => console.warn('Avatar-Baukasten', e));
   const tid = kartTrackId(), TH = KART_THEMES[tid], SH = KART_SHAPES[tid];
   Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
   $('#view').innerHTML = gameShell('kart', `
@@ -643,6 +652,7 @@ async function startKart3D() {
   game.stage3d = st;
   const { scene, camera, renderer } = st;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
+  if (typeof kvProp === 'function') { renderer.toneMapping = T.NeutralToneMapping; renderer.toneMappingExposure = 1.0; }   // Farben wie in der 3D-Welt
   scene.fog = new T.Fog(TH.fog, TH.fogNear, TH.fogFar);
   const W = KART.W, HW = W / 2, LANE = W / 3, WL = HW + KART.WALL;
   const tr = kartBuildTrack(SH, W);
@@ -975,11 +985,27 @@ async function startKart3D() {
   }
   const P = TH.props;
   const trunkMat = new T.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
+  // Kulisse im Stil der Avatare (js/kartvox.js): nahe an der Strecke weich gerundete Voxel-Modelle,
+  // weit weg die einfachen Formen (sieht man dort kaum, spart viel Rechenarbeit)
+  const VP = typeof kvProp === 'function';
+  const propMats = VP ? kvPropMats(T) : null;
+  const tintSoft = (p, i) => [0xffffff, 0xf1f7ec, 0xfaf6ee, 0xe9f2ea][i % 4];
+  function voxSplit(kind, list, { near = 40, scale = 1, variants = [0], cast = true, tint = tintSoft, max = Infinity, lod = 0 } = {}) {
+    if (!VP) return list;
+    const isNear = (p) => near === Infinity || kartNear(tr, p.x, p.z).d < WL + near;
+    const nearL = list.filter(isNear).slice(0, max), farL = list.filter((p) => !isNear(p));
+    variants.forEach((v, vi) => {
+      const sub = nearL.filter((p, i) => i % variants.length === vi);
+      inst(kvProp(T, kind, v, lod), propMats, sub, (o, p) => { o.position.y = -0.25; o.scale.setScalar(p.sc * scale); }, { cast, color: tint });
+    });
+    return farL;
+  }
   if (P.includes('trees') || P.includes('pines') || P.includes('snowPines')) {
     const snowy = P.includes('snowPines');
-    const list = scatter(P.includes('pines') || snowy ? 620 : 300, 6, 180).map((p) => ({ ...p, sc: rnd(0.8, 1.7) }));
+    let list = scatter(P.includes('pines') || snowy ? 620 : 300, 6, 180).map((p) => ({ ...p, sc: rnd(0.8, 1.7) }));
+    list = voxSplit('pine', list, { near: 30, scale: 1.45, variants: [snowy ? 1 : 0] });
     inst(new T.CylinderGeometry(0.35, 0.5, 3, 8), trunkMat, list, (o) => { o.position.y = 1.5 * o.scale.y - 0.25; });
-    const pineMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true });
+    const pineMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: !VP });
     const tint = (p, i) => (snowy ? [0x2f5a46, 0x335f4a, 0x2a5240][i % 3] : [0x24552f, 0x2c6b38, 0x1f4a29, 0x356f2f][i % 4]);
     for (const [h, r, y] of [[4.2, 2.6, 4.2], [3.4, 2.0, 6.2], [2.6, 1.3, 7.9]]) {
       inst(new T.ConeGeometry(r, h, 9), pineMat, list, (o) => { o.position.y = y * o.scale.y - 0.25; }, { color: tint });
@@ -987,38 +1013,43 @@ async function startKart3D() {
     }
   }
   if (P.includes('oaks')) {
-    const list = scatter(240, 8, 170).map((p) => ({ ...p, sc: rnd(0.9, 1.6) }));
+    let list = scatter(240, 8, 170).map((p) => ({ ...p, sc: rnd(0.9, 1.6) }));
+    list = voxSplit('oak', list, { near: 32, scale: 1.3, variants: [0, 0, 1] });
     inst(new T.CylinderGeometry(0.4, 0.6, 4, 8), trunkMat, list, (o) => { o.position.y = 2 * o.scale.y - 0.25; });
-    inst(new T.IcosahedronGeometry(3.2, 1), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }), list, (o) => { o.position.y = 5.6 * o.scale.y - 0.25; }, { color: (p, i) => [0x3f7d2c, 0x4d8a33, 0x6a9a2f, 0xb45309][i % 9 === 0 ? 3 : i % 3] });
+    inst(new T.IcosahedronGeometry(3.2, 1), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: !VP }), list, (o) => { o.position.y = 5.6 * o.scale.y - 0.25; }, { color: (p, i) => [0x3f7d2c, 0x4d8a33, 0x6a9a2f, 0xb45309][i % 9 === 0 ? 3 : i % 3] });
   }
   if (P.includes('bushes')) {
-    const list = scatter(260, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.4) }));
-    inst(new T.IcosahedronGeometry(1.1, 0), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), list, (o) => { o.position.y = 0.5 * o.scale.y - 0.25; o.scale.y *= 0.75; }, { color: (p, i) => [0x3f8f3a, 0x4b9c3d, 0x2f7a33][i % 3] });
+    let list = scatter(260, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.4) }));
+    list = voxSplit('bush', list, { near: 30, lod: 1, cast: false, max: 170 });
+    inst(new T.IcosahedronGeometry(1.1, 0), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: !VP }), list, (o) => { o.position.y = 0.5 * o.scale.y - 0.25; o.scale.y *= 0.75; }, { color: (p, i) => [0x3f8f3a, 0x4b9c3d, 0x2f7a33][i % 3] });
   }
   if (P.includes('flowers')) {
     const list = scatter(700, 2.5, 50, 2.5).map((p) => ({ ...p, sc: rnd(0.7, 1.3) }));
     inst(new T.SphereGeometry(0.22, 6, 4), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = 0.2; }, { cast: false, color: (p, i) => ['#f472b6', '#facc15', '#ffffff', '#a78bfa', '#fb7185'][i % 5] });
   }
   if (P.includes('mushrooms')) {
-    const list = scatter(90, 3, 34, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.5) }));
+    let list = scatter(90, 3, 34, 3).map((p) => ({ ...p, sc: rnd(0.6, 1.5) }));
+    list = voxSplit('mushroom', list, { near: Infinity, scale: 1.15, cast: false, max: 40 });
     inst(new T.CylinderGeometry(0.25, 0.32, 0.9, 10), new T.MeshStandardMaterial({ color: 0xf5efe0 }), list, (o) => { o.position.y = 0.45 * o.scale.y - 0.25; });
     const capTex = canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#d7263d'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; for (let i = 0; i < 14; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h * 0.8, 3 + Math.random() * 5, 0, Math.PI * 2); g.fill(); } });
     inst(new T.SphereGeometry(0.7, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ map: capTex, roughness: 0.5 }), list, (o) => { o.position.y = 0.85 * o.scale.y - 0.25; });
   }
   if (P.includes('cabins')) {
-    const list = scatter(10, 20, 70, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.2) }));
+    let list = scatter(10, 20, 70, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.2) }));
+    list = voxSplit('cabin', list, { near: Infinity });
     inst(new T.BoxGeometry(6, 3.4, 5), new T.MeshStandardMaterial({ map: kartWallTex('logs'), roughness: 0.9 }), list, (o) => { o.position.y = 1.7 * o.scale.y - 0.25; });
-    inst(new T.ConeGeometry(5, 2.8, 4), new T.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.8, flatShading: true }), list, (o) => { o.position.y = 4.8 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
+    inst(new T.ConeGeometry(5, 2.8, 4), new T.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.8, flatShading: !VP }), list, (o) => { o.position.y = 4.8 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
   }
   if (P.includes('rocks') || P.includes('marsRocks')) {
     const mars = P.includes('marsRocks');
-    const list = scatter(mars ? 460 : 150, 3, 200, 3).map((p) => ({ ...p, sc: rnd(0.5, mars ? 3.6 : 2.4) }));
-    inst(new T.DodecahedronGeometry(1.2, 0), new T.MeshStandardMaterial({ color: mars ? 0x7c3a20 : TH.ground === 'snow' ? 0x7d8794 : 0x7b7f86, roughness: 0.95, flatShading: true }), list, (o) => { o.position.y = 0.2 * o.scale.y; o.rotation.x = Math.random(); o.scale.y *= 0.65; });
+    let list = scatter(mars ? 460 : 150, 3, 200, 3).map((p) => ({ ...p, sc: rnd(0.5, mars ? 3.6 : 2.4) }));
+    list = voxSplit('rock', list, { near: 42, lod: 1, variants: [mars ? 1 : 0], tint: (p, i) => [0xffffff, 0xeeeeee, 0xf7f2ea][i % 3] });
+    inst(new T.DodecahedronGeometry(1.2, 0), new T.MeshStandardMaterial({ color: mars ? 0x7c3a20 : TH.ground === 'snow' ? 0x7d8794 : 0x7b7f86, roughness: 0.95, flatShading: !VP }), list, (o) => { o.position.y = 0.2 * o.scale.y; o.rotation.x = Math.random(); o.scale.y *= 0.65; });
   }
   if (P.includes('craters')) {
     const list = scatter(40, 18, 220, 14).map((p) => ({ ...p, sc: rnd(2, 6) }));
     inst(new T.CircleGeometry(2.2, 24), new T.MeshStandardMaterial({ color: 0x6b2a14, roughness: 1 }), list, (o) => { o.position.y = -0.2; o.rotation.set(-Math.PI / 2, 0, 0); }, { cast: false });
-    inst(new T.TorusGeometry(2.3, 0.35, 6, 24), new T.MeshStandardMaterial({ color: 0x9a4220, roughness: 1, flatShading: true }), list, (o) => { o.position.y = -0.2; o.rotation.set(-Math.PI / 2, 0, 0); o.scale.z = 0.4; });
+    inst(new T.TorusGeometry(2.3, 0.35, 6, 24), new T.MeshStandardMaterial({ color: 0x9a4220, roughness: 1, flatShading: !VP }), list, (o) => { o.position.y = -0.2; o.rotation.set(-Math.PI / 2, 0, 0); o.scale.z = 0.4; });
   }
   if (P.includes('domes')) {
     const list = scatter(14, 26, 120, 20).map((p) => ({ ...p, sc: rnd(1, 1.9) }));
@@ -1042,9 +1073,10 @@ async function startKart3D() {
     }
   }
   if (P.includes('palms')) {
-    const list = scatter(190, 6, 130).map((p) => ({ ...p, sc: rnd(0.9, 1.4), lean: rnd(-0.25, 0.25) }));
+    let list = scatter(190, 6, 130).map((p) => ({ ...p, sc: rnd(0.9, 1.4), lean: rnd(-0.25, 0.25) }));
+    list = voxSplit('palm', list, { near: 40 });
     inst(new T.CylinderGeometry(0.28, 0.45, 9, 8), new T.MeshStandardMaterial({ color: 0x8b6b45, roughness: 0.95 }), list, (o, p) => { o.position.y = 4.5 * o.scale.y - 0.25; o.rotation.z = p.lean; });
-    const leafMat = new T.MeshStandardMaterial({ color: 0x2f8f3a, roughness: 0.75, side: T.DoubleSide, flatShading: true });
+    const leafMat = new T.MeshStandardMaterial({ color: 0x2f8f3a, roughness: 0.75, side: T.DoubleSide, flatShading: !VP });
     const leafG = new T.ConeGeometry(0.7, 5.2, 4); leafG.rotateZ(-Math.PI / 2); leafG.translate(2.5, 0, 0); leafG.scale(1, 0.25, 1);
     for (let a = 0; a < 7; a++) {
       inst(leafG, leafMat, list, (o, p) => {
@@ -1056,19 +1088,22 @@ async function startKart3D() {
     }
   }
   if (P.includes('umbrellas')) {
-    const list = scatter(70, 4, 40, 3);
+    let list = scatter(70, 4, 40, 3);
+    list = voxSplit('umbrella', list, { near: Infinity, max: 24, tint: null });
     inst(new T.CylinderGeometry(0.06, 0.06, 2.6, 6), new T.MeshStandardMaterial({ color: 0xf5f5f5 }), list, (o) => { o.position.y = 1.05; });
     const umTex = canvasTex(256, 32, (g, w, h) => { for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#ffffff' : ['#ef4444', '#0ea5e9', '#f59e0b'][i % 3]; g.fillRect((i * w) / 8, 0, w / 8, h); } });
     inst(new T.ConeGeometry(1.6, 0.7, 16, 1, true), new T.MeshStandardMaterial({ map: umTex, side: T.DoubleSide }), list, (o) => { o.position.y = 2.5; });
   }
   if (P.includes('surf')) {
-    const list = scatter(40, 4, 30, 3);
+    let list = scatter(40, 4, 30, 3);
+    list = voxSplit('surf', list, { near: Infinity, scale: 1.1, variants: [0, 1, 2, 3], cast: false, tint: null });
     inst(new T.CapsuleGeometry(0.35, 2.2, 4, 10), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), list, (o) => { o.position.y = 1.1; o.rotation.z = 0.25; o.scale.z = 0.25; }, { color: (p, i) => ['#f97316', '#22d3ee', '#facc15', '#ec4899'][i % 4] });
   }
   if (P.includes('huts')) {
-    const list = scatter(16, 16, 80, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.3) }));
+    let list = scatter(16, 16, 80, 14).map((p) => ({ ...p, sc: rnd(0.9, 1.3) }));
+    list = voxSplit('hut', list, { near: Infinity, tint: null });
     inst(new T.BoxGeometry(5, 3, 4), new T.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.9 }), list, (o) => { o.position.y = 1.5 * o.scale.y - 0.25; });
-    inst(new T.ConeGeometry(4.2, 2.4, 4), new T.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8, flatShading: true }), list, (o) => { o.position.y = 4.2 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
+    inst(new T.ConeGeometry(4.2, 2.4, 4), new T.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.8, flatShading: !VP }), list, (o) => { o.position.y = 4.2 * o.scale.y - 0.25; o.rotation.y += Math.PI / 4; });
   }
   if (P.includes('sea')) {
     const seaTex = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#1e88b8'; g.fillRect(0, 0, w, h); kartNoise(g, w, h, 2500, ['rgba(255,255,255,.18)', 'rgba(20,90,140,.35)', 'rgba(120,220,240,.25)'], [1, 5]); }, { repeat: [60, 60] });
@@ -1084,19 +1119,22 @@ async function startKart3D() {
     const roof = new T.Mesh(new T.ConeGeometry(3, 3, 16), new T.MeshStandardMaterial({ color: 0x1f2937 })); roof.position.y = 30.5; g.add(roof);
   }
   if (P.includes('snowmen')) {
-    const list = scatter(36, 4, 36, 3);
+    let list = scatter(36, 4, 36, 3);
+    list = voxSplit('snowman', list, { near: Infinity, max: 12, tint: null });
     const snowMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
     for (const [r, y] of [[1.1, 0.8], [0.8, 2.4], [0.55, 3.55]]) inst(new T.SphereGeometry(r, 16, 12), snowMat, list, (o) => { o.position.y = y; });
     inst(new T.ConeGeometry(0.12, 0.6, 8), new T.MeshStandardMaterial({ color: 0xf97316 }), list, (o, p) => { o.rotation.set(Math.PI / 2, p.rot, 0, 'YXZ'); o.position.y = 3.55; o.position.x += Math.sin(p.rot) * 0.6; o.position.z += Math.cos(p.rot) * 0.6; });
     inst(new T.CylinderGeometry(0.4, 0.45, 0.6, 12), new T.MeshStandardMaterial({ color: 0x111827 }), list, (o) => { o.position.y = 4.2; });
   }
   if (P.includes('igloos')) {
-    const list = scatter(14, 14, 70, 12).map((p) => ({ ...p, sc: rnd(0.9, 1.4) }));
+    let list = scatter(14, 14, 70, 12).map((p) => ({ ...p, sc: rnd(0.9, 1.4) }));
+    list = voxSplit('igloo', list, { near: Infinity, scale: 1.1, tint: null });
     const iTex = canvasTex(128, 64, (g, w, h) => { g.fillStyle = '#f8fbff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#c7d7ea'; g.lineWidth = 2; for (let y = 0; y < h; y += 12) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 12) % 2 ? 0 : 10; x < w; x += 20) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 12); g.stroke(); } } });
     inst(new T.SphereGeometry(4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ map: iTex, roughness: 0.8 }), list);
   }
   if (P.includes('crystals')) {
-    const list = scatter(120, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.5, 1.6) }));
+    let list = scatter(120, 3, 60, 3).map((p) => ({ ...p, sc: rnd(0.5, 1.6) }));
+    list = voxSplit('crystal', list, { near: Infinity, lod: 1, max: 50, cast: false, tint: null });
     inst(new T.OctahedronGeometry(1, 0), new T.MeshStandardMaterial({ color: 0xbae6fd, emissive: 0x38bdf8, emissiveIntensity: 0.4, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 }), list, (o) => { o.position.y = 1 * o.scale.y; o.scale.y *= 2.2; });
   }
   if (P.includes('stands')) {
@@ -1187,30 +1225,35 @@ async function startKart3D() {
     }
   }
   if (P.includes('lollipops')) {
-    const list = scatter(60, 5, 110, 4).map((p) => ({ ...p, sc: rnd(0.8, 2) }));
+    let list = scatter(60, 5, 110, 4).map((p) => ({ ...p, sc: rnd(0.8, 2) }));
+    list = voxSplit('lollipop', list, { near: 60, max: 20, variants: [1, 0], scale: 0.85, tint: null });
     inst(new T.CylinderGeometry(0.18, 0.18, 7, 8), new T.MeshStandardMaterial({ color: 0xffffff }), list, (o) => { o.position.y = 3.5 * o.scale.y - 0.25; });
     const lt = canvasTex(128, 128, (g) => { for (let r = 64; r > 0; r -= 8) { g.fillStyle = (r / 8) % 2 ? '#f472b6' : '#ffffff'; g.beginPath(); g.arc(64, 64, r, 0, Math.PI * 2); g.fill(); } });
     inst(new T.CylinderGeometry(2.2, 2.2, 0.6, 28), new T.MeshStandardMaterial({ map: lt, roughness: 0.3 }), list, (o) => { o.position.y = 7.6 * o.scale.y; o.rotation.x = Math.PI / 2; }, { color: (p, i) => ['#ffffff', '#fde68a', '#bae6fd', '#ddd6fe'][i % 4] });
   }
   if (P.includes('canes')) {
-    const list = scatter(70, 3, 50, 3).map((p) => ({ ...p, sc: rnd(0.8, 1.5) }));
+    let list = scatter(70, 3, 50, 3).map((p) => ({ ...p, sc: rnd(0.8, 1.5) }));
+    list = voxSplit('cane', list, { near: Infinity, max: 24, tint: null });
     const ct = canvasTex(32, 128, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); g.fillStyle = '#ef4444'; for (let y = -w; y < h; y += 20) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y + w); g.lineTo(w, y + w + 8); g.lineTo(0, y + 8); g.fill(); } }, { repeat: [1, 3] });
     const cm2 = new T.MeshStandardMaterial({ map: ct, roughness: 0.3 });
     inst(new T.CylinderGeometry(0.35, 0.35, 6, 12), cm2, list, (o) => { o.position.y = 3 * o.scale.y - 0.25; });
     inst(new T.TorusGeometry(0.9, 0.35, 10, 20, Math.PI), cm2, list, (o) => { o.position.y = 6 * o.scale.y - 0.25; o.position.x += 0.9 * o.scale.x * Math.cos(o.rotation.y); o.position.z -= 0.9 * o.scale.x * Math.sin(o.rotation.y); });
   }
   if (P.includes('cupcakes')) {
-    const list = scatter(26, 18, 120, 14).map((p) => ({ ...p, sc: rnd(2, 4) }));
+    let list = scatter(26, 18, 120, 14).map((p) => ({ ...p, sc: rnd(2, 4) }));
+    list = voxSplit('cupcake', list, { near: 70, max: 12, variants: [0, 1, 2, 3], scale: 1.3, tint: null });
     inst(new T.CylinderGeometry(2.2, 1.7, 2.4, 20), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), list, (o) => { o.position.y = 1.2 * o.scale.y - 0.25; }, { color: (p, i) => ['#f472b6', '#60a5fa', '#a78bfa', '#facc15'][i % 4] });
     inst(new T.SphereGeometry(2.3, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), list, (o) => { o.position.y = 2.4 * o.scale.y - 0.25; }, { color: (p, i) => ['#fef3c7', '#fbcfe8', '#ffffff', '#7c2d12'][i % 4] });
     inst(new T.SphereGeometry(0.5, 12, 8), new T.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 }), list, (o) => { o.position.y = 4.8 * o.scale.y - 0.25; });
   }
   if (P.includes('donuts')) {
-    const list = scatter(30, 10, 100, 10).map((p) => ({ ...p, sc: rnd(1.5, 3.5) }));
+    let list = scatter(30, 10, 100, 10).map((p) => ({ ...p, sc: rnd(1.5, 3.5) }));
+    list = voxSplit('donut', list, { near: 60, max: 10, variants: [0, 1, 2, 3], scale: 1.1, tint: null });
     inst(new T.TorusGeometry(1.4, 0.7, 14, 28), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), list, (o) => { o.position.y = 2.1 * o.scale.y - 0.25; }, { color: (p, i) => ['#f9a8d4', '#fde68a', '#c4b5fd', '#92400e'][i % 4] });
   }
   if (P.includes('gumdrops')) {
-    const list = scatter(260, 2.5, 60, 2.5).map((p) => ({ ...p, sc: rnd(0.5, 1.2) }));
+    let list = scatter(260, 2.5, 60, 2.5).map((p) => ({ ...p, sc: rnd(0.5, 1.2) }));
+    list = voxSplit('gumdrop', list, { near: Infinity, lod: 1, max: 120, variants: [0, 1, 2, 3, 4], cast: false, tint: null });
     inst(new T.SphereGeometry(0.7, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 }), list, (o) => { o.position.y = -0.2; }, { color: (p, i) => ['#ef4444', '#22c55e', '#facc15', '#a855f7', '#f97316', '#38bdf8'][i % 6] });
   }
   // Kurvenschilder (Pfeile aussen auf der Bande)
@@ -1260,13 +1303,19 @@ async function startKart3D() {
   }
 
   /* Fahrerinnen und Fahrer */
-  const myLook = typeof garageLook === 'function' ? garageLook() : null;  // Optik aus der Garage (fährt gleich schnell)
+  // Karts im Stil der Avatare: die eigene Figur fährt mit dem Kart aus der Garage (alle fahren gleich schnell)
+  if (typeof w3LoadEngine === 'function') await w3LoadEngine().catch((e) => console.warn('Avatar-Baukasten', e));
+  const myLook = typeof garageLook === 'function' ? garageLook() : null;
+  let myDriver = null;
+  try { if (typeof vxFigure === 'function' && typeof a3Mine === 'function') myDriver = a3Mine(); } catch (e) { console.warn('eigene Figur', e); }
+  const BOT_BODIES = ['kart', 'buggy', 'formula', 'bubble', 'kart'];
   const racers = KART_RACERS.map((r, i) => {
-    const look = i === 0 && myLook ? myLook : null;
-    const m = kartModel(T, r.color, r.helmet, r.num, look);
+    const look = i === 0 ? (myLook || { paint: r.color, num: r.num }) : { body: BOT_BODIES[(i - 1) % BOT_BODIES.length], paint: r.color, paint2: r.helmet, num: r.num };
+    const driver = typeof kvBotLook === 'function' ? (i === 0 ? myDriver || kvBotLook(9) : kvBotLook(i)) : null;
+    const m = kartModel(T, r.color, r.helmet, r.num, look, driver, { lite: i > 0 });
     scene.add(m.g);
     return {
-      i, name: r.name, color: look ? m.look.paint : r.color, bot: i > 0, m,
+      i, name: r.name, color: i === 0 && myLook ? m.look.paint : r.color, bot: i > 0, m,
       p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
       skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0,
     };
@@ -1391,8 +1440,10 @@ async function startKart3D() {
     r.m.body.rotation.z = clamp(r.latV * 0.01, -0.07, 0.07);
     r.m.body.position.y = r.fx === 'slow' ? Math.abs(Math.sin(st.time / 70)) * 0.06 : 0;
     const fs = r.fx === 'turbo' ? 0.9 + Math.random() * 0.5 : 0.01;
-    r.m.flames.forEach((f) => f.scale.set(fs, fs, 1));
-    r.m.tick?.(st.time / 1000);
+    r.m.flames.forEach((f) => { const k = f.userData.k || 1; f.scale.set(fs * k, fs * k, 1); });
+    r.m.setSteer?.(clamp(r.latV * 0.12, -1, 1));
+    r.m.setMood?.(r.finished ? 'win' : r.fx === 'turbo' ? 'turbo' : r.fx === 'slow' ? 'oops' : '');
+    r.m.tick?.(st.time / 1000, dt);
   }
   racers.forEach((r) => placeKart(r, 0));
   hud(); drawMap();
@@ -1482,6 +1533,18 @@ async function startKart3D() {
 
   /* Rennlogik pro Bild */
   const cPos = new T.Vector3();
+  // Leistung: ruckelt es (ältere Tablets), zuerst die Auflösung, dann die Schatten zurücknehmen
+  const perf = { n: 0, acc: 0, step: 0 };
+  st.onFrame((dt) => {
+    if (perf.step >= 2 || st.disposed) return;
+    perf.n++; perf.acc += dt;
+    if (perf.acc < 2.5) return;
+    const fps = perf.n / perf.acc; perf.n = 0; perf.acc = 0;
+    if (fps >= 40) { perf.step = 2; return; }
+    perf.step++;
+    if (perf.step === 1) { renderer.setPixelRatio(Math.min(1, renderer.getPixelRatio())); renderer.setSize(st.w, st.h, false); }
+    else sun.castShadow = false;
+  });
   st.onFrame((dt) => {
     if (st.disposed) return;
     const now = st.time;
