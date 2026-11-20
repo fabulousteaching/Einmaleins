@@ -8,7 +8,7 @@
  *    Starke Kinder müssen also etwas mehr leisten, schwächere kommen schneller zu einer Münze.
  *  - Eine gut gelöste Runde gibt einen Bonus.
  *  - Keine Münzen für «leichte Reihen sammeln»: Wählt ein Kind selbst nur Reihen, die es schon sicher kann
- *    (oder die 1er-, 10er- bzw. 20er-Reihe), obwohl es schwierigere üben könnte, gibt es keine Münzen.
+ *    (oder die 1er-, 2er- bzw. 10er-Reihe), obwohl es schwierigere üben könnte, gibt es keine Münzen.
  *    Üben geht ganz normal weiter. Sobald eine schwierigere Reihe dazukommt, gibt es wieder Münzen.
  *    Gibt die Lehrperson die Reihen fest vor, gilt das nicht (dann entscheidet sie, was geübt wird).
  * Lehrpersonen spielen gratis (zum Ausprobieren).
@@ -27,9 +27,9 @@ function masteryNow(prog = db.prog) {
   return keys.size ? sure / keys.size : 0;
 }
 /* ---------------- Keine Münzen für leichte Reihen ---------------- */
-const COIN_EASY_ROWS = [1, 10, 20];   // kann man mit einer einfachen Regel – zählen immer als «sicher»
+const COIN_EASY_ROWS = [1, 2, 10];    // kann man mit einer einfachen Regel – zählen immer als «sicher»
 const COIN_SURE = 0.85;               // ab diesem Anteil sicherer Rechnungen gilt eine Auswahl als «schon gekonnt»
-/** Anteil sicherer Rechnungen in diesen Reihen (1er, 10er, 20er zählen als sicher) */
+/** Anteil sicherer Rechnungen in diesen Reihen (1er, 2er und 10er zählen als sicher) */
 function masteryOfRows(rows, ps = practiceSettings(), prog = db.prog) {
   if (!rows.length) return 1;
   const keys = new Set(buildPool({ ...ps, reihen: rows }).map((x) => makeTask(x.a, x.b, x.op).key));
@@ -174,7 +174,7 @@ function openCoinsInfo() {
       <li><b>Schwierige Rechnungen zählen mehr:</b> Rechnungen, die dir noch Mühe machen, geben 1,5 Punkte. Schnelle Antworten etwas extra.</li>
       <li><b>Gute Runde = Bonus:</b> Mindestens 80 % richtig gibt 2 Punkte dazu, alles richtig 4.</li>
       <li><b>Eine Münze = ${th} Punkte.</b> Je sicherer du schon rechnest, desto mehr Punkte braucht eine Münze.</li>
-      <li><b>Keine Münzen fürs «Leichte-Reihen-Sammeln»:</b> Wer nur Reihen auswählt, die er schon sicher kann (oder 1er, 10er, 20er), obwohl er schwierigere üben könnte, bekommt dafür keine Münzen. Üben geht trotzdem.</li>
+      <li><b>Keine Münzen fürs «Leichte-Reihen-Sammeln»:</b> Wer nur Reihen auswählt, die er schon sicher kann (oder 1er, 2er, 10er), obwohl er schwierigere üben könnte, bekommt dafür keine Münzen. Üben geht trotzdem.</li>
       <li><b>Ein Spiel kostet ${GAME_COST} Münze.</b></li>
     </ul>
     <p class="muted small">Bisher verdient: ${c.earned} · ausgegeben: ${c.spent}</p>
