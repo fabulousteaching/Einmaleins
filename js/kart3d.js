@@ -8,7 +8,12 @@
  * Strecken mit Steigungen und Gefällen, überhöhten Kurven, Brücken (auch über die eigene Strecke) und
  * Tunneln bzw. Höhlen. Fahrkönnen zählt: Wer innen um die Kurve fährt, hat den kürzeren Weg. An den Banden
  * wird man langsamer. Die Computer-Fahrer fahren verschieden gute Linien, machen Fehler und bleiben in der
- * Nähe (Gummiband), damit das Rennen spannend bleibt. Alle Strecken sind gleich lang (faire Bestenliste).
+ * Nähe (sanftes Gummiband), damit das Rennen spannend bleibt. Alle Strecken sind gleich lang (faire Bestenliste).
+ * Können lohnt sich wie bei richtigen Kart-Spielen über selbst verdiente Turbos:
+ *  - Kurven-Turbo: Wer eine Kurve innen durchfährt (ohne die Bande zu berühren), lädt Funken auf (blau → orange → lila);
+ *    am Kurvenende gibt es Schub – je länger und enger, desto stärker.
+ *  - Rechen-Serie: Mehrere richtige Antworten hintereinander machen den Turbo stärker und länger.
+ *  - Start-Turbo: Genau bei «LOS!» tippen gibt einen Raketenstart; zu früh tippen = kurzer Fehlstart.
  * Eigene Grafik und eigene Figuren (keine Vorlage aus anderen Spielen).
  */
 'use strict';
@@ -18,7 +23,9 @@ const KART = {
   TURBO: 1.5, SLOW: 0.55, FX_MS: 1800,
   STATIONS: [0.15, 0.47, 0.79], ASK: 200, ZONE: 12,
   WALL: 1.6,     // Bande: so weit ausserhalb der Fahrbahn
-  DRAFT: 3, DRAFT_BOOST: 1.15, DRAFT_HOLD: 1800,   // Windschatten: nach 3 s dicht dahinter 15 % schneller (noch 1,8 s nach dem Ausscheren)
+  MT: [0.9, 2.0, 3.2], MT_MUL: [1, 1.22, 1.28, 1.34], MT_MS: [0, 700, 1100, 1600],   // Kurven-Turbo: Ladung (s) je Stufe, Schub, Dauer
+  STREAK_MUL: [1.5, 1.5, 1.56, 1.62], STREAK_MS: [1800, 1800, 2400, 3000],             // Rechen-Serie: 1., 2., ab 3. richtige Antwort
+  START_MUL: 1.45, START_MS: 1600,                                                      // Start-Turbo
 };
 const KART_TRACKS = [
   { id: 'circuit', name: 'Rennstrecke', emo: '🏁' },
@@ -722,17 +729,18 @@ async function startKart3D() {
   Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
   $('#view').innerHTML = gameShell('kart', `
     <div class="g3 g3-kart theme-${tid}" id="g3">
-      <div class="kart-hud tl"><div class="kart-pos"><b id="kplace">–</b><small>/6</small></div><span class="kart-lap" id="klap">Runde 1/${KART.LAPS}</span><ol class="kart-rank" id="krank"></ol></div>
+      <div class="kart-hud tl"><div class="kart-pos"><b id="kplace">–</b><small>/6</small></div><span class="kart-lap" id="klap">Runde 1/${KART.LAPS}</span><span class="kart-streak" id="kstreak" hidden></span><ol class="kart-rank" id="krank"></ol></div>
       <canvas class="kart-map" id="kmap" width="300" height="300" aria-hidden="true"></canvas>
       <div class="kart-time" id="ktime">0,0 s</div>
       <div class="kart-ask" id="kask" hidden><small id="kaskhint">Fahr durch das richtige Ergebnis</small><b id="ktask"></b><div class="kart-ans" id="kans"></div></div>
       <div class="kart-lines" id="klines"></div>
-      <div class="kart-draft" id="kdraft" aria-hidden="true"><b>💨</b><span id="kdrafttxt">Windschatten</span><i><i id="kdraftbar"></i></i></div>
+      <div class="kart-mt" id="kmt" aria-hidden="true"><b>🔥</b><span id="kmttxt">Kurven-Turbo</span><i><i id="kmtbar"></i><u></u><u></u></i></div>
+      <div class="kart-start-hint" id="kstarthint" hidden>Tippe genau bei <b>LOS!</b> – Raketenstart!</div>
       <div class="kart-pad l" id="kpl" aria-hidden="true">◀</div><div class="kart-pad r" id="kpr" aria-hidden="true">▶</div>
       <div class="kart-lights" id="klights" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="kart-count" id="kcount"></div>
     </div>
-    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipps: Innen um die Kurve ist der Weg kürzer. 3 Sekunden dicht hinter einem Kart = Windschatten-Schub!</p>`);
+    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipps: Innen durch die Kurve lädt den Kurven-Turbo (Bande nicht berühren!). Richtige Antworten hintereinander = stärkerer Turbo. Genau bei LOS! tippen = Raketenstart.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 62, near: 0.9, far: 3600, shadows: true, clear: TH.fog });
   game.stage3d = st;
@@ -1431,9 +1439,12 @@ async function startKart3D() {
     return {
       i, name: r.name, color: i === 0 && myLook ? m.look.paint : r.color, bot: i > 0, m,
       p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
-      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0, draftT: 0, draftUntil: 0,
+      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0, boostUntil: 0, boostMul: 1, drift: 0, fxMul: 0,
     };
   });
+  // Funken für den Kurven-Turbo an deinen Hinterrädern
+  const sparkMat = new T.SpriteMaterial({ map: glowTex('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), color: 0xffffff, transparent: true, depthWrite: false, blending: T.AdditiveBlending });
+  const sparks = racers[0].m.wheels.filter((w) => !w.front).map((w) => { const sp = new T.Sprite(sparkMat); sp.position.set(w.steer.position.x, 0.12, w.steer.position.z - 0.15); sp.visible = false; racers[0].m.g.add(sp); return sp; });
   // Startaufstellung: Du startest von Platz 4
   const me = racers[0];
   const grid = [[-7, -0.55], [-7, 0.55], [-15, -0.55], [-15, 0.55], [-23, -0.55], [-23, 0.55]];
@@ -1451,11 +1462,11 @@ async function startKart3D() {
     if (['ArrowLeft', 'a', 'A'].includes(k)) { input.left = down; e.preventDefault(); }
     if (['ArrowRight', 'd', 'D'].includes(k)) { input.right = down; e.preventDefault(); }
   };
-  const kd = (e) => { if (ui.view === 'game' && !ui.modal) onKey(e, true); };
+  const kd = (e) => { if (ui.view === 'game' && !ui.modal) { onKey(e, true); if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'a', 'd', 'A', 'D'].includes(e.key)) startTap(); } };
   const ku = (e) => onKey(e, false);
   document.addEventListener('keydown', kd); document.addEventListener('keyup', ku);
   const ptrSide = (e) => { const r = host.getBoundingClientRect(); return e.clientX - r.left < r.width / 2 ? -1 : 1; };
-  const pd = (e) => { input.ptr.set(e.pointerId, ptrSide(e)); host.setPointerCapture?.(e.pointerId); e.preventDefault(); };
+  const pd = (e) => { input.ptr.set(e.pointerId, ptrSide(e)); host.setPointerCapture?.(e.pointerId); e.preventDefault(); startTap(); };
   const pmv = (e) => { if (input.ptr.has(e.pointerId)) input.ptr.set(e.pointerId, ptrSide(e)); };
   const pu = (e) => { input.ptr.delete(e.pointerId); };
   host.addEventListener('pointerdown', pd); host.addEventListener('pointermove', pmv);
@@ -1483,7 +1494,7 @@ async function startKart3D() {
 
   /* Anzeige */
   const elPlace = $('#kplace'), elLap = $('#klap'), elRank = $('#krank'), elTime = $('#ktime'), elAsk = $('#kask'), elTask = $('#ktask'), elAns = $('#kans'), elHint = $('#kaskhint'), elLines = $('#klines'), elCount = $('#kcount'), elLights = $('#klights');
-  const elDraft = $('#kdraft'), elDraftBar = $('#kdraftbar'), elDraftTxt = $('#kdrafttxt');
+  const elMt = $('#kmt'), elMtBar = $('#kmtbar'), elMtTxt = $('#kmttxt'), elStreak = $('#kstreak'), elStartHint = $('#kstarthint');
   const map = $('#kmap'), mg = map.getContext('2d');
   const mapImg = document.createElement('canvas'); mapImg.width = map.width; mapImg.height = map.height;
   const mb = tr.box, msc = Math.min((map.width - 30) / (mb.maxX - mb.minX), (map.height - 30) / (mb.maxZ - mb.minZ));
@@ -1542,7 +1553,7 @@ async function startKart3D() {
     kartAt(tr, me.p, q);
     const ang = Math.atan2(q.fz * msc, q.fx * msc), pulse = (mapT * 1.6) % 1;
     mg.strokeStyle = `rgba(255,224,138,${1 - pulse})`; mg.lineWidth = 3; mg.beginPath(); mg.arc(px, py, 9 + pulse * 12, 0, Math.PI * 2); mg.stroke();
-    if (st.time < me.draftUntil || me.fx === 'turbo') { mg.fillStyle = me.fx === 'turbo' ? 'rgba(255,150,40,.45)' : 'rgba(125,211,252,.5)'; mg.beginPath(); mg.arc(px, py, 15, 0, Math.PI * 2); mg.fill(); }
+    if (st.time < me.boostUntil || me.fx === 'turbo') { mg.fillStyle = me.fx === 'turbo' ? 'rgba(255,150,40,.45)' : 'rgba(192,132,252,.5)'; mg.beginPath(); mg.arc(px, py, 15, 0, Math.PI * 2); mg.fill(); }
     mg.save(); mg.translate(px, py); mg.rotate(ang);
     mg.fillStyle = kartHex(me.color); mg.strokeStyle = '#fff'; mg.lineWidth = 3; mg.lineJoin = 'round';
     mg.beginPath(); mg.moveTo(12, 0); mg.lineTo(-8, -8); mg.lineTo(-4, 0); mg.lineTo(-8, 8); mg.closePath(); mg.fill(); mg.stroke();
@@ -1583,14 +1594,47 @@ async function startKart3D() {
     }
     lastPlace = place;
   }
-  /** Windschatten-Schub beginnt (nur für dich: Ton und Anzeige) */
-  function draftStart() {
-    noise(0.35, { freq: 900, gain: 0.05 });
-    tone([523, 784], 0.07, 'triangle', 0.05);
+  /** Schub für dich (Kurven-Turbo oder Start-Turbo) */
+  function boost(mul, ms) { me.boostMul = mul; me.boostUntil = st.time + ms; }
+  /** Kurven-Turbo auslösen: Stufe aus der Ladung */
+  const MT_COL = ['#ffffff', '#60a5fa', '#fb923c', '#c084fc'], MT_HEX = [0xffffff, 0x60a5fa, 0xfb923c, 0xc084fc];
+  const mtTier = (c) => (c >= KART.MT[2] ? 3 : c >= KART.MT[1] ? 2 : c >= KART.MT[0] ? 1 : 0);
+  function releaseMini() {
+    const tier = mtTier(S.mt);
+    S.mt = 0;
+    if (!tier) return;
+    boost(KART.MT_MUL[tier], KART.MT_MS[tier]);
+    S.mtFlash = { tier, until: st.time + 900 };
+    noise(0.25 + tier * 0.08, { freq: 700 + tier * 300, gain: 0.05 });
+    tone([392, 523, 659, 784].slice(0, tier + 1), 0.06, 'triangle', 0.05);
+    kartAt(tr, me.p, q); burst(st, pt(q, me.lat, 0.4), { n: 18 + tier * 10, colors: [MT_HEX[tier], 0xffffff], speed: 4, life: 0.4, size: 0.22, gravity: -4 });
+  }
+  /** Start-Turbo: Tippen kurz vor bzw. genau bei «LOS!» */
+  function startTap() {
+    try {
+      if (!S || S.tapped) return;
+      const t = performance.now();
+      if (S.phase === 'count') { if (S.goAt - t > 900) return; S.tapped = t; }       // frühere Tipper zählen nicht
+      else if (S.phase === 'race' && t - S.goReal < 220) { S.tapped = t; startResult(); }
+    } catch { /* Rennen noch nicht bereit */ }
+  }
+  function startResult() {
+    if (!S.tapped) return;
+    const d = S.goAt - S.tapped;                                  // > 0: vor «LOS!»
+    if (d <= 380) {
+      const good = d >= -120;
+      boost(good ? KART.START_MUL : 1.25, good ? KART.START_MS : 900);
+      bigWord(host, good ? 'RAKETENSTART!' : 'Guter Start!', 'good kart-word');
+      tone([660, 990, 1320], 0.07, 'triangle', 0.06);
+    } else {
+      S.stallUntil = st.time + 650;
+      bigWord(host, 'Zu früh!', 'bad kart-word');
+      tone([196, 147], 0.12, 'sine', 0.05);
+    }
   }
 
   /* Ablauf */
-  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, ok: 0, wrong: 0, wrongs: [] };
+  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, ok: 0, wrong: 0, wrongs: [], mt: 0, mtOff: 0, streak: 0, tapped: 0, goAt: 0, goReal: 0, stallUntil: 0 };
   game.kart = S;
   S.dbg = { racers, stations, tr, me: () => me }; // für Tests
   const look = new T.Vector3();
@@ -1612,16 +1656,16 @@ async function startKart3D() {
   function placeKart(r, dt) {
     kartAt(tr, r.p, q);
     r.m.g.position.copy(pt(q, r.lat));
-    const yaw = Math.atan2(q.fx, q.fz) - Math.atan2(r.latV, Math.max(6, r.v)) * 0.85;
+    const yaw = Math.atan2(q.fx, q.fz) - Math.atan2(r.latV, Math.max(6, r.v)) * 0.85 - (r.drift || 0);
     r.m.g.rotation.set(-Math.atan(q.sl), yaw, Math.atan(q.b), 'YXZ');
     const spin = r.v * dt;
     for (const w of r.m.wheels) { w.spin.rotation.x += spin / w.r; if (w.front) w.steer.rotation.y = clamp(-r.latV * 0.045, -0.4, 0.4); }
     r.m.body.rotation.z = clamp(r.latV * 0.01, -0.07, 0.07);
     r.m.body.position.y = r.fx === 'slow' ? Math.abs(Math.sin(st.time / 70)) * 0.06 : 0;
-    const fs = r.fx === 'turbo' ? 0.9 + Math.random() * 0.5 : 0.01;
+    const fs = r.fx === 'turbo' || st.time < r.boostUntil ? 0.9 + Math.random() * 0.5 : 0.01;
     r.m.flames.forEach((f) => { const k = f.userData.k || 1; f.scale.set(fs * k, fs * k, 1); });
     r.m.setSteer?.(clamp(r.latV * 0.12, -1, 1));
-    r.m.setMood?.(r.finished ? 'win' : r.fx === 'turbo' ? 'turbo' : r.fx === 'slow' ? 'oops' : '');
+    r.m.setMood?.(r.finished ? 'win' : r.fx === 'turbo' || st.time < r.boostUntil ? 'turbo' : r.fx === 'slow' ? 'oops' : '');
     r.m.tick?.(st.time / 1000, dt);
   }
   racers.forEach((r) => placeKart(r, 0));
@@ -1634,7 +1678,7 @@ async function startKart3D() {
     for (const stn of stations) for (const c of [stn.s0, stn.s1]) if (Math.abs(s - c) <= KART.ZONE + 0.5) return c;
     return null;
   }
-  function setFx(r, kind) { r.fx = kind; r.fxUntil = st.time + KART.FX_MS; }
+  function setFx(r, kind, ms = KART.FX_MS, mul = 0) { r.fx = kind; r.fxUntil = st.time + ms; r.fxMul = mul; }
   function smoke(r) {
     kartAt(tr, r.p - 1.4, q);
     burst(st, pt(q, r.lat, 0.8), { n: 18, colors: [0x9ca3af, 0xd1d5db, 0x6b7280], speed: 1.6, life: 0.9, size: 0.9, gravity: 1.2 });
@@ -1689,14 +1733,20 @@ async function startKart3D() {
     $$('#kans .ka').forEach((el, i) => el.classList.add(i === stn.correct ? 'right' : i === lane ? 'wrong' : 'fade'));
     stn.label.forEach((l, i) => l.el.classList.add(i === stn.correct ? 'right' : i === lane ? 'wrong' : 'fade'));
     if (ok) {
-      S.ok++; setFx(me, 'turbo'); sfx.good(); tone([523, 784, 1047, 1568], 0.07, 'sawtooth', 0.05);
-      elAsk.classList.add('ok'); elHint.textContent = 'Richtig – Turbo!';
+      S.ok++; S.streak = (S.streak || 0) + 1;
+      const n = Math.min(3, S.streak);
+      setFx(me, 'turbo', KART.STREAK_MS[n], KART.STREAK_MUL[n]); sfx.good(); tone([523, 784, 1047, 1568].concat(n > 1 ? [2093] : []), 0.07, 'sawtooth', 0.05);
+      elAsk.classList.add('ok'); elHint.textContent = S.streak > 1 ? `Richtig – Serie ×${S.streak}, stärkerer Turbo!` : 'Richtig – Turbo!';
       elTask.innerHTML = esc(taskText(a.t, true));
-      bigWord(host, 'TURBO!', 'good kart-word');
+      bigWord(host, S.streak > 1 ? `TURBO ×${Math.min(S.streak, 9)}!` : 'TURBO!', 'good kart-word');
+      elStreak.hidden = S.streak < 2; elStreak.textContent = `🔥 Serie ×${S.streak}`;
+      elStreak.classList.remove('pop'); void elStreak.offsetWidth; elStreak.classList.add('pop');
       kartAt(tr, me.p + 2, q);
       burst(st, pt(q, me.lat, 1.5), { n: 60, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 6, life: 0.7, size: 0.3 });
     } else {
       S.wrong++; S.wrongs.push(a.t); setFx(me, 'slow'); sfx.bad(); smoke(me); st.shake(0.25);
+      if (S.streak > 1) { elStreak.textContent = 'Serie vorbei'; elStreak.classList.remove('pop'); void elStreak.offsetWidth; elStreak.classList.add('lost'); gLater(() => { elStreak.hidden = true; elStreak.classList.remove('lost'); }, 1400); }
+      S.streak = 0;
       elAsk.classList.add('bad'); elHint.textContent = 'Schade – das war nicht richtig';
       elTask.innerHTML = esc(taskText(a.t, true));
     }
@@ -1754,25 +1804,27 @@ async function startKart3D() {
     for (const r of racers) {
       if (r.fx && now > r.fxUntil) r.fx = null;
       kartAt(tr, r.p, q);
-      // Windschatten: dicht hinter einem anderen Kart (2–14 m, fast gleiche Spur); nach 3 s gibt es Schub zum Überholen
-      if (S.phase === 'race' && !r.finished) {
-        let behind = false;
-        for (const o of racers) { const gap = o.p - r.p; if (o !== r && gap > 2 && gap < 14 && Math.abs(o.lat - r.lat) < 2.6) { behind = true; break; } }
-        r.draftT = behind ? r.draftT + dt : Math.max(0, r.draftT - dt * 1.5);
-        if (r.draftT >= KART.DRAFT) { if (r === me && now >= r.draftUntil) draftStart(); r.draftUntil = now + KART.DRAFT_HOLD; }
-      }
+      // Kurven-Turbo (nur du): innen durch die Kurve lädt Funken, am Kurvenende gibt es Schub. Bande berühren = Ladung weg.
+      if (r === me && S.phase === 'race' && !r.finished) {
+        const kk = Math.abs(q.k), inside = (Math.sign(q.k) * r.lat) / HW;
+        if (kk > 1 / 85 && inside > 0.3 && r.zone == null) { S.mt += dt * (0.55 + inside) * clamp(kk * 40, 0.8, 1.6); S.mtOff = 0; }
+        else { S.mtOff += dt; if (S.mtOff > 0.25 && S.mt > 0) releaseMini(); }
+        r.drift += ((S.mt > 0.3 ? Math.sign(q.k) * Math.min(0.2, 0.06 + S.mt * 0.04) : 0) - r.drift) * Math.min(1, dt * 6);
+      } else r.drift *= Math.max(0, 1 - dt * 6);
       let target = 0;
       if (racing) {
-        target = KART.BASE * r.skill * (r.fx === 'turbo' ? KART.TURBO : r.fx === 'slow' ? KART.SLOW : 1) * (now < r.draftUntil ? KART.DRAFT_BOOST : 1);
+        const fxMul = r.fx === 'turbo' ? (r.fxMul || KART.TURBO) : r.fx === 'slow' ? KART.SLOW : 1;
+        target = KART.BASE * r.skill * (now < r.boostUntil ? Math.max(fxMul, r.boostMul) : fxMul);
         target *= clamp(1 - q.sl * 0.9, 0.86, 1.12); // bergauf etwas langsamer, bergab schneller
         if (r.bot) {
           const d = r.p - me.p;
-          target *= 1 - clamp(d / 70, -1, 1) * 0.09; // Gummiband
+          target *= 1 - clamp(d / 90, -1, 1) * 0.045; // sanftes Gummiband: wer besser fährt, setzt sich ab
           if (r.finished) target *= 0.6;
         }
         if (r === me && S.phase === 'done') target *= 0.55;
         if (Math.abs(r.lat) > HW - 0.2) target *= 0.9; // auf dem Randstein
       }
+      if (r === me && now < (S.stallUntil || 0)) target = Math.min(target, 4);
       r.v += (target - r.v) * Math.min(1, dt * (target > r.v ? 1.3 : 2.4));
       if (!racing) { r.v = 0; r.latV = 0; }
       // Lenken
@@ -1788,7 +1840,7 @@ async function startKart3D() {
                 r.wantFor = key;
                 if (gate) {
                   const d = r.p - me.p;
-                  const acc = clamp(r.acc - (d > 25 ? 0.18 : 0) + (d < -25 ? 0.12 : 0), 0.35, 0.95);
+                  const acc = clamp(r.acc - (d > 25 ? 0.08 : 0) + (d < -25 ? 0.06 : 0), 0.35, 0.95);
                   r.nextOk = Math.random() < acc;
                   const right = stn.correct >= 0 && S.ask?.stn === stn ? stn.correct : Math.floor(Math.random() * 3);
                   const wrongs = [0, 1, 2].filter((x) => x !== right);
@@ -1822,6 +1874,7 @@ async function startKart3D() {
       const lim = WL - 1.0;
       if (Math.abs(r.lat) > lim) {
         r.lat = Math.sign(r.lat) * lim; r.latV *= -0.25; r.v *= 1 - Math.min(0.5, dt * 1.8);
+        if (r === me && S.mt > 0.3) { S.mt = 0; S.mtOff = 0; }
         if (r === me && now - r.wallT > 250) { r.wallT = now; kartAt(tr, r.p + 1, q2); burst(st, pt(q2, Math.sign(r.lat) * WL, 0.6), { n: 14, colors: [0xffd166, 0xffffff], speed: 3, life: 0.35, size: 0.18, gravity: -6 }); tone([180, 140], 0.05, 'square', 0.03); }
       }
       if (racing && !r.finished) {
@@ -1872,10 +1925,10 @@ async function startKart3D() {
     camera.position.copy(cDes);
     look.lerp(lDes, 1 - Math.pow(0.00001, dt));
     camera.lookAt(look);
-    const fovGoal = 62 + (me.fx === 'turbo' ? 12 : me.fx === 'slow' ? -4 : 0) + (now < me.draftUntil ? 5 : 0) + (me.v / KART.BASE) * 2;
+    const fovGoal = 62 + (me.fx === 'turbo' ? 12 : me.fx === 'slow' ? -4 : 0) + (now < me.boostUntil ? 6 : 0) + (me.v / KART.BASE) * 2;
     camera.fov += (fovGoal - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
-    elLines.classList.toggle('on', me.fx === 'turbo' || now < me.draftUntil);
-    elLines.classList.toggle('draft', me.fx !== 'turbo' && now < me.draftUntil);
+    elLines.classList.toggle('on', me.fx === 'turbo' || now < me.boostUntil);
+    elLines.classList.toggle('draft', me.fx !== 'turbo' && now < me.boostUntil);
     host.classList.toggle('slow', me.fx === 'slow');
     kartAt(tr, me.p, q);
     sun.target.position.set(q.x, q.y, q.z); sun.position.set(q.x + sunDir.x * 80, q.y + sunDir.y * 80, q.z + sunDir.z * 80);
@@ -1884,11 +1937,16 @@ async function startKart3D() {
     S.hudT = (S.hudT || 0) + dt;
     if (S.hudT > 0.2) { S.hudT = 0; hud(); }
     drawMap(dt);
-    {
-      const drafting = me.draftT > 0.15 && S.phase === 'race', boost = now < me.draftUntil;
-      elDraft.classList.toggle('on', drafting || boost); elDraft.classList.toggle('boost', boost);
-      elDraftBar.style.width = `${Math.round((boost ? 1 : Math.min(1, me.draftT / KART.DRAFT)) * 100)}%`;
-      if (S.draftTxt !== boost) { S.draftTxt = boost; elDraftTxt.textContent = boost ? 'Windschatten-Schub!' : 'Windschatten'; }
+    {   // Kurven-Turbo: Balken mit drei Stufen; Funken an den Hinterrädern
+      const tier = mtTier(S.mt), flash = S.mtFlash && now < S.mtFlash.until ? S.mtFlash.tier : 0;
+      const show = S.mt > 0.25 || flash;
+      elMt.classList.toggle('on', !!show);
+      elMt.dataset.tier = flash || tier;
+      elMtBar.style.width = `${Math.round(Math.min(1, (flash ? KART.MT[2] : S.mt) / KART.MT[2]) * 100)}%`;
+      const txt = flash ? ['', 'Turbo!', 'Super-Turbo!', 'Mega-Turbo!'][flash] : 'Kurven-Turbo';
+      if (S.mtTxt !== txt) { S.mtTxt = txt; elMtTxt.textContent = txt; }
+      const on = S.mt > 0.3;
+      sparks.forEach((sp) => { sp.visible = on; if (on) { const k = 0.35 + tier * 0.18 + Math.random() * 0.25; sp.scale.set(k, k, 1); sp.material.color.setHex(MT_HEX[tier]); } });
     }
     if (S.phase === 'race') elTime.textContent = `${fmtSec(now - S.raceT0)} s`;
     if (S.ask) { const ln = laneOf(me.lat); $$('#kans .ka').forEach((el, i) => el.classList.toggle('here', i === ln)); }
@@ -1896,12 +1954,14 @@ async function startKart3D() {
 
   function countdown() {
     elLights.classList.add('on');
+    S.goAt = performance.now() + 3 * 850;
+    elStartHint.hidden = false;
     const steps = ['3', '2', '1', 'LOS!'];
     steps.forEach((t, i) => gLater(() => {
       elCount.innerHTML = `<span class="${i === 3 ? 'go' : ''}">${t}</span>`;
       [...elLights.children].forEach((l, j) => { l.className = i === 3 ? 'go' : j <= i ? 'red' : ''; });
       tone(i === 3 ? [880, 1320] : [440], i === 3 ? 0.18 : 0.12, 'square', 0.05);
-      if (i === 3) { S.phase = 'race'; S.raceT0 = st.time; startEngine(); gLater(() => { elCount.innerHTML = ''; elLights.classList.remove('on'); }, 900); }
+      if (i === 3) { S.phase = 'race'; S.raceT0 = st.time; S.goReal = performance.now(); startEngine(); startResult(); gLater(() => { elCount.innerHTML = ''; elLights.classList.remove('on'); elStartHint.hidden = true; }, 900); }
     }, i * 850));
   }
   function finish() {
