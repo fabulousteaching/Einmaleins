@@ -7,6 +7,10 @@
  *    12 Punkte, wenn noch vieles Mühe macht, bis 20 Punkte, wenn fast alles sitzt.
  *    Starke Kinder müssen also etwas mehr leisten, schwächere kommen schneller zu einer Münze.
  *  - Eine gut gelöste Runde gibt einen Bonus.
+ *  - Keine Münzen für «leichte Reihen sammeln»: Wählt ein Kind selbst nur Reihen, die es schon sicher kann
+ *    (oder die 1er-, 10er- bzw. 20er-Reihe), obwohl es schwierigere üben könnte, gibt es keine Münzen.
+ *    Üben geht ganz normal weiter. Sobald eine schwierigere Reihe dazukommt, gibt es wieder Münzen.
+ *    Gibt die Lehrperson die Reihen fest vor, gilt das nicht (dann entscheidet sie, was geübt wird).
  * Lehrpersonen spielen gratis (zum Ausprobieren).
  */
 'use strict';
@@ -22,6 +26,44 @@ function masteryNow(prog = db.prog) {
   keys.forEach((k) => { const lv = levelOf(prog.f[k]); if (lv === 'ok' || lv === 'top') sure++; });
   return keys.size ? sure / keys.size : 0;
 }
+/* ---------------- Keine Münzen für leichte Reihen ---------------- */
+const COIN_EASY_ROWS = [1, 10, 20];   // kann man mit einer einfachen Regel – zählen immer als «sicher»
+const COIN_SURE = 0.85;               // ab diesem Anteil sicherer Rechnungen gilt eine Auswahl als «schon gekonnt»
+/** Anteil sicherer Rechnungen in diesen Reihen (1er, 10er, 20er zählen als sicher) */
+function masteryOfRows(rows, ps = practiceSettings(), prog = db.prog) {
+  if (!rows.length) return 1;
+  const keys = new Set(buildPool({ ...ps, reihen: rows }).map((x) => makeTask(x.a, x.b, x.op).key));
+  let sure = 0;
+  keys.forEach((k) => {
+    const { a, b } = taskKeyParts(k) || {};
+    const lv = levelOf(prog.f[k]);
+    if (lv === 'ok' || lv === 'top' || COIN_EASY_ROWS.includes(b) || COIN_EASY_ROWS.includes(a)) sure++;
+  });
+  return keys.size ? sure / keys.size : 1;
+}
+/** Welche Reihen übt das Kind gerade? (Reihen-Treppe: die gewählte Reihe, sonst die Auswahl auf der Startseite) */
+const coinRows = () => (typeof ex === 'object' && ex.mode === 'reihen' && ex.reihe ? [ex.reihe] : practiceSettings().reihen);
+/**
+ * Gibt es für diese Auswahl gerade Münzen? Gesperrt, wenn das Kind selbst nur Leichtes gewählt hat:
+ * die gewählten Reihen sitzen schon sicher, und unter den Reihen, die es auch üben könnte, gibt es noch Schwierigeres.
+ * Liefert { locked, easy: [Reihen], harder: [Reihen] }.
+ */
+function coinLock(rows = coinRows(), treppe = typeof ex === 'object' && ex.mode === 'reihen') {
+  const ps = practiceSettings();
+  const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
+  const fixed = cls && cls.choose === false;
+  // was das Kind auch üben könnte: Treppe → alle Reihen der Auswahl; sonst alle erlaubten Reihen (bei fester Vorgabe: keine Wahl)
+  const could = treppe ? ps.reihen : fixed ? rows : (cls?.reihen?.length ? cls.reihen : reihenFor(ps.big)).filter((r) => reihenFor(ps.big).includes(r));
+  const rest = could.filter((r) => !rows.includes(r));
+  const no = { locked: false, easy: [], harder: [] };
+  if (!rest.length || gamesFree()) return no;
+  if (masteryOfRows(rows, ps) < COIN_SURE) return no;
+  const harder = rest.filter((r) => masteryOfRows([r], ps) < COIN_SURE);
+  if (!harder.length) return no;
+  return { locked: true, easy: rows, harder };
+}
+const coinLockText = (L) => `Keine Münzen für ${L.easy.length === 1 ? `die ${L.easy[0]}er-Reihe` : `die Reihen ${L.easy.join(', ')}`} – das kannst du schon sicher. Nimm eine schwierigere Reihe dazu (z. B. ${L.harder.slice(0, 3).map((r) => `${r}er`).join(', ')}), dann gibt es wieder Münzen.`;
+
 /** Punkte für eine Münze: 12 (vieles macht noch Mühe) bis 20 (fast alles sitzt) */
 const coinThreshold = () => Math.round(12 + 8 * masteryNow());
 
@@ -37,6 +79,13 @@ function pointsFor(before, ms, ok, factor = 1) {
 /** Punkte gutschreiben; liefert die Zahl neuer Münzen */
 function earnPoints(pts, from = null) {
   if (!pts) return 0;
+  const L = coinLock();
+  if (L.locked) {   // üben geht weiter, aber ohne Münzen – einmal pro Übung Bescheid geben
+    const key = `${L.easy.join(',')}|${typeof ex === 'object' ? ex.mode : ''}`;
+    if (coinLockWarned !== key) { coinLockWarned = key; toast(`🔒 ${coinLockText(L)}`); }
+    updateCoinUI();
+    return 0;
+  }
   const c = coinsOf();
   c.p += pts;
   const th = coinThreshold();
@@ -62,6 +111,7 @@ function payForGame() {
 /** Angemeldete Kinder spielen mit den Münzen aus dem gemeinsamen Konto (js/shop3d.js), alle anderen mit denen auf dem Gerät */
 const kidWallet = () => typeof isKid === 'function' && isKid() && typeof avatarOn === 'function' && avatarOn() && (typeof avCfg !== 'function' || avCfg().coins !== false);
 const playCoins = () => (kidWallet() && typeof AV === 'object' && AV.state ? AV.state.coins : coinsOf().c);
+let coinLockWarned = '';
 const canPlay = () => gamesFree() || playCoins() >= GAME_COST;
 
 /* ---------------- Anzeige ---------------- */
@@ -82,6 +132,8 @@ function updateCoinUI() {
 /** Kleine Anzeige in den Übungen: Fortschritt bis zur nächsten Münze */
 function exCoinHTML() {
   if (gamesFree()) return '<span id="ex-coin" hidden></span>';
+  const L = coinLock();
+  if (L.locked) return `<span class="ex-coin locked" id="ex-coin" title="${esc(coinLockText(L))}">🔒${COIN_SVG}<b>${playCoins()}</b><small>keine Münzen</small></span>`;
   const c = coinsOf(), th = coinThreshold();
   return `<span class="ex-coin" id="ex-coin" title="Noch ${Math.max(0, Math.ceil((th - c.p) * 10) / 10)} Punkte bis zur nächsten Münze">${COIN_SVG}<b>${playCoins()}</b><i class="coin-prog"><i style="width:${Math.min(100, (c.p / th) * 100)}%"></i></i></span>`;
 }
@@ -122,6 +174,7 @@ function openCoinsInfo() {
       <li><b>Schwierige Rechnungen zählen mehr:</b> Rechnungen, die dir noch Mühe machen, geben 1,5 Punkte. Schnelle Antworten etwas extra.</li>
       <li><b>Gute Runde = Bonus:</b> Mindestens 80 % richtig gibt 2 Punkte dazu, alles richtig 4.</li>
       <li><b>Eine Münze = ${th} Punkte.</b> Je sicherer du schon rechnest, desto mehr Punkte braucht eine Münze.</li>
+      <li><b>Keine Münzen fürs «Leichte-Reihen-Sammeln»:</b> Wer nur Reihen auswählt, die er schon sicher kann (oder 1er, 10er, 20er), obwohl er schwierigere üben könnte, bekommt dafür keine Münzen. Üben geht trotzdem.</li>
       <li><b>Ein Spiel kostet ${GAME_COST} Münze.</b></li>
     </ul>
     <p class="muted small">Bisher verdient: ${c.earned} · ausgegeben: ${c.spent}</p>

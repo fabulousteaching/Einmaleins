@@ -248,6 +248,7 @@ function reihenPanelHTML() {
       }).join('')}
     </div>
     ${modes.length > 1 ? opPickHTML('set-op') : ''}
+    ${(() => { if (typeof coinLock !== 'function') return ''; const L = coinLock(ps.reihen, false); return L.locked ? `<p class="coin-lock-note">🔒 ${esc(coinLockText(L))}</p>` : ''; })()}
   </div>`;
 }
 /** Knöpfe Mal · Geteilt · Lücken · Gemischt (nur die erlaubten). action: set-op (Startseite) oder game-op (Spiel) */

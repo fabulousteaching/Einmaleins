@@ -295,6 +295,7 @@ function renderReihenStart() {
       <h2>Welche Reihe?</h2>
       <div class="reihen">${ps.reihen.map((r) => `<button type="button" class="reihe r${r}" data-action="reihe-pick" data-r="${r}" aria-pressed="${ex.reihe === r}"><b>${r}</b><small>er</small></button>`).join('')}</div>
       <p class="hint">Vorgeschlagen ist die Reihe, die dir am meisten Mühe macht. Zuerst gehst du die Treppe hinauf (1 ${SIGN()} ${ex.reihe}, 2 ${SIGN()} ${ex.reihe} …), dann wieder hinunter (10 ${SIGN()} ${ex.reihe}, 9 ${SIGN()} ${ex.reihe} …). Für jede Stufe hast du 3 Versuche.</p>
+      ${(() => { if (typeof coinLock !== 'function') return ''; const L = coinLock([ex.reihe], true); return L.locked ? `<p class="coin-lock-note">🔒 ${esc(coinLockText(L))}</p>` : ''; })()}
       <button class="btn primary big" data-action="reihe-go">${icon('play')} Los</button>
     </div>
   </section>`;

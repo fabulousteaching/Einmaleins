@@ -1419,3 +1419,9 @@ td.hard-chips { display: table-cell; }
 .kart-lights i.red { background: #EF4444; box-shadow: 0 0 16px #EF4444, inset 0 -3px 6px rgba(0, 0, 0, .3); }
 .kart-lights i.go { background: #22C55E; box-shadow: 0 0 18px #22C55E, inset 0 -3px 6px rgba(0, 0, 0, .3); }
 @media (max-width: 560px) { .kart-tracks { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kart-rank { display: none; } .kart-ans .ka { min-width: 3rem; font-size: 1.25rem; } }
+
+/* Keine Münzen für leichte Reihen */
+.coin-lock-note { margin: .8rem 0 0; padding: .6rem .9rem; border-radius: 14px; background: var(--sun-wash); color: #7a5200; font-size: .9rem; font-weight: 600; }
+.ex-coin.locked { opacity: .9; background: var(--sunken); }
+.ex-coin.locked .coin-svg { filter: grayscale(1); opacity: .6; }
+.ex-coin.locked small { font-size: .72rem; font-weight: 700; color: var(--ink-3); white-space: nowrap; }
