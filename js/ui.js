@@ -94,6 +94,7 @@ function renderCrumbs() {
   else if (ui.view === 'game') html = `${sep}<span class="crumb current">${esc(GAME_BY_ID[ui.game]?.name || '')}</span>`;
   else if (ui.view === 'stand') html = `${sep}<span class="crumb current">Mein Stand</span>`;
   else if (ui.view === 'avatar') html = `${sep}<span class="crumb current">Mein Avatar</span>`;
+  else if (ui.view === 'garage') html = `${sep}<span class="crumb current">Garage</span>`;
   else if (ui.view === 'classes' || ui.view === 'class') html = classesCrumbs();
   el.innerHTML = html;
 }
@@ -101,7 +102,9 @@ function renderCrumbs() {
 function render() {
   const v = $('#view');
   if (isKid() && ['classes', 'class'].includes(ui.view)) ui.view = 'home';
-  if (ui.view === 'avatar' && !isKid()) ui.view = 'home';
+  const w3 = typeof renderWorld3D === 'function' && webglOK(); // 3D-Welt (js/world3d.js), sonst der 2D-Avatar
+  if (ui.view === 'avatar' && !isKid() && !w3) ui.view = 'home';
+  if (ui.view === 'garage' && !w3) ui.view = 'home';
   if (ui.view !== 'home') stopHeroFlip();
   renderCrumbs();
   switch (ui.view) {
@@ -110,7 +113,8 @@ function render() {
     case 'stand': renderStand(); break;
     case 'classes': renderClasses(); break;
     case 'class': renderClass(); break;
-    case 'avatar': renderAvatar(); break;
+    case 'avatar': if (w3 && !(isKid() && !avatarOn())) renderWorld3D('avatar'); else renderAvatar(); break;
+    case 'garage': renderWorld3D('garage'); break;
     default: v.innerHTML = viewHome(); bindHome();
   }
 }
@@ -125,6 +129,7 @@ function go(view, extra = {}) {
 function stopAll() {
   if (typeof stopExercise === 'function') stopExercise();
   if (typeof stopGame === 'function') stopGame();
+  if (typeof stopWorld3D === 'function') stopWorld3D();
   stopHeroFlip();
 }
 

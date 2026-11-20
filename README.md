@@ -47,6 +47,19 @@ Die Spiele kosten **1 Münze**. Münzen verdient man nur in den Übungen:
 - **Fair für alle:** Wie viele Punkte eine Münze kostet, hängt davon ab, wie sicher die geübten Rechnungen schon sitzen – **12 Punkte**, wenn noch vieles Mühe macht, bis **20 Punkte**, wenn fast alles sitzt. Starke Kinder müssen etwas mehr leisten, schwächere kommen schneller zu einer Münze. Und wer gezielt seine schwierigen Rechnungen übt, verdient mehr.
 - Die Münzen stehen oben rechts, mit einem kleinen Balken bis zur nächsten Münze. Antippen erklärt das System.
 - Lehrpersonen spielen gratis (zum Ausprobieren). In der Übersicht sehen sie pro Kind, wie viele Münzen es verdient und ausgegeben hat.
+- **Ein Konto für alles:** Angemeldete Kinder haben ein einziges Münzkonto in der Datenbank (gemeinsam mit Vokaboom). Damit bezahlen sie die Spiele und kaufen Teile für Avatar und Kart. Die Datenbank bucht nie doppelt ab und nie unter null. Ohne Internet (oder solange die Datenbank noch nicht aktualisiert ist) zahlen Kinder mit den Münzen auf dem Gerät. Ohne Anmeldung gelten wie bisher die Münzen auf dem Gerät.
+
+## Meine 3D-Welt: Avatar und Garage
+
+Auf der Startseite der Kinder führen zwei Karten in die 3D-Welt (mit Bild der eigenen Figur bzw. des eigenen Karts):
+
+- **Mein Avatar:** eine runde 3D-Figur (Voxel-Stil), gross und drehbar (ziehen; zoomen mit Mausrad oder zwei Fingern). Rechts die Kategorien **Ich** (Hautfarbe, Augen, Augenfarbe, Brauen, Mund, Wimpern, rote Wangen, Sommersprossen, Gesichts-Deko), **Frisuren**, **Oberteile**, **Outfits**, **Hosen**, **Schuhe**, **Hüte & Brillen**, **Accessoires** (Hals, Handgelenk, Taschen), **In der Hand** (21 Gadgets), **Rücken**, **Tiere & Effekte** und **Animationen** (Bewegungen mit Mimik). Insgesamt über 170 Teile, jedes mit Vorschaubild, Preis und Seltenheit (Basis, Normal, Selten, Episch, Legendär).
+- **Garage:** das eigene Kart auf einer Drehscheibe, daneben die eigene Figur. Lack (16 Farben), Lackart (Glanz, Matt, Metallic, Perlmutt, Leuchtlack, Chrom), Muster, Felgen, Spoiler, Auspuff, Turbo-Flammen, Unterboden-Licht, Helmfarbe, Visier und Startnummer. **Alle Karts fahren gleich schnell** – die Garage ändert nur das Aussehen. Im Turbo-Rennen fährt man mit diesem Kart. Knopf «Rennen» führt direkt zur Startkarte, dort gibt es umgekehrt «Garage: dein Kart gestalten».
+- **Gratis** ist alles Grundlegende: Hautfarben, Augen, Brauen, die meisten Münder, alle Alltagsfrisuren (auch Afro, Zöpfe, Dutts), Alltagskleider (auch Kleid), Brillen und alle Farben. Andere Teile kosten 5 bis 50 Münzen; ein paar besondere gibt es erst ab einer Anzahl gesammelter Münzen (z. B. Krone ab 60). Kein echtes Geld, keine Zufallskisten, kein Zeitdruck. Gekauftes bleibt für immer.
+- **Anprobieren** ist immer gratis: Ein nicht gekauftes Teil erscheint an der Figur mit einem Hinweis «Du probierst an … Für 15 kaufen» oder «Wieder ausziehen». **Gespeichert wird automatisch**, sobald die Figur nur noch Teile trägt, die dem Kind gehören.
+- Die Datenbank prüft Preise, Freischaltung, Münzen und Besitz; sie speichert nur Looks mit gekauften Teilen. Avatar und Kart gelten pro Konto auf jedem Gerät.
+- Lehrpersonen und Kinder ohne Anmeldung sehen eine **Vorschau** (Lehrpersonen: alles frei; ohne Anmeldung: nur Gratis-Teile), gespeichert nur auf dem Gerät. Die Garage erreicht man über die Startkarte des Turbo-Rennens.
+- Ohne WebGL gibt es statt der 3D-Welt den bisherigen 2D-Avatar (wie in Vokaboom). three.js und der Avatar-Baukasten werden erst geladen, wenn man die 3D-Welt öffnet.
 
 ## Spielen
 
@@ -187,6 +200,13 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/modes.js` | Übungen: Trainer, Auswählen, Reihen-Treppe (hinauf und hinunter, 3 Versuche, mit Eichhörnchen), Blitztest |
 | `js/games.js` | Spiele: Startkarte, Spielmodi (Countdown, Survive, Speed), Ergebnis mit Bestenliste, Memory, Stimmt das?, Duell und die 2D-Versionen von Elfmeter, Meteoriten, Frosch-Hüpfen |
 | `js/games3d.js` | 3D-Spiele: Elfmeter, Meteoriten, Frosch-Hüpfen (mit three.js) |
+| `js/kart3d.js` | Turbo-Rennen: Strecken, Karts (mit der Optik aus der Garage), Fahrphysik |
+| `js/avatar3d.js` | Baukasten für die 3D-Figuren (Voxel, geglättet): Frisuren, Kleider, Zubehör, Gesichter, Bewegungen; wird erst bei Bedarf geladen |
+| `js/shop3d.js` | 3D-Welt: Katalog (Preise, Seltenheit, Freischaltung), Münzkonto, Kaufen, Speichern, Spiele bezahlen |
+| `js/world3d.js` | 3D-Welt: Seiten «Mein Avatar» und «Garage», Vorschaubilder, Bilder für die Startseite |
+| `js/avatar.js`, `css/avatar.css` | 2D-Avatar und Münzen (in Vokaboom und Teilmal gleich) |
+| `css/world3d.css` | Gestaltung der 3D-Welt |
+| `labor/avatar.html` | Avatar-Labor: Prototyp zum Ausprobieren der Figuren (ohne Shop) |
 | `js/sheets.js` | Übungsblätter: Auswahl der Rechnungen, Vektor-PDF und Vorschau |
 | `js/sso.js` | Gemeinsames Anmelden mit Vokaboom (Cookies auf fabulousteaching.ch, in beiden Repositories gleich) |
 | `js/cloud.js` | Anmeldung der Lehrperson |
@@ -196,6 +216,6 @@ Reines HTML/CSS/JavaScript ohne Build-Schritt:
 | `js/vendor/three.module.min.js` | 3D-Grafik ([three.js](https://threejs.org) r170, MIT-Lizenz, siehe `three.LICENSE`); wird erst beim Start eines 3D-Spiels geladen |
 | `js/vendor/qrcode.js` | QR-Codes ([qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), MIT-Lizenz, Kazuhiko Arase) |
 | `audio/torjubel.mp3` | Torjubel beim Elfmeter: echte Aufnahme eines jubelnden Publikums, [„Crowd Cheer“ von FoolBoyMedia](https://freesound.org/people/FoolBoyMedia/sounds/397434/) auf Freesound, [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (gemeinfrei); auf 4,6 s gekürzt, ein- und ausgeblendet, Lautstärke angeglichen |
-| `supabase/` | Tabellen und Zugriffsregeln (`einmaleins.sql`) und Anleitung |
+| `supabase/` | Tabellen und Zugriffsregeln (`einmaleins.sql`), Avatar, Münzen und 3D-Welt (`avatar.sql`, in beiden Repositories gleich) und Anleitungen |
 | `tools/alte-adresse/` | Weiterleitung der alten Adresse einmaleins.fabulousteaching.ch (eigenes Repository, siehe „Adresswechsel“) |
 | `icon.svg`, `logo.svg`, `apple-touch-icon.png` | Logo: Sprechblase mit × (mal) und : (geteilt) |

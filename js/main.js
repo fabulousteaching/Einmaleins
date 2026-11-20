@@ -91,6 +91,7 @@ const actions = {
   ...(typeof menuActions === 'object' ? menuActions : {}),
 };
 if (typeof avatarActions === 'object') Object.assign(actions, avatarActions); // Mein Avatar (js/avatar.js, gemeinsam mit Vokaboom)
+if (typeof world3dActions === 'object') Object.assign(actions, world3dActions); // 3D-Welt und Garage (js/world3d.js)
 
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */

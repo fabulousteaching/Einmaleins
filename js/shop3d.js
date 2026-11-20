@@ -158,8 +158,9 @@ function w3PaidIn(pre, c) {
 const W3 = { mode: 'guest', a3: null, car: null, savedA3: null, savedCar: null, sqlOld: false, busy: false, saveT: 0, saving: false, status: '' };
 const w3Kid = () => typeof isKid === 'function' && isKid() && typeof avatarOn === 'function' && avatarOn() && typeof AV === 'object';
 const w3Teacher = () => typeof cloud === 'object' && !!cloud.uid && !(typeof isKid === 'function' && isKid());
-/** kid: echtes Konto · teacher: alles frei zur Vorschau · guest: nur Gratis-Teile, Kaufen nach dem Anmelden */
-const w3Mode = () => (w3Kid() ? 'kid' : w3Teacher() ? 'teacher' : 'guest');
+/** kid: echtes Konto · teacher: alles frei zur Vorschau · guest: nur Gratis-Teile, Kaufen nach dem Anmelden
+    off: Kind, bei dessen Klasse der Avatar ausgeschaltet ist (nur Gratis-Teile, gespeichert auf dem Gerät) */
+const w3Mode = () => (w3Kid() ? 'kid' : w3Teacher() ? 'teacher' : typeof isKid === 'function' && isKid() ? 'off' : 'guest');
 const W3_LOCAL = (what) => `teilmal.w3.${what}.${typeof kid === 'object' && kid.username ? kid.username : w3Teacher() ? 'lp' : 'gast'}`;
 function w3LocalGet(what) { try { return JSON.parse(localStorage.getItem(W3_LOCAL(what))); } catch { return null; } }
 function w3LocalSet(what, v) { try { localStorage.setItem(W3_LOCAL(what), JSON.stringify(v)); } catch { /* voll */ } }
@@ -234,6 +235,7 @@ function w3Apply(st) {
 /** Ein Teil kaufen. Liefert true, wenn es jetzt dem Kind gehört. */
 async function w3Buy(it) {
   if (!it || w3Owns(it)) return true;
+  if (w3Mode() === 'off') { toast('Der Shop ist bei deiner Klasse gerade ausgeschaltet.'); return false; }
   if (w3Mode() !== 'kid') { toast('Melde dich mit deinem Kärtchen an, dann kannst du mit deinen Münzen einkaufen.'); return false; }
   if (!w3ShopOpen()) { toast('Der Shop ist gerade geschlossen.'); return false; }
   if (w3Locked(it)) { toast(`Das gibt es ab ${it.unlock.earned} gesammelten Münzen. Du hast schon ${w3Earned()}.`); return false; }

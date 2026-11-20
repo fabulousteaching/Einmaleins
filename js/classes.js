@@ -381,7 +381,7 @@ function kidHelloHTML() {
     <div><p class="eyebrow">${esc(kid.cls)}</p><h1>Hallo ${esc(kid.first)}!</h1><p class="lead">Such dir eine Übung oder ein Spiel aus.</p>
       ${kid.vb && CLOUD_CFG.vokaboomUrl ? `<button class="btn small secondary other-tool" data-action="go-vokaboom"><span class="ot-tag">ABC</span> Vokabeln üben</button>` : ''}</div>
   </div>
-  ${typeof avatarSVG === 'function' && avatarOn() ? `<button class="av-home-card" data-action="avatar-open">
+  ${typeof w3HomeCardsHTML === 'function' && avatarOn() && webglOK() ? (setTimeout(w3HomeSnaps), w3HomeCardsHTML()) : typeof avatarSVG === 'function' && avatarOn() ? `<button class="av-home-card" data-action="avatar-open">
       <span class="av-home-fig">${AV.state ? avatarSVG(AV.state.avatar, { idle: true, label: 'Mein Avatar' }) : ''}</span>
       <span><strong>Mein Avatar${AV.state?.fresh ? '<span class="av-new">Neu</span>' : ''}</strong>
         <span class="muted">${AV.state?.fresh ? 'Gestalte deine eigene Figur!' : 'Frisur, Kleider, Haustier …'}</span><br>

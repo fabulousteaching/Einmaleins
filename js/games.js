@@ -344,7 +344,7 @@ function renderGame() {
   game.over = false;
   const g = GAME_BY_ID[ui.game];
   if (!g) return;
-  const c = coinsOf();
+  const have = playCoins();
   const free = gamesFree(), can = canPlay();
   const opts = gateOptionsHTML(g.id);
   $('#view').innerHTML = `<section class="mode game gate c-${g.color}">
@@ -358,9 +358,10 @@ function renderGame() {
       ${opts ? `<div class="gate-opts">${opts}</div>` : ''}
       ${g.id === 'kart' && !webglOK() ? '<div class="gate-need"><p><b>Dieses Spiel braucht 3D-Grafik.</b><br>Auf diesem Gerät geht das leider nicht. Probier ein anderes Spiel!</p></div>'
     : can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
-        <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${c.c} ${c.c === 1 ? 'Münze' : 'Münzen'}.`}</p>`
+        <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${have} ${have === 1 ? 'Münze' : 'Münzen'}.`}</p>`
     : `<div class="gate-need">${COIN_SVG}<p><b>Dir fehlt noch eine Münze.</b><br>Münzen verdienst du beim Üben: für jede richtige Antwort gibt es Punkte. ${coinThreshold()} Punkte = 1 Münze.</p></div>
         <button class="btn primary big" data-action="open-ex" data-id="trainer">${icon('keypad')} Zum Trainer</button>`}
+      ${g.id === 'kart' && webglOK() && typeof renderWorld3D === 'function' ? '<button class="btn secondary" data-action="garage-open">🔧 Garage: dein Kart gestalten</button>' : ''}
       <button class="btn ghost" data-action="home">Zurück</button>
     </div>
   </section>`;
@@ -369,7 +370,16 @@ const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(),
   kart: () => { toast('Das Rennen konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); } };
 const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D(), kart: () => startKart3D() };
 async function startGameNow() {
-  if (!payForGame()) { renderGame(); return; }
+  if (game.paying) return;
+  if (!gamesFree() && kidWallet() && typeof w3PayGame === 'function') {
+    // ein Konto: mit den Münzen aus der Datenbank bezahlen (offline: mit denen auf dem Gerät)
+    game.paying = true;
+    let r;
+    try { r = await w3PayGame(GAME_COST, `spiel ${ui.game}`); } finally { game.paying = false; }
+    if (r === 'poor') { toast('Dir fehlt noch eine Münze. Üben bringt Münzen!'); renderGame(); return; }
+    if (r === 'local' && !payForGame()) { renderGame(); return; }
+    if (r === 'ok') { const c = coinsOf(); if (c.c >= GAME_COST) { c.c -= GAME_COST; c.spent += GAME_COST; saveDB(); } updateCoinUI(); }
+  } else if (!payForGame()) { renderGame(); return; }
   const id = ui.game;
   game.over = false;
   game.onRunHud = null;

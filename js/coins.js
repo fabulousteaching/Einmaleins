@@ -59,12 +59,15 @@ function payForGame() {
   updateCoinUI();
   return true;
 }
-const canPlay = () => gamesFree() || coinsOf().c >= GAME_COST;
+/** Angemeldete Kinder spielen mit den Münzen aus dem gemeinsamen Konto (js/shop3d.js), alle anderen mit denen auf dem Gerät */
+const kidWallet = () => typeof isKid === 'function' && isKid() && typeof avatarOn === 'function' && avatarOn() && (typeof avCfg !== 'function' || avCfg().coins !== false);
+const playCoins = () => (kidWallet() && typeof AV === 'object' && AV.state ? AV.state.coins : coinsOf().c);
+const canPlay = () => gamesFree() || playCoins() >= GAME_COST;
 
 /* ---------------- Anzeige ---------------- */
 const COIN_SVG = `<svg class="coin-svg" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#F4B400"/><circle cx="20" cy="20" r="14.5" fill="#FFCF3F" stroke="#E09A00" stroke-width="1.6"/><path d="M14.5 14.5l11 11M25.5 14.5l-11 11" stroke="#C27C00" stroke-width="3.2" stroke-linecap="round"/><path d="M9 14a12 12 0 0 1 9-7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`;
 function coinPillHTML() {
-  if (gamesFree()) return '';
+  if (gamesFree() || kidWallet()) return ''; // Kinder: die Münzen stehen oben beim Avatar
   const c = coinsOf();
   const th = coinThreshold();
   return `<button class="coin-pill" data-action="coins-info" title="Meine Münzen" aria-label="${c.c} Münzen">
@@ -80,7 +83,7 @@ function updateCoinUI() {
 function exCoinHTML() {
   if (gamesFree()) return '<span id="ex-coin" hidden></span>';
   const c = coinsOf(), th = coinThreshold();
-  return `<span class="ex-coin" id="ex-coin" title="Noch ${Math.max(0, Math.ceil((th - c.p) * 10) / 10)} Punkte bis zur nächsten Münze">${COIN_SVG}<b>${c.c}</b><i class="coin-prog"><i style="width:${Math.min(100, (c.p / th) * 100)}%"></i></i></span>`;
+  return `<span class="ex-coin" id="ex-coin" title="Noch ${Math.max(0, Math.ceil((th - c.p) * 10) / 10)} Punkte bis zur nächsten Münze">${COIN_SVG}<b>${playCoins()}</b><i class="coin-prog"><i style="width:${Math.min(100, (c.p / th) * 100)}%"></i></i></span>`;
 }
 function coinGainFx(n, from) {
   tone([1318, 1760, 2093], 0.09, 'triangle', 0.12);
