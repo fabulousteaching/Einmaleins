@@ -20,7 +20,7 @@ const GAMES = [
   { id: 'truefalse', name: 'Stimmt das?', desc: 'Richtig oder falsch? Wisch dich durch.', color: 'sun', art: '<span class="emo">✅</span>', modes: ['countdown', 'survive', 'speed'],
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
-    howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige und du bekommst Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen um die Kurve ist der Weg kürzer. Fährst du innen durch eine Kurve, lädst du einen Kurven-Turbo auf. Mehrere richtige Antworten hintereinander geben einen stärkeren Turbo, und wer genau bei «LOS!» tippt, hat einen Raketenstart!' },
+    howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -90,7 +90,7 @@ const GAME_MODES = {
     desc: (id) => `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
     desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.'
-      : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Richtig = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
+      : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Jede 4. richtige Antwort = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
         : '20 richtige Antworten – so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr.') },
 };
 const modesOf = (id) => GAME_BY_ID[id]?.modes || [];

@@ -12,7 +12,8 @@
  * Können lohnt sich wie bei richtigen Kart-Spielen über selbst verdiente Turbos:
  *  - Kurven-Turbo: Wer eine Kurve innen durchfährt (ohne die Bande zu berühren), lädt Funken auf (blau → orange → lila);
  *    am Kurvenende gibt es Schub – je länger und enger, desto stärker.
- *  - Rechen-Serie: Mehrere richtige Antworten hintereinander machen den Turbo stärker und länger.
+ *  - Rechen-Turbo: Jede richtige Antwort füllt eine Anzeige mit 4 Feldern; bei der 4. gibt es Turbo (4 hintereinander
+ *    richtig = Mega-Turbo). Eine falsche Antwort nimmt ein Feld weg und bremst kurz. Für die Computer-Fahrer gilt dasselbe.
  *  - Start-Turbo: Genau bei «LOS!» tippen gibt einen Raketenstart; zu früh tippen = kurzer Fehlstart.
  * Eigene Grafik und eigene Figuren (keine Vorlage aus anderen Spielen).
  */
@@ -23,9 +24,11 @@ const KART = {
   TURBO: 1.5, SLOW: 0.55, FX_MS: 1800,
   STATIONS: [0.15, 0.47, 0.79], ASK: 200, ZONE: 12,
   WALL: 1.6,     // Bande: so weit ausserhalb der Fahrbahn
-  MT: [0.9, 2.0, 3.2], MT_MUL: [1, 1.22, 1.28, 1.34], MT_MS: [0, 700, 1100, 1600],   // Kurven-Turbo: Ladung (s) je Stufe, Schub, Dauer
-  STREAK_MUL: [1.5, 1.5, 1.56, 1.62], STREAK_MS: [1800, 1800, 2400, 3000],             // Rechen-Serie: 1., 2., ab 3. richtige Antwort
-  START_MUL: 1.45, START_MS: 1600,                                                      // Start-Turbo
+  // Abgestimmt mit einer Renn-Simulation: starke Kinder gewinnen oft (etwa 6 von 10), aber nicht immer
+  MT: [1.2, 2.4, 3.8], MT_MUL: [1, 1.08, 1.12, 1.16], MT_MS: [0, 450, 700, 950],   // Kurven-Turbo: Ladung (s) je Stufe, Schub, Dauer
+  MATH_EVERY: 4, MATH_MUL: 1.35, MATH_MS: 2000, MEGA_MUL: 1.4, MEGA_MS: 2500,       // Rechen-Turbo bei jeder 4. richtigen Antwort
+  START_MUL: 1.2, START_MS: 1000,                                                   // Start-Turbo
+  GAIN: [0.9, 1.1],                                                                 // Innen-/Aussenbahn: höchstens 10 % kürzer bzw. länger
 };
 const KART_TRACKS = [
   { id: 'circuit', name: 'Rennstrecke', emo: '🏁' },
@@ -729,7 +732,7 @@ async function startKart3D() {
   Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
   $('#view').innerHTML = gameShell('kart', `
     <div class="g3 g3-kart theme-${tid}" id="g3">
-      <div class="kart-hud tl"><div class="kart-pos"><b id="kplace">–</b><small>/6</small></div><span class="kart-lap" id="klap">Runde 1/${KART.LAPS}</span><span class="kart-streak" id="kstreak" hidden></span><ol class="kart-rank" id="krank"></ol></div>
+      <div class="kart-hud tl"><div class="kart-pos"><b id="kplace">–</b><small>/6</small></div><span class="kart-lap" id="klap">Runde 1/${KART.LAPS}</span><span class="kart-math" id="kmath" title="Richtige Antworten bis zum Turbo"><b>⚡</b><i></i><i></i><i></i><i></i></span><ol class="kart-rank" id="krank"></ol></div>
       <canvas class="kart-map" id="kmap" width="300" height="300" aria-hidden="true"></canvas>
       <div class="kart-time" id="ktime">0,0 s</div>
       <div class="kart-ask" id="kask" hidden><small id="kaskhint">Fahr durch das richtige Ergebnis</small><b id="ktask"></b><div class="kart-ans" id="kans"></div></div>
@@ -740,7 +743,7 @@ async function startKart3D() {
       <div class="kart-lights" id="klights" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="kart-count" id="kcount"></div>
     </div>
-    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipps: Innen durch die Kurve lädt den Kurven-Turbo (Bande nicht berühren!). Richtige Antworten hintereinander = stärkerer Turbo. Genau bei LOS! tippen = Raketenstart.</p>`);
+    <p class="mode-hint">Lenken: Pfeiltasten ← → (oder A/D) – auf dem Tablet links oder rechts aufs Bild tippen und halten. Tipps: Innen durch die Kurve lädt den Kurven-Turbo (Bande nicht berühren!). Jede 4. richtige Antwort gibt Turbo. Genau bei LOS! tippen = Raketenstart.</p>`);
   const host = $('#g3');
   const st = createStage(host, { fov: 62, near: 0.9, far: 3600, shadows: true, clear: TH.fog });
   game.stage3d = st;
@@ -1439,7 +1442,7 @@ async function startKart3D() {
     return {
       i, name: r.name, color: i === 0 && myLook ? m.look.paint : r.color, bot: i > 0, m,
       p: 0, lat: 0, latV: 0, v: 0, fx: null, fxUntil: 0, zoneLane: null, wantLane: null, phase: rnd(0, 6),
-      skill: i > 0 ? rnd(0.965, 1.02) : 1, acc: i > 0 ? rnd(0.62, 0.86) : 1, line: i > 0 ? rnd(0.35, 0.9) : 0, finished: 0, seen: new Set(), wallT: 0, boostUntil: 0, boostMul: 1, drift: 0, fxMul: 0,
+      skill: i > 0 ? rnd(0.97, 1.03) : 1, acc: i > 0 ? rnd(0.7, 0.9) : 1, line: i > 0 ? rnd(0.45, 0.95) : 0, mathN: 0, mathRow: 0, finished: 0, seen: new Set(), wallT: 0, boostUntil: 0, boostMul: 1, drift: 0, fxMul: 0,
     };
   });
   // Funken für den Kurven-Turbo an deinen Hinterrädern
@@ -1494,7 +1497,7 @@ async function startKart3D() {
 
   /* Anzeige */
   const elPlace = $('#kplace'), elLap = $('#klap'), elRank = $('#krank'), elTime = $('#ktime'), elAsk = $('#kask'), elTask = $('#ktask'), elAns = $('#kans'), elHint = $('#kaskhint'), elLines = $('#klines'), elCount = $('#kcount'), elLights = $('#klights');
-  const elMt = $('#kmt'), elMtBar = $('#kmtbar'), elMtTxt = $('#kmttxt'), elStreak = $('#kstreak'), elStartHint = $('#kstarthint');
+  const elMt = $('#kmt'), elMtBar = $('#kmtbar'), elMtTxt = $('#kmttxt'), elMath = $('#kmath'), elStartHint = $('#kstarthint');
   const map = $('#kmap'), mg = map.getContext('2d');
   const mapImg = document.createElement('canvas'); mapImg.width = map.width; mapImg.height = map.height;
   const mb = tr.box, msc = Math.min((map.width - 30) / (mb.maxX - mb.minX), (map.height - 30) / (mb.maxZ - mb.minZ));
@@ -1623,7 +1626,7 @@ async function startKart3D() {
     const d = S.goAt - S.tapped;                                  // > 0: vor «LOS!»
     if (d <= 380) {
       const good = d >= -120;
-      boost(good ? KART.START_MUL : 1.25, good ? KART.START_MS : 900);
+      boost(good ? KART.START_MUL : 1.1, good ? KART.START_MS : 600);
       bigWord(host, good ? 'RAKETENSTART!' : 'Guter Start!', 'good kart-word');
       tone([660, 990, 1320], 0.07, 'triangle', 0.06);
     } else {
@@ -1634,7 +1637,7 @@ async function startKart3D() {
   }
 
   /* Ablauf */
-  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, ok: 0, wrong: 0, wrongs: [], mt: 0, mtOff: 0, streak: 0, tapped: 0, goAt: 0, goReal: 0, stallUntil: 0 };
+  const S = { phase: 'intro', t0: 0, raceT0: 0, ask: null, ok: 0, wrong: 0, wrongs: [], mt: 0, mtOff: 0, tapped: 0, goAt: 0, goReal: 0, stallUntil: 0 };
   game.kart = S;
   S.dbg = { racers, stations, tr, me: () => me }; // für Tests
   const look = new T.Vector3();
@@ -1679,6 +1682,21 @@ async function startKart3D() {
     return null;
   }
   function setFx(r, kind, ms = KART.FX_MS, mul = 0) { r.fx = kind; r.fxUntil = st.time + ms; r.fxMul = mul; }
+  /** Antwort zählen (für alle gleich): bei der 4. richtigen Turbo, 4 hintereinander = Mega-Turbo; falsch nimmt ein Feld weg.
+      Liefert 'turbo', 'mega', 'ok' oder 'bad'. */
+  function mathCount(r, ok) {
+    if (!ok) { r.mathN = Math.max(0, r.mathN - 1); r.mathRow = 0; setFx(r, 'slow'); return 'bad'; }
+    r.mathN++; r.mathRow++;
+    if (r.mathN < KART.MATH_EVERY) return 'ok';
+    const mega = r.mathRow >= KART.MATH_EVERY;
+    setFx(r, 'turbo', mega ? KART.MEGA_MS : KART.MATH_MS, mega ? KART.MEGA_MUL : KART.MATH_MUL);
+    r.mathN = 0; r.mathRow = 0;
+    return mega ? 'mega' : 'turbo';
+  }
+  function mathHud(pop) {
+    [...elMath.querySelectorAll('i')].forEach((el, i) => el.classList.toggle('on', i < me.mathN));
+    if (pop) { elMath.classList.remove('pop', 'lost', 'full'); void elMath.offsetWidth; elMath.classList.add(pop); }
+  }
   function smoke(r) {
     kartAt(tr, r.p - 1.4, q);
     burst(st, pt(q, r.lat, 0.8), { n: 18, colors: [0x9ca3af, 0xd1d5db, 0x6b7280], speed: 1.6, life: 0.9, size: 0.9, gravity: 1.2 });
@@ -1733,20 +1751,25 @@ async function startKart3D() {
     $$('#kans .ka').forEach((el, i) => el.classList.add(i === stn.correct ? 'right' : i === lane ? 'wrong' : 'fade'));
     stn.label.forEach((l, i) => l.el.classList.add(i === stn.correct ? 'right' : i === lane ? 'wrong' : 'fade'));
     if (ok) {
-      S.ok++; S.streak = (S.streak || 0) + 1;
-      const n = Math.min(3, S.streak);
-      setFx(me, 'turbo', KART.STREAK_MS[n], KART.STREAK_MUL[n]); sfx.good(); tone([523, 784, 1047, 1568].concat(n > 1 ? [2093] : []), 0.07, 'sawtooth', 0.05);
-      elAsk.classList.add('ok'); elHint.textContent = S.streak > 1 ? `Richtig – Serie ×${S.streak}, stärkerer Turbo!` : 'Richtig – Turbo!';
+      S.ok++;
+      const res = mathCount(me, true);
+      sfx.good();
+      elAsk.classList.add('ok');
       elTask.innerHTML = esc(taskText(a.t, true));
-      bigWord(host, S.streak > 1 ? `TURBO ×${Math.min(S.streak, 9)}!` : 'TURBO!', 'good kart-word');
-      elStreak.hidden = S.streak < 2; elStreak.textContent = `🔥 Serie ×${S.streak}`;
-      elStreak.classList.remove('pop'); void elStreak.offsetWidth; elStreak.classList.add('pop');
       kartAt(tr, me.p + 2, q);
-      burst(st, pt(q, me.lat, 1.5), { n: 60, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 6, life: 0.7, size: 0.3 });
+      if (res === 'ok') {
+        const left = KART.MATH_EVERY - me.mathN;
+        elHint.textContent = `Richtig! Noch ${left} bis zum Turbo`;
+        tone([523, 784], 0.07, 'triangle', 0.05); mathHud('pop');
+        burst(st, pt(q, me.lat, 1.5), { n: 24, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 4, life: 0.5, size: 0.24 });
+      } else {
+        elHint.textContent = res === 'mega' ? '4 richtig hintereinander – Mega-Turbo!' : '4 richtig – Turbo!';
+        tone([523, 784, 1047, 1568].concat(res === 'mega' ? [2093] : []), 0.07, 'sawtooth', 0.05); mathHud('full');
+        bigWord(host, res === 'mega' ? 'MEGA-TURBO!' : 'TURBO!', 'good kart-word');
+        burst(st, pt(q, me.lat, 1.5), { n: 60, colors: [0x22c55e, 0xbbf7d0, 0xffffff], speed: 6, life: 0.7, size: 0.3 });
+      }
     } else {
-      S.wrong++; S.wrongs.push(a.t); setFx(me, 'slow'); sfx.bad(); smoke(me); st.shake(0.25);
-      if (S.streak > 1) { elStreak.textContent = 'Serie vorbei'; elStreak.classList.remove('pop'); void elStreak.offsetWidth; elStreak.classList.add('lost'); gLater(() => { elStreak.hidden = true; elStreak.classList.remove('lost'); }, 1400); }
-      S.streak = 0;
+      S.wrong++; S.wrongs.push(a.t); mathCount(me, false); mathHud('lost'); sfx.bad(); smoke(me); st.shake(0.25);
       elAsk.classList.add('bad'); elHint.textContent = 'Schade – das war nicht richtig';
       elTask.innerHTML = esc(taskText(a.t, true));
     }
@@ -1818,7 +1841,7 @@ async function startKart3D() {
         target *= clamp(1 - q.sl * 0.9, 0.86, 1.12); // bergauf etwas langsamer, bergab schneller
         if (r.bot) {
           const d = r.p - me.p;
-          target *= 1 - clamp(d / 90, -1, 1) * 0.045; // sanftes Gummiband: wer besser fährt, setzt sich ab
+          target *= 1 - clamp(d / 70, -1, 1) * (d > 0 ? 0.11 : 0.08); // Gummiband: wer weit hinten ist, holt etwas auf
           if (r.finished) target *= 0.6;
         }
         if (r === me && S.phase === 'done') target *= 0.55;
@@ -1840,7 +1863,7 @@ async function startKart3D() {
                 r.wantFor = key;
                 if (gate) {
                   const d = r.p - me.p;
-                  const acc = clamp(r.acc - (d > 25 ? 0.08 : 0) + (d < -25 ? 0.06 : 0), 0.35, 0.95);
+                  const acc = clamp(r.acc - (d > 25 ? 0.1 : 0) + (d < -25 ? 0.1 : 0), 0.35, 0.95);
                   r.nextOk = Math.random() < acc;
                   const right = stn.correct >= 0 && S.ask?.stn === stn ? stn.correct : Math.floor(Math.random() * 3);
                   const wrongs = [0, 1, 2].filter((x) => x !== right);
@@ -1860,7 +1883,7 @@ async function startKart3D() {
       }
       const prevP = r.p;
       // Fahrkönnen: Innen um die Kurve ist der Weg kürzer → schneller vorwärts
-      const gain = 1 / clamp(1 - q.k * r.lat, 0.72, 1.35);
+      const gain = clamp(1 / clamp(1 - q.k * r.lat, 0.72, 1.35), KART.GAIN[0], KART.GAIN[1]);
       r.p += r.v * dt * gain;
       r.lat += r.latV * dt;
       const z = zoneAt(r.p);
@@ -1893,7 +1916,7 @@ async function startKart3D() {
             if (r === me) answer(stn, lane);
             else {
               const ok = r.gateRight != null ? lane === r.gateRight : r.nextOk;
-              setFx(r, ok ? 'turbo' : 'slow');
+              mathCount(r, ok);
               if (!ok && Math.abs(r.p - me.p) < 80) smoke(r);
             }
           }
