@@ -48,7 +48,11 @@ const coinRows = () => (typeof ex === 'object' && ex.mode === 'reihen' && ex.rei
  * die gewählten Reihen sitzen schon sicher, und unter den Reihen, die es auch üben könnte, gibt es noch Schwierigeres.
  * Liefert { locked, easy: [Reihen], harder: [Reihen] }.
  */
+/** Münzensperre der Lehrperson (aus dem gemeinsamen Münzkonto, js/avatar.js) */
+const teacherCoinLock = () => (typeof isKid === 'function' && isKid() && typeof avLock === 'function' ? avLock() : null);
 function coinLock(rows = coinRows(), treppe = typeof ex === 'object' && ex.mode === 'reihen') {
+  const T = teacherCoinLock();
+  if (T) return { locked: true, teacher: T, easy: [], harder: [] };
   const ps = practiceSettings();
   const cls = typeof kidClassSettings === 'function' ? kidClassSettings() : null;
   const fixed = cls && cls.choose === false;
@@ -62,7 +66,7 @@ function coinLock(rows = coinRows(), treppe = typeof ex === 'object' && ex.mode 
   if (!harder.length) return no;
   return { locked: true, easy: rows, harder };
 }
-const coinLockText = (L) => `Keine Münzen für ${L.easy.length === 1 ? `die ${L.easy[0]}er-Reihe` : `die Reihen ${L.easy.join(', ')}`} – das kannst du schon sicher. Nimm eine schwierigere Reihe dazu (z. B. ${L.harder.slice(0, 3).map((r) => `${r}er`).join(', ')}), dann gibt es wieder Münzen.`;
+const coinLockText = (L) => L.teacher ? avLockText(L.teacher) : `Keine Münzen für ${L.easy.length === 1 ? `die ${L.easy[0]}er-Reihe` : `die Reihen ${L.easy.join(', ')}`} – das kannst du schon sicher. Nimm eine schwierigere Reihe dazu (z. B. ${L.harder.slice(0, 3).map((r) => `${r}er`).join(', ')}), dann gibt es wieder Münzen.`;
 
 /** Punkte für eine Münze: 12 (vieles macht noch Mühe) bis 20 (fast alles sitzt) */
 const coinThreshold = () => Math.round(12 + 8 * masteryNow());
@@ -81,7 +85,8 @@ function earnPoints(pts, from = null) {
   if (!pts) return 0;
   const L = coinLock();
   if (L.locked) {   // üben geht weiter, aber ohne Münzen – einmal pro Übung Bescheid geben
-    const key = `${L.easy.join(',')}|${typeof ex === 'object' ? ex.mode : ''}`;
+    if (!L.teacher) noteCoinLock(L);
+    const key = L.teacher ? 'teacher' : `${L.easy.join(',')}|${typeof ex === 'object' ? ex.mode : ''}`;
     if (coinLockWarned !== key) { coinLockWarned = key; toast(`🔒 ${coinLockText(L)}`); }
     updateCoinUI();
     return 0;
@@ -97,6 +102,14 @@ function earnPoints(pts, from = null) {
   if (gained) coinGainFx(gained, from);
   if (gained && typeof avatarEarnCoins === 'function') avatarEarnCoins(gained); // auch fürs Avatar-Konto (gemeinsam mit Vokaboom)
   return gained;
+}
+/** Automatische Sperre im Übungsstand vermerken (wird mit der Klasse synchronisiert → Übersicht der Lehrperson) */
+function noteCoinLock(L) {
+  if (typeof isKid !== 'function' || !isKid()) return;
+  const old = db.prog.lock, d = today();
+  const same = old && old.day === d;
+  db.prog.lock = { at: Date.now(), day: d, n: same ? old.n + 1 : 1, cnt: old ? old.cnt + (same ? 0 : 1) : 1, rows: [...L.easy] };
+  saveDB();
 }
 /** Ein Spiel bezahlen. Liefert true, wenn gespielt werden darf. */
 function payForGame() {

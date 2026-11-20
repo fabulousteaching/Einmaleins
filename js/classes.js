@@ -80,6 +80,7 @@ function mergeProg(a, b) {
   // Münzen: es gilt der Stand mit mehr Aktivität (verdient + ausgegeben), damit nichts verloren geht
   const act = (c) => (c ? c.earned + c.spent + c.p / 100 : -1);
   if (act(A.coins) > act(B.coins)) out.coins = { ...A.coins };
+  if ((A.lock?.at || 0) > (B.lock?.at || 0)) out.lock = { ...A.lock };
   return out;
 }
 
@@ -392,7 +393,7 @@ function kidHelloHTML() {
 /* =========================================================
    Klassen der Lehrperson
    ========================================================= */
-const klass = { list: [], students: {}, progress: {}, loaded: false, loading: null, error: '', tab: 'overview', kidDetail: '', confirm: '', busy: false };
+const klass = { list: [], students: {}, progress: {}, locks: {}, loaded: false, loading: null, error: '', tab: 'overview', kidDetail: '', confirm: '', busy: false };
 const classById = (id) => klass.list.find((c) => c.id === id);
 const currentClass = () => classById(ui.classId);
 const studentsOf = (cid) => klass.students[cid] || [];
@@ -548,7 +549,51 @@ async function loadClassProgress(cid) {
     (data || []).forEach((r) => { map[r.student_id] = { prog: cleanProg(r.data), at: Date.parse(r.updated_at) || 0 }; });
   }
   klass.progress[cid] = map;
+  await loadCoinLocks(cid, ids);
 }
+/** Münzensperren der Lehrperson (supabase/avatar.sql). Fehlt die Funktion noch, geht die Übersicht trotzdem. */
+async function loadCoinLocks(cid, ids = studentsOf(cid).map((s) => s.id)) {
+  try {
+    if (!ids.length) { klass.locks[cid] = { map: {} }; return; }
+    const c = await cloudClient();
+    const { data, error } = await c.rpc('fab_teacher_coin_locks', { p_students: ids });
+    if (error) throw error;
+    klass.locks[cid] = { map: data || {} };
+  } catch (e) {
+    const missing = /PGRST202|Could not find the function|fab_teacher_coin_locks/i.test(`${e?.code || ''} ${e?.message || ''}`);
+    klass.locks[cid] = { map: {}, missing, error: missing ? '' : cloudErrorText(e) };
+  }
+}
+/** Ende der Sperre: 'day' = heute, Zahl = so viele Tage (bis zum Abend), '0' = bis die Lehrperson sie aufhebt */
+function coinLockUntil(dur) {
+  if (String(dur) === '0') return null;
+  const d = new Date();
+  if (dur !== 'day') d.setDate(d.getDate() + Math.max(1, Math.min(60, parseInt(dur, 10) || 7)));
+  d.setHours(23, 59, 0, 0);
+  return d.toISOString();
+}
+async function setCoinLock(sid, on, dur = '7') {
+  const cid = ui.classId, st = studentsOf(cid).find((x) => x.id === sid);
+  if (!st) { toast('Bitte zuerst ein Kind auswählen.'); return; }
+  try {
+    const c = await cloudClient();
+    const until = on ? coinLockUntil(dur) : null;
+    const { data, error } = await c.rpc('fab_teacher_coin_lock', { p_student: sid, p_on: !!on, p_until: until, p_note: '' });
+    if (error) throw error;
+    const L = klass.locks[cid] || (klass.locks[cid] = { map: {} });
+    if (on && data) L.map[sid] = data; else delete L.map[sid];
+    toast(on ? `🔒 ${kidName(st)} bekommt ${coinLockUntilText(data?.until ?? until)} keine Münzen.` : `🔓 Die Münzen von ${kidName(st)} sind wieder frei.`);
+  } catch (e) {
+    const missing = /PGRST202|Could not find the function|fab_teacher_coin_lock/i.test(`${e?.code || ''} ${e?.message || ''}`);
+    toast(missing ? 'Für Münzensperren bitte supabase/avatar.sql in Supabase noch einmal ausführen.' : classErrorText(e), 'bad');
+  }
+  if (ui.view === 'class') render();
+}
+const coinLockUntilText = (until) => {
+  if (!until) return 'bis du die Sperre aufhebst';
+  const d = new Date(until);
+  return d.toDateString() === new Date().toDateString() ? 'für heute' : `bis ${d.toLocaleDateString('de-CH', { weekday: 'short', day: 'numeric', month: 'numeric' })}`;
+};
 function classErrorText(e) {
   const msg = String(e?.message || e || '');
   if (/class_full/.test(msg)) return 'In einer Klasse haben höchstens 60 Kinder Platz.';
@@ -1265,6 +1310,62 @@ function classMulKeys(c) {
   return keys;
 }
 
+/* ---------- Münzensperren (automatisch: nur leichte Reihen geübt; von Hand: durch die Lehrperson) ---------- */
+const LOCK_RECENT = 7 * 864e5;
+const autoLockOf = (p) => (p?.lock && Date.now() - p.lock.at < LOCK_RECENT ? p.lock : null);
+const teacherLockOf = (cid, sid) => { const l = klass.locks[cid]?.map?.[sid]; return l && (l.until == null || Date.parse(l.until) > Date.now()) ? l : null; };
+const lockRowsTxt = (rows) => (rows?.length ? rows.map((r) => `${r}er`).join(', ') : 'leichte Reihen');
+function autoLockTxt(a) {
+  const t = new Date(a.at).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  return `nur ${lockRowsTxt(a.rows)} geübt · ${fmtDay(a.at)} ${t} · ${a.n} ${a.n === 1 ? 'Antwort' : 'Antworten'} ohne Münzen${a.cnt > 1 ? ` · schon an ${a.cnt} Tagen` : ''}`;
+}
+function lockChipHTML(cid, r) {
+  const t = teacherLockOf(cid, r.st.id), a = autoLockOf(r.p);
+  return (t ? `<span class="lock-chip man" title="Von dir gesperrt – ${esc(coinLockUntilText(t.until))}">🔒 gesperrt</span>` : '')
+    + (a ? `<span class="lock-chip auto" title="Automatische Münzensperre: ${esc(autoLockTxt(a))}">🔒 ${fmtDay(a.at)}</span>` : '');
+}
+const LOCK_DURS = [['day', 'Heute'], ['3', '3 Tage'], ['7', '1 Woche'], ['0', 'Bis ich sie aufhebe']];
+function lockMenuHTML(sid, label = 'Münzen sperren') {
+  return `<details class="lock-menu"><summary class="btn small secondary">🔒 ${label}</summary><div class="lock-menu-pop"><span class="small muted">Wie lange?</span>
+    ${LOCK_DURS.map(([d, t]) => `<button class="btn small ghost" data-action="coin-lock" data-id="${sid}" data-dur="${d}">${t}</button>`).join('')}</div></details>`;
+}
+/** Steuerung für ein Kind: Sperre aufheben oder setzen */
+function lockCtlHTML(cid, sid) {
+  if (klass.locks[cid]?.missing) return '';
+  const t = teacherLockOf(cid, sid);
+  return t ? `<span class="lock-state">Münzen gesperrt ${esc(coinLockUntilText(t.until))}</span><button class="btn small secondary" data-action="coin-unlock" data-id="${sid}">🔓 Sperre aufheben</button>`
+    : lockMenuHTML(sid);
+}
+function coinLockPanelHTML(c, rows) {
+  const L = klass.locks[c.id] || {};
+  const auto = rows.filter((r) => autoLockOf(r.p)).sort((x, y) => y.p.lock.at - x.p.lock.at);
+  const man = rows.filter((r) => teacherLockOf(c.id, r.st.id));
+  const name = (r) => `<button class="link-btn kid-link" data-action="stats-kid" data-id="${r.st.id}">${kidWordImg(r.st.username, 'kid-mini')}${esc(kidName(r.st))}</button>`;
+  return `<div class="panel lock-panel" id="lock-panel">
+    <div class="stats-head"><h2>🔒 Münzensperren</h2>${auto.length || man.length ? `<span class="pill ${auto.length ? 'mid' : ''}">${auto.length + man.length}</span>` : ''}</div>
+    <p class="hint">Kinder, die nur Reihen üben, die sie schon sicher können (1er, 2er und 10er zählen immer dazu), üben automatisch ohne Münzen weiter.
+      Du kannst einem Kind die Münzen auch selbst sperren: Üben und Spielen geht weiter, es gibt nur keine neuen Münzen.</p>
+    <div class="lock-cols">
+      <div><h3>Automatisch gesperrt <small class="muted">(letzte 7 Tage)</small></h3>
+        ${auto.length ? `<ul class="lock-list">${auto.map((r) => `<li><span class="lock-who">${name(r)}<span class="lock-chip auto">auto</span></span>
+          <small class="lock-why">${esc(autoLockTxt(r.p.lock))}</small>${teacherLockOf(c.id, r.st.id) || L.missing ? '' : `<span class="lock-act" title="Alle Münzen sperren, nicht nur für leichte Reihen">${lockMenuHTML(r.st.id, 'Ganz sperren')}</span>`}</li>`).join('')}</ul>`
+          : '<p class="empty small">Niemand – gut so!</p>'}</div>
+      <div><h3>Von dir gesperrt</h3>
+        ${L.missing ? '<p class="banner">Für eigene Münzensperren bitte <b>supabase/avatar.sql</b> in Supabase noch einmal ausführen.</p>'
+          : L.error ? `<p class="banner bad">${esc(L.error)}</p>`
+          : `${man.length ? `<ul class="lock-list">${man.map((r) => { const t = teacherLockOf(c.id, r.st.id); return `<li><span class="lock-who">${name(r)}<span class="lock-chip man">gesperrt</span></span>
+              <small class="lock-why">${esc(coinLockUntilText(t.until))}${t.at ? ` · seit ${fmtDay(Date.parse(t.at))}` : ''}</small>
+              <span class="lock-act"><button class="btn small secondary" data-action="coin-unlock" data-id="${r.st.id}">🔓 Aufheben</button></span></li>`; }).join('')}</ul>` : '<p class="empty small">Keine.</p>'}
+          <div class="lock-form">
+            <label class="cb-field"><span>Kind</span><select id="lock-kid"><option value="">– auswählen –</option>${rows.filter((r) => !teacherLockOf(c.id, r.st.id)).map((r) => `<option value="${r.st.id}">${esc(kidName(r.st))}</option>`).join('')}</select></label>
+            <label class="cb-field"><span>Wie lange?</span><select id="lock-dur">${LOCK_DURS.map(([d, t]) => `<option value="${d}" ${d === '7' ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+            <button class="btn primary" data-action="coin-lock" data-form="1">🔒 Münzen sperren</button>
+          </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
 function classOverviewHTML(c, kids) {
   const prog = klass.progress[c.id];
   const head = `<div class="stats-head"><h2>Übersicht</h2><div class="row"><button class="btn small ghost" data-action="stats-refresh">${icon('flip')} Aktualisieren</button></div></div>`;
@@ -1286,7 +1387,7 @@ function classOverviewHTML(c, kids) {
   const table = `<div class="stat-scroll"><table class="ov-table">
     <thead><tr><th scope="col">Kind</th><th scope="col">Gelöst</th><th scope="col">Richtig</th><th scope="col">Zeit</th><th scope="col">Sitzen</th><th scope="col">Macht am meisten Mühe</th><th scope="col">Zuletzt</th><th scope="col"><span class="sr-only">Blatt</span></th></tr></thead>
     <tbody>${rows.map((r) => `<tr class="${klass.kidDetail === r.st.id ? 'sel' : ''}">
-      <th scope="row"><button class="link-btn kid-link" data-action="stats-kid" data-id="${r.st.id}">${kidWordImg(r.st.username, 'kid-mini')}${esc(kidName(r.st))}</button></th>
+      <th scope="row"><button class="link-btn kid-link" data-action="stats-kid" data-id="${r.st.id}">${kidWordImg(r.st.username, 'kid-mini')}${esc(kidName(r.st))}</button>${lockChipHTML(c.id, r)}</th>
       ${r.all?.n ? `<td class="num">${r.all.n}${r.week ? `<small>${r.week} diese Woche</small>` : ''}</td>
         <td><span class="pill ${accClass(r.all.acc)}">${pctTxt(r.all.acc)}</span></td>
         <td class="num">${r.all.ms ? (r.all.ms / 1000).toFixed(1).replace('.', ',') + ' s' : '–'}</td>
@@ -1306,6 +1407,8 @@ function classOverviewHTML(c, kids) {
         <div class="row"><button class="btn small primary" data-action="sheet-kid" data-id="${sel.st.id}">${icon('print')} Übungsblatt</button><button class="icon-btn subtle" data-action="stats-kid" data-id="" aria-label="Schliessen">${icon('x')}</button></div></div>
       ${sel.all?.n ? statTilesHTML(sel.sum, total) : '<p class="empty">Noch nicht geübt.</p>'}
       ${p.coins?.earned ? `<p class="small kd-coins">${COIN_SVG}<span><b>${p.coins.c}</b> ${p.coins.c === 1 ? 'Münze' : 'Münzen'} · ${p.coins.earned} verdient · ${p.coins.spent} für Spiele ausgegeben</span></p>` : ''}
+      <div class="kd-lock">${autoLockOf(p) ? `<p class="small"><span class="lock-chip auto">🔒 auto</span> Automatische Münzensperre: ${esc(autoLockTxt(p.lock))}</p>` : ''}
+        <div class="row">${lockCtlHTML(c.id, sel.st.id)}</div></div>
       <div class="kd-grid">
         <div><h3>Einmaleins-Tafel</h3>${tafelHTML(p, { mode: 'mul', id: 'kid', big: c.settings.big })}${legendHTML()}</div>
         <div><h3>Die Reihen</h3>${reihenBarsHTML(p, c.settings.big)}<h3>Häufigste Fehler</h3>${focusListHTML(p)}
@@ -1348,6 +1451,7 @@ function classOverviewHTML(c, kids) {
     </div>
     <div class="panel">${head}${table}<p class="muted small">Gelöst = alle Rechnungen in Übungen und Spielen. Sitzen = Malrechnungen aus den Reihen der Klasse, die mehrmals schnell und richtig gelöst wurden. Tippe auf ein Kind für Details.</p></div>
     ${detail}
+    ${coinLockPanelHTML(c, rows)}
     <div class="ov-grid">
       <div class="panel"><h2>Die Klasse auf einen Blick</h2><p class="hint">Je röter, desto mehr Mühe hat die Klasse. Die kleine Zahl = so viele Kinder haben mit dieser Rechnung gerade viel Mühe.</p>${heat}${legendHTML()}</div>
       <div class="panel"><h2>Schwierigste Rechnungen der Klasse</h2>
@@ -1487,6 +1591,8 @@ const classActions = {
   'kid-delete-yes': (el) => kidDelete(el.dataset.id, el.dataset.where || ''),
   'cards-pdf': () => downloadCardsPDF(),
   'stats-refresh': () => { klass.progress[ui.classId] = null; render(); refreshStats(); },
+  'coin-lock': (el) => setCoinLock(el.dataset.form ? $('#lock-kid')?.value : el.dataset.id, true, el.dataset.form ? $('#lock-dur')?.value : el.dataset.dur),
+  'coin-unlock': (el) => setCoinLock(el.dataset.id, false),
   'stats-kid': (el) => { klass.kidDetail = klass.kidDetail === el.dataset.id ? '' : el.dataset.id; render(); if (klass.kidDetail) $('#kid-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   'sheet-kid': (el) => previewKidSheet(el.dataset.id),
   'sheet-kid-pdf': (el) => downloadKidSheet(el.dataset.id),

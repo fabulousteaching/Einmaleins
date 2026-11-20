@@ -122,6 +122,7 @@ function go(view, extra = {}) {
   stopAll();
   Object.assign(ui, extra);
   ui.view = view;
+  if (typeof avatarFresh === 'function') avatarFresh(); // z. B. neue Münzensperre der Lehrperson
   render();
   window.scrollTo({ top: 0 });
   $('#view')?.focus({ preventScroll: true });

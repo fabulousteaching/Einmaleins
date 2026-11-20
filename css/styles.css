@@ -1425,3 +1425,27 @@ td.hard-chips { display: table-cell; }
 .ex-coin.locked { opacity: .9; background: var(--sunken); }
 .ex-coin.locked .coin-svg { filter: grayscale(1); opacity: .6; }
 .ex-coin.locked small { font-size: .72rem; font-weight: 700; color: var(--ink-3); white-space: nowrap; }
+
+/* ---------- Münzensperren (Übersicht der Lehrperson) ---------- */
+.lock-chip { display: inline-flex; align-items: center; gap: .2rem; margin-left: .3rem; padding: .08rem .45rem; border-radius: 99px; font-size: .74rem; font-weight: 700; white-space: nowrap; vertical-align: middle; }
+.lock-chip.auto { background: var(--sun-wash); color: #7a5200; }
+.lock-chip.man { background: var(--red-wash); color: var(--red-ink); }
+.lock-panel .stats-head { align-items: center; }
+.lock-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: .6rem 1.6rem; }
+.lock-cols h3 { margin: .4rem 0 .5rem; font-size: 1rem; }
+.lock-list { list-style: none; margin: 0 0 .8rem; padding: 0; display: grid; gap: .45rem; }
+.lock-list li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .15rem .6rem; padding: .45rem .6rem; border-radius: 14px; background: var(--sunken); }
+.lock-who { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.lock-why { grid-column: 1; color: var(--ink-2); }
+.lock-act { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+.lock-form { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem 1rem; padding-top: .3rem; }
+.lock-form .cb-field select { min-width: 140px; }
+.lock-menu { position: relative; display: inline-block; }
+.lock-menu > summary { list-style: none; cursor: pointer; }
+.lock-menu > summary::-webkit-details-marker { display: none; }
+.lock-menu-pop { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .35rem; padding: .45rem; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow-soft, 0 6px 18px -10px rgba(40, 40, 90, .35)); }
+.lock-act .lock-menu-pop { position: absolute; right: 0; z-index: 5; width: max-content; max-width: 260px; }
+.kd-lock { margin: .4rem 0 .8rem; display: grid; gap: .4rem; }
+.kd-lock p { margin: 0; }
+.kd-lock .row { align-items: center; gap: .5rem; flex-wrap: wrap; }
+.lock-state { font-weight: 700; color: var(--red-ink); }

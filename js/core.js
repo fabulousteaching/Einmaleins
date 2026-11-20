@@ -72,6 +72,15 @@ function cleanProg(p) {
     const n = (x) => (Number.isFinite(+x) && +x > 0 ? +x : 0);
     out.coins = { c: Math.floor(n(p.coins.c)), p: n(p.coins.p), earned: Math.floor(n(p.coins.earned)), spent: Math.floor(n(p.coins.spent)) };
   }
+  // letzte automatische Münzensperre (leichte Reihen) – die Lehrperson sieht sie in der Übersicht
+  if (p.lock && typeof p.lock === 'object' && Number.isFinite(+p.lock.at) && +p.lock.at > 0) {
+    const L = p.lock;
+    out.lock = {
+      at: +L.at, day: typeof L.day === 'string' && /^\d{4}-\d\d-\d\d$/.test(L.day) ? L.day : '',
+      n: Math.max(1, Math.floor(+L.n || 1)), cnt: Math.max(1, Math.floor(+L.cnt || 1)),
+      rows: Array.isArray(L.rows) ? L.rows.map(Number).filter((r) => Number.isInteger(r) && r > 0 && r <= 20).slice(0, 20) : [],
+    };
+  }
   if (p.f && typeof p.f === 'object') {
     Object.entries(p.f).forEach(([k, s]) => {
       if (!/^\d{1,3}[x:]\d{1,2}$/.test(k) || !s || typeof s !== 'object') return;
