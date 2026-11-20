@@ -8,8 +8,37 @@
  *  - Gekauftes bleibt für immer. Kein echtes Geld, keine Zufallskisten, kein Zeitdruck.
  *  - Avatar (avatar3d) und Kart (garage) werden pro Konto gespeichert; die Datenbank lässt nur gekaufte Teile zu.
  * Ohne Anmeldung (oder als Lehrperson) ist alles eine Vorschau, die nur auf diesem Gerät gespeichert wird.
+ *
+ * Gemeinsam für Teilmal und Vokaboom (die Dateien shop3d.js, world3d.js, avatar3d.js und world3d.css sind in beiden
+ * Repositories gleich). Die Garage und das Bezahlen der Spiele gibt es nur, wo das Turbo-Rennen geladen ist (Teilmal).
  */
 'use strict';
+
+/* ---------------- 3D-Grafik: three.js laden (Teilmal hat dafür schon loadThree/webglOK, Vokaboom nicht) ---------------- */
+let W3_THREE = null, w3ThreeP = null;
+function w3Three() {
+  if (W3_THREE) return Promise.resolve(W3_THREE);
+  if (typeof loadThree === 'function') return loadThree().then((m) => (W3_THREE = m));
+  if (!w3ThreeP) w3ThreeP = import(w3Asset('js/vendor/three.module.min.js')).then((m) => (W3_THREE = m)).catch((e) => { w3ThreeP = null; throw e; });
+  return w3ThreeP;
+}
+const w3T = () => W3_THREE || (typeof THREE !== 'undefined' ? THREE : null);
+let w3GL = null;
+function w3WebGL() {
+  if (typeof webglOK === 'function') return webglOK();
+  if (w3GL == null) { try { const c = document.createElement('canvas'); w3GL = !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch { w3GL = false; } }
+  return w3GL;
+}
+/** Garage nur dort, wo es das Turbo-Rennen gibt */
+const w3Garage = () => typeof kartModel === 'function';
+/** Für Live-Spiele: der gespeicherte 3D-Look des Kindes (oder null, wenn es noch keinen hat) */
+function w3LiveLook() {
+  try {
+    if (!w3WebGL() || w3Mode() !== 'kid' || !AV.state?.avatar3d || !Object.keys(AV.state.avatar3d).length) return null;
+    const c = w3Saved('a3'); delete c.fresh;
+    return c;
+  } catch { return null; }
+}
 
 /* ---------------- Farben (alle gratis) ---------------- */
 const W3_SKINS = [0xfce3d3, 0xf6cfb0, 0xf2c9a5, 0xe9b48c, 0xd59a6c, 0xb97a4f, 0x93593a, 0x6e4129, 0x4b2b1c];
@@ -301,12 +330,12 @@ const w3Script = (path) => new Promise((res, rej) => {
   s.onerror = () => rej(new Error(path));
   document.head.appendChild(s);
 });
-/** Avatar-Baukasten (js/avatar3d.js) und Karts im Avatar-Stil (js/kartvox.js) erst bei Bedarf laden */
+/** Avatar-Baukasten (js/avatar3d.js) und – wo es das Rennen gibt – Karts im Avatar-Stil (js/kartvox.js) erst bei Bedarf laden */
 function w3LoadEngine() {
-  if (typeof vxFigure === 'function' && typeof kartVoxModel === 'function') return Promise.resolve();
+  if (typeof vxFigure === 'function' && (typeof kartVoxModel === 'function' || !w3Garage())) return Promise.resolve();
   if (!w3EngineP) {
     w3EngineP = (typeof vxFigure === 'function' ? Promise.resolve() : w3Script('js/avatar3d.js'))
-      .then(() => (typeof kartVoxModel === 'function' ? null : w3Script('js/kartvox.js')))
+      .then(() => (typeof kartVoxModel === 'function' || !w3Garage() ? null : w3Script('js/kartvox.js')))
       .catch((e) => { w3EngineP = null; throw e; });
   }
   return w3EngineP;

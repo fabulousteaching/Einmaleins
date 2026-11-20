@@ -135,10 +135,10 @@ function renderWorld3D(page = 'avatar') {
   v.innerHTML = `<section class="w3-page w3-${page}">
     <header class="w3-head">
       <div class="w3-title"><p class="eyebrow">${car ? 'Turbo-Garage' : 'Meine 3D-Welt'}</p><h1>${car ? 'Mein Kart' : 'Mein Avatar'}</h1></div>
-      <nav class="w3-switch" aria-label="Bereich wählen">
+      ${w3Garage() ? `<nav class="w3-switch" aria-label="Bereich wählen">
         <button data-action="w3-page" data-page="avatar" class="${car ? '' : 'on'}" aria-pressed="${!car}">🧍 Avatar</button>
         <button data-action="w3-page" data-page="garage" class="${car ? 'on' : ''}" aria-pressed="${car}">🏎️ Garage</button>
-      </nav>
+      </nav>` : ''}
       <div class="w3-wallet-slot" id="w3-wallet">${w3WalletHTML()}</div>
     </header>
     <div class="w3-main">
@@ -156,7 +156,7 @@ function renderWorld3D(page = 'avatar') {
         <div class="w3-actions">
           <button class="btn ghost" data-action="w3-random" title="Zufälliger Look aus deinen Teilen">🎲 Zufall</button>
           <button class="btn ghost" data-action="w3-revert" id="w3-revert" title="Zurück zum gespeicherten Look">↩︎ Zurück</button>
-          ${car ? `<button class="btn primary" data-action="w3-race" title="Zum Turbo-Rennen">🏁 Rennen</button>` : `<button class="btn primary" data-action="w3-page" data-page="garage">🏎️ Garage</button>`}
+          ${car ? `<button class="btn primary" data-action="w3-race" title="Zum Turbo-Rennen">🏁 Rennen</button>` : w3Garage() ? `<button class="btn primary" data-action="w3-page" data-page="garage">🏎️ Garage</button>` : '<button class="btn primary" data-action="home">✓ Fertig</button>'}
         </div>
       </section>
     </div>
@@ -382,7 +382,7 @@ async function w3StageStart(page, pre) {
   const host = document.getElementById('w3-stage');
   let T;
   try {
-    T = await loadThree();
+    T = await w3Three();
     await w3LoadEngine();
     if (typeof loadNumFont === 'function') await loadNumFont().catch(() => null);
   } catch (e) {
@@ -584,7 +584,7 @@ async function w3PumpThumbs() {
 }
 function w3ThumbStage() {
   if (W3V.tr) return W3V.tr;
-  const T = THREE;
+  const T = w3T();
   const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1); renderer.setSize(176, 176, false);
   renderer.toneMapping = T.NeutralToneMapping; renderer.toneMappingExposure = 1.05;
@@ -597,7 +597,7 @@ function w3ThumbStage() {
 }
 function w3RenderThumb(it) {
   const { renderer, scene, cam, floor } = w3ThumbStage();
-  const T = THREE;
+  const T = w3T();
   if (it.pre === 'a3') {
     if (typeof vxFigure !== 'function') return null;
     const c = { ...w3ThumbBase(), [it.slot]: it.v };
@@ -640,7 +640,7 @@ async function w3MakeSnap(pre) {
   const cfg = w3Saved(pre); delete cfg.fresh;
   const h = w3Hash(cfg);
   if (w3SnapGet(pre)?.h === h) return w3SnapGet(pre);
-  const T = await loadThree();
+  const T = await w3Three();
   await w3LoadEngine();
   const { renderer, scene, cam, floor } = w3ThumbStage();
   renderer.setSize(220, 260, false); cam.aspect = 220 / 260; cam.updateProjectionMatrix();
@@ -676,22 +676,22 @@ async function w3MakeSnap(pre) {
 }
 /** Startseite der Kinder: zwei Karten (Avatar und Garage) mit Bild; fehlt ein Bild, wird es im Hintergrund gezeichnet */
 function w3HomeCardsHTML() {
-  if (typeof webglOK !== 'function' || !webglOK()) return '';
+  if (!w3WebGL()) return '';
   const a = w3SnapGet('a3'), c = w3SnapGet('car');
   const coins = w3Mode() === 'kid' ? `${AV_COIN_SVG} <b class="av-coin-n">${w3Coins()}</b> Münzen` : '';
   return `<div class="w3-home">
     <button class="w3-home-card" data-action="world-open"><span class="w3-home-pic" data-w3snap="a3">${a ? `<img src="${a.url}" alt="">` : '<span class="w3-emo">🧍</span>'}</span>
       <span><strong>Mein Avatar</strong><span class="muted">Frisuren, Outfits, Gadgets, Tiere …</span><span class="w3-home-coins">${coins}</span></span></button>
-    <button class="w3-home-card car" data-action="garage-open"><span class="w3-home-pic" data-w3snap="car">${c ? `<img src="${c.url}" alt="">` : '<span class="w3-emo">🏎️</span>'}</span>
-      <span><strong>Meine Garage</strong><span class="muted">Lack, Felgen, Spoiler, Turbo-Flammen …</span></span></button>
+    ${w3Garage() ? `<button class="w3-home-card car" data-action="garage-open"><span class="w3-home-pic" data-w3snap="car">${c ? `<img src="${c.url}" alt="">` : '<span class="w3-emo">🏎️</span>'}</span>
+      <span><strong>Meine Garage</strong><span class="muted">Lack, Felgen, Spoiler, Turbo-Flammen …</span></span></button>` : ''}
   </div>`;
 }
 function w3HomeSnaps() {
-  if (typeof webglOK !== 'function' || !webglOK()) return;
+  if (!w3WebGL()) return;
   clearTimeout(W3V.homeT);
   W3V.homeT = setTimeout(async () => {
     if (W3V.st || !document.querySelector('[data-w3snap]') || (w3Mode() === 'kid' && !AV.state)) return;
-    for (const pre of ['a3', 'car']) {
+    for (const pre of w3Garage() ? ['a3', 'car'] : ['a3']) {
       const cfg = w3Saved(pre); delete cfg.fresh;
       if (w3SnapGet(pre)?.h !== w3Hash(cfg)) { try { await w3MakeSnap(pre); } catch (e) { console.warn('Bild für die Startseite', e); } }
     }
@@ -700,7 +700,48 @@ function w3HomeSnaps() {
 
 /** Kopf in der Münz-Anzeige oben (js/avatar.js fragt hier nach): der 3D-Kopf, sobald es ein Bild davon gibt */
 function avPillFace() {
-  if (typeof webglOK !== 'function' || !webglOK()) return '';
+  if (!w3WebGL()) return '';
   const s = w3SnapGet('a3');
   return s?.head ? `<img src="${s.head}" alt="">` : '';
+}
+
+/* ---------------- Köpfe aus einem 3D-Look (z. B. für Live-Spiele) ----------------
+   w3HeadHTML(look) liefert sofort ein <img>; das Bild wird im Hintergrund gezeichnet und dann eingesetzt. */
+const W3_HEADS = new Map();
+const W3_HEADQ = [];
+let w3HeadBusy = false;
+function w3HeadHTML(look, fallback = '') {
+  if (!look || typeof look !== 'object' || !w3WebGL()) return fallback;
+  const cfg = w3Clean('a3', look), key = w3Hash(cfg);
+  const url = W3_HEADS.get(key);
+  if (url) return `<img class="w3-head" src="${url}" alt="">`;
+  if (!W3_HEADQ.some((x) => x.key === key)) W3_HEADQ.push({ key, cfg });
+  setTimeout(w3HeadPump, 30);
+  return `<span class="w3-head-wait" data-w3head="${key}">${fallback}</span>`;
+}
+async function w3HeadPump() {
+  if (w3HeadBusy || !W3_HEADQ.length) return;
+  w3HeadBusy = true;
+  try {
+    const T = await w3Three();
+    await w3LoadEngine();
+    while (W3_HEADQ.length) {
+      const { key, cfg } = W3_HEADQ.shift();
+      if (W3_HEADS.has(key)) continue;
+      const { renderer, scene, cam } = w3ThumbStage();
+      renderer.setSize(128, 128, false); cam.aspect = 1; cam.updateProjectionMatrix();
+      const fig = vxFigure(T, a3Look(cfg));
+      fig.root.rotation.y = -0.15; fig.update(0.016); scene.add(fig.root);
+      cam.position.set(0, 1.98, 2.9); cam.lookAt(0, 1.88, 0);
+      renderer.render(scene, cam);
+      const url = renderer.domElement.toDataURL('image/png');
+      scene.remove(fig.root); fig.dispose();
+      W3_HEADS.set(key, url);
+      document.querySelectorAll(`[data-w3head="${key}"]`).forEach((el) => { el.outerHTML = `<img class="w3-head" src="${url}" alt="">`; });
+      await new Promise((r) => setTimeout(r, 16));
+    }
+  } catch (e) { console.warn('3D-Köpfe', e); } finally {
+    w3HeadBusy = false;
+    if (W3V.tr && !W3V.st) { W3V.tr.renderer.setSize(176, 176, false); }
+  }
 }

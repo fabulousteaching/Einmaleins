@@ -60,7 +60,8 @@ Auf der Startseite der Kinder führen zwei Karten in die 3D-Welt (mit Bild der e
 - **Anprobieren** ist immer gratis: Ein nicht gekauftes Teil erscheint an der Figur mit einem Hinweis «Du probierst an … Für 15 kaufen» oder «Wieder ausziehen». **Gespeichert wird automatisch**, sobald die Figur nur noch Teile trägt, die dem Kind gehören.
 - Die Datenbank prüft Preise, Freischaltung, Münzen und Besitz; sie speichert nur Looks mit gekauften Teilen. Avatar und Kart gelten pro Konto auf jedem Gerät.
 - Lehrpersonen und Kinder ohne Anmeldung sehen eine **Vorschau** (Lehrpersonen: alles frei; ohne Anmeldung: nur Gratis-Teile), gespeichert nur auf dem Gerät. Die Garage erreicht man über die Startkarte des Turbo-Rennens.
-- Ohne WebGL gibt es statt der 3D-Welt den bisherigen 2D-Avatar (wie in Vokaboom). three.js und der Avatar-Baukasten werden erst geladen, wenn man die 3D-Welt öffnet.
+- **Gleich in Vokaboom:** Der 3D-Avatar ist auch in Vokaboom der Avatar – gleiche Oberfläche, gleiches Konto (`js/avatar3d.js`, `js/shop3d.js`, `js/world3d.js`, `css/world3d.css` und three.js sind in beiden Repositories gleich). Die Garage gibt es nur in Teilmal. Früher im 2D-Shop gekaufte Teile werden in passende 3D-Teile umgetauscht oder zurückbezahlt (siehe `supabase/AVATAR.md`).
+- Ohne WebGL gibt es statt der 3D-Welt den bisherigen 2D-Avatar. three.js und der Avatar-Baukasten werden erst geladen, wenn man die 3D-Welt öffnet.
 
 ## Spielen
 

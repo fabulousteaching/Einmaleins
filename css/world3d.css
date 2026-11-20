@@ -95,6 +95,7 @@
 
 /* Startseite: zwei Karten */
 .w3-home { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.w3-home > :only-child { grid-column: 1 / -1; }
 .w3-home-card { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 1rem; padding: .8rem 1rem; border: 0; border-radius: 24px; text-align: left; font: inherit; color: #12262A; cursor: pointer;
   background: radial-gradient(circle at 15% 30%, #fff3c4, #ffd23f 70%); box-shadow: 0 14px 30px -20px rgba(80, 50, 0, .7); transition: transform .15s; }
 .w3-home-card.car { background: radial-gradient(circle at 15% 30%, #ffe9a8, #f6b812 75%); }
@@ -119,3 +120,8 @@
   .w3-items { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .w3-try { animation: none; } .w3-item, .w3-home-card { transition: none; } }
+
+/* 3D-Köpfe an anderen Orten (z. B. Live-Spiele in Vokaboom) */
+.w3-head { display: block; width: 100%; height: 100%; object-fit: cover; }
+.w3-head-wait { display: contents; }
+.av-mini .w3-head, .pd-avatar .w3-head { border-radius: 50%; background: radial-gradient(circle at 50% 40%, #fff3c4, #ffd76a); }
