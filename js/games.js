@@ -27,10 +27,10 @@ const GAMES = [
     howto: 'Der Fuchs sucht den Schatz. Er darf nur auf Zahlen der Reihe treten, die oben steht (zum Beispiel 21, 28, 35 bei der 7er-Reihe). Tippe auf ein Nachbarfeld: Gehört die Zahl zur Reihe, geht er hin – sonst zerbricht das Feld. Manche Wege sind Sackgassen!' },
   { id: 'tower', name: 'Turmbau', desc: 'Richtig gerechnet? Dann kommt ein Block – bau den höchsten Turm!', color: 'sun', art: '<span class="emo">🏗️</span>', modes: ['countdown', 'survive'],
     howto: 'Rechne die Aufgabe und tippe das richtige Ergebnis an. Dann hängt ein Block am Kran und schwingt hin und her. Tippe im richtigen Moment ins Bild – der Block fällt auf den Turm. Was übersteht, bricht ab, und der nächste Block wird schmaler. Triffst du genau, gibt es «Perfekt!» und der Block wird wieder etwas breiter.' },
-  { id: 'snake', name: 'Zahlen-Schlange', desc: 'Lenk die Schlange zum richtigen Ergebnis!', color: 'lime', art: '<span class="emo">🐍</span>', modes: ['countdown', 'survive'],
-    howto: 'Oben steht eine Rechnung, auf der Wiese liegen drei Zahlen. Lenk die Schlange zur richtigen – sie frisst sie und wird länger. Falsche Zahlen und Bisse in den eigenen Schwanz sind schlecht! Am Rand geht es auf der anderen Seite weiter. Lenken: Pfeiltasten, Wischen oder die Knöpfe.' },
-  { id: 'puzzle', name: '1×1-Tafel-Puzzle', desc: 'Leg die Zahlenteile an den richtigen Platz der Einmaleins-Tafel.', color: 'purple', art: '<span class="emo">🧩</span>', modes: ['speed'],
-    howto: 'Ein Stück der Einmaleins-Tafel fehlt. Unten liegen Teile mit Zahlen. Zieh jedes Teil an seinen Platz – zum Beispiel gehört 21 · 24 · 27 in die 3er-Zeile unter 7, 8 und 9. Ein falscher Platz kostet 3 Sekunden.' },
+  { id: 'snake', name: 'Zahlen-Schlange', desc: 'Friss das richtige Ergebnis und werde immer länger!', color: 'lime', art: '<span class="emo">🐍</span>', modes: ['sudden'],
+    howto: 'Oben steht eine Rechnung, auf dem Feld leuchten drei Zahlen. Lenk die Schlange zur richtigen – sie frisst sie und wird länger. Falsche Zahlen machen sie kürzer. Beisst sie sich mit dem Kopf in den eigenen Körper, ist das Spiel vorbei – je länger sie wird, desto kniffliger! Lenken: Finger oder Maus aufs Feld halten, Pfeiltasten ← → oder die Drehknöpfe.' },
+  { id: 'puzzle', name: '1×1-Tafel-Puzzle', desc: 'In der Einmaleins-Tafel fehlen Ergebnisse – setz sie ein!', color: 'purple', art: '<span class="emo">🧩</span>', modes: ['speed'],
+    howto: 'Die ganze Einmaleins-Tafel – aber einige Felder sind leer. Unten liegen die fehlenden Ergebnisse. Zieh jedes an den richtigen Platz oder tippe zuerst das Ergebnis und dann das Feld an. Ein falscher Platz kostet 3 Sekunden.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -97,7 +97,8 @@ const GAME_MODES = {
   countdown: { name: 'Countdown', icon: () => icon('clock'), short: '60 Sekunden',
     desc: (id) => ({ runner: 'Lauf 60 Sekunden lang durch möglichst viele richtige Bögen. Hindernisse bremsen dich, kosten aber kein Leben.', maze: 'Möglichst viele richtige Schritte in 60 Sekunden. Falsche Felder halten dich nur auf.', tower: 'Bau in 60 Sekunden einen möglichst hohen Turm.', snake: 'Friss in 60 Sekunden möglichst viele richtige Zahlen.' }[id] || 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.') },
   sudden: { name: 'Ein Leben', icon: () => HEART_SVG, short: 'bis zum 1. Fehler',
-    desc: () => 'Nur ein Leben: Lauf so weit du kannst. Beim ersten Hindernis, Absturz oder falscher Antwort ist es vorbei.' },
+    desc: (id) => (id === 'snake' ? 'Werde so lang wie möglich! Jede richtige Zahl macht dich länger, falsche Zahlen kürzer. Beisst du dich selbst, ist das Spiel vorbei. Alle 5 richtigen wirst du schneller.'
+      : 'Nur ein Leben: Lauf so weit du kannst. Beim ersten Hindernis, Absturz oder falscher Antwort ist es vorbei.') },
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
     desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in einen Abgrund kostet ein Leben. Jede richtige Antwort macht dich ein bisschen schneller.'
       : id === 'maze' ? '3 Leben – jede falsche Zahl kostet eines, ebenso zu langes Überlegen. Alle 5 richtigen Schritte hast du etwas weniger Zeit.'
@@ -115,7 +116,8 @@ function gameModeOf(id) {
   return list.includes(m) ? m : list[0];
 }
 // Turbo-Rennen: seit den neuen Strecken und dem Windschatten eine neue Bestenliste («rennen»)
-const boardKey = (id, mode, op) => (id === 'runner' && mode === 'sudden' ? `laufeins:survive:${op}` : `${id === 'kart' ? 'rennen' : id}:${mode}:${op}`);
+// Zahlen-Schlange: seit der freien Schlange nur noch «Beiss dich nicht» – eigene Bestenliste («schlange»)
+const boardKey = (id, mode, op) => (id === 'runner' && mode === 'sudden' ? `laufeins:survive:${op}` : id === 'snake' ? `schlange:survive:${op}` : `${id === 'kart' ? 'rennen' : id}:${mode}:${op}`);
 const boardOf = (id, mode) => boardKey(id, mode, practiceSettings().op);
 /** Modi mit Leben: Survive (3) und Ein Leben (1) */
 const livesMode = (m) => m === 'survive' || m === 'sudden';
@@ -252,7 +254,7 @@ function runFinish(why) {
 const STAR_LIMITS = {
   countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32], runner: [4, 7, 10], maze: [8, 14, 20], tower: [4, 8, 12], snake: [5, 9, 14] },
   survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35], runner: [5, 10, 18], maze: [10, 20, 32], tower: [5, 10, 18], snake: [5, 10, 18] },
-  sudden: { runner: [3, 7, 12] },
+  sudden: { runner: [3, 7, 12], snake: [5, 10, 18] },
   speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32], puzzle: [150, 100, 65] },
 };
 function runStars(r, score) {
@@ -281,7 +283,7 @@ function showRunResult(r) {
   if (rec) { db.prog.best[key] = score; saveDB(); }
   const st = runStars(r, score);
   if (st >= 2 || rec) { sfx.win(); confetti(); }
-  const title = { time: 'Zeit ist um!', lives: 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : r.id === 'puzzle' ? 'Puzzle fertig!' : 'Geschafft!' }[r.why] || 'Fertig!';
+  const title = { time: 'Zeit ist um!', lives: r.id === 'snake' ? 'Autsch – in dich selbst gebissen!' : 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : r.id === 'puzzle' ? 'Puzzle fertig!' : 'Geschafft!' }[r.why] || 'Fertig!';
   const line = lower
     ? `${r.id === 'memory' ? `${r.goal} Paare` : r.id === 'puzzle' ? `${r.goal} Teile` : `${r.goal} richtige`} in <b>${fmtSec(score)} s</b>${r.wrong ? ` · ${r.wrong} falsch` : ' · ohne Fehler'}`
     : `<b>${r.ok}</b> ${(typeof g2Noun === 'function' && g2Noun(r.id, r.ok)) || (r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten')}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${livesMode(r.mode) ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
@@ -337,6 +339,7 @@ function boardListHTML(data, { kid: forKid = false } = {}) {
 function gateOptionsHTML(id) {
   const seg = (action, cur, list) => `<div class="seg">${list.map(([v, t]) => `<button class="seg-btn" data-action="${action}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
   if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
+  if (id === 'puzzle' && typeof pzBig === 'function') return `<p class="label">Tafel</p>${seg('pz-big', pzBig() ? 1 : 0, [[0, 'Kleines 1×1 (10 × 10)'], [1, 'Grosses 1×1 (20 × 10)']])}`;
   if (id === 'runner' && typeof w3RunWorldsHTML === 'function') {
     const sk = runnerSkill();
     const pct = (x) => `${Math.round(x * 100)} %`;

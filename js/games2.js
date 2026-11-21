@@ -342,84 +342,90 @@ function twFloat(text, anchor) {
 }
 
 /* =========================================================
-   🐍 Zahlen-Schlange: nur das richtige Ergebnis fressen
-   Am Rand geht es auf der anderen Seite weiter. Falsche Zahl oder Biss in den eigenen Schwanz: Survive kostet ein Leben.
+   🐍 Zahlen-Schlange: eine lange, fliessende Schlange frisst das richtige Ergebnis und wird länger.
+   Sie schwimmt frei übers Feld (mit dem Finger/der Maus lenken, mit Pfeiltasten oder den Drehknöpfen drehen).
+   Ende: nur, wenn sie sich selbst in den Körper beisst. Falsche Zahlen machen sie kürzer.
    ========================================================= */
+const SN = { R: 13, TURN: 3.4, V0: 105, VMAX: 205, GROW: 26, SHRINK: 40, LEN0: 150, BITE_SKIP: 3.2 };
+const SN_SKINS = [
+  { a: '#22d3ee', b: '#6366f1', band: 'rgba(15, 23, 80, .28)', eye: '#0f172a' },
+  { a: '#a3e635', b: '#0d9488', band: 'rgba(5, 46, 22, .28)', eye: '#052e16' },
+  { a: '#fb923c', b: '#db2777', band: 'rgba(80, 7, 36, .26)', eye: '#3b0764' },
+  { a: '#facc15', b: '#16a34a', band: 'rgba(20, 50, 10, .26)', eye: '#1c1917' },
+];
 function startSnake() {
   Object.assign(game, { picker: gamePicker(), sn: null, over: false });
   runStart('snake');
   $('#view').innerHTML = gameShell('snake', `
     ${runHudHTML('bar-hud')}
-    <div class="sn-task task" id="sntask"></div>
+    <div class="sn-task" id="sntask"></div>
     <div class="sn-stage" id="snstage"><canvas id="sncv"></canvas><div class="sn-go" id="sngo">Bereit?</div></div>
-    <div class="sn-pad" aria-label="Steuerung">
-      <button type="button" class="sn-dir up" data-action="sn-dir" data-d="0,-1" aria-label="nach oben">▲</button>
-      <button type="button" class="sn-dir left" data-action="sn-dir" data-d="-1,0" aria-label="nach links">◀</button>
-      <button type="button" class="sn-dir down" data-action="sn-dir" data-d="0,1" aria-label="nach unten">▼</button>
-      <button type="button" class="sn-dir right" data-action="sn-dir" data-d="1,0" aria-label="nach rechts">▶</button>
+    <div class="sn-pad">
+      <button type="button" class="sn-turn" id="snl" aria-label="nach links drehen">↺</button>
+      <span class="sn-pad-hint">oder mit dem Finger lenken</span>
+      <button type="button" class="sn-turn" id="snr" aria-label="nach rechts drehen">↻</button>
     </div>
-    <p class="mode-hint">Lenke mit den Pfeiltasten, durch Wischen oder mit den Knöpfen. Am Rand geht es auf der anderen Seite weiter.</p>`);
-  const stage = $('#snstage'), cv = $('#sncv');
-  const R = stage.getBoundingClientRect();
-  const COLS = 14, ROWS = rnd2(Math.round((COLS * R.height) / Math.max(1, R.width)), 9, 15);
-  const mid = Math.floor(ROWS / 2);
-  game.sn = { COLS, ROWS, body: [[5, mid], [4, mid], [3, mid]], dir: [1, 0], queue: [], foods: [], acc: 0, last: 0, t: null, started: false, flash: 0, grow: 0 };
+    <p class="mode-hint">Lenke die Schlange zum richtigen Ergebnis: Finger oder Maus aufs Feld halten, Pfeiltasten ← → oder die Drehknöpfe. Beisst sie sich selbst, ist das Spiel vorbei.</p>`);
+  const st = $('#snstage'), cv = $('#sncv');
+  const W = st.clientWidth, H = st.clientHeight;
+  game.sn = { W, H, x: W * 0.3, y: H * 0.55, ang: 0, aim: null, turn: 0, keys: { l: 0, r: 0 }, path: [], len: SN.LEN0, travel: 0, foods: [], t: null,
+    skin: g2Pick(SN_SKINS), flash: 0, parts: [], floats: [], started: false, dead: false, last: 0, open: 0, tongue: 0 };
+  for (let i = 0; i < 60; i++) game.sn.path.push({ x: game.sn.x - i * 2.5, y: game.sn.y });
   snResize();
   const onResize = () => snResize();
   window.addEventListener('resize', onResize);
   game.cleanups = [...(game.cleanups || []), () => window.removeEventListener('resize', onResize)];
-  setGameKeys((e) => {
-    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] }[e.key];
-    if (d) { e.preventDefault(); snTurn(d); }
-  });
-  let sw = null;
-  cv.addEventListener('pointerdown', (e) => { sw = [e.clientX, e.clientY]; });
-  cv.addEventListener('pointermove', (e) => {
-    if (!sw) return;
-    const dx = e.clientX - sw[0], dy = e.clientY - sw[1];
-    if (Math.hypot(dx, dy) < 24) return;
-    snTurn(Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]);
-    sw = [e.clientX, e.clientY];
-  });
-  const end = () => { sw = null; };
-  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  // Lenken: Finger/Maus aufs Feld halten → die Schlange schwimmt dorthin
+  const local = (e) => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) / r.width) * game.sn.W, y: ((e.clientY - r.top) / r.height) * game.sn.H }; };
+  let down = false;
+  cv.addEventListener('pointerdown', (e) => { down = true; cv.setPointerCapture(e.pointerId); game.sn.aim = local(e); snGo(); });
+  cv.addEventListener('pointermove', (e) => { if (down || e.pointerType === 'mouse') game.sn.aim = local(e); });
+  const up = () => { down = false; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerleave', () => { if (!down) game.sn.aim = null; });
   cv.style.touchAction = 'none';
+  // Drehknöpfe (gedrückt halten)
+  for (const [id, d] of [['#snl', -1], ['#snr', 1]]) {
+    const b = $(id);
+    const on = (e) => { e.preventDefault(); game.sn.keys[d < 0 ? 'l' : 'r'] = 1; game.sn.aim = null; snGo(); };
+    const off = () => { game.sn.keys[d < 0 ? 'l' : 'r'] = 0; };
+    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+  }
+  setGameKeys((e) => {
+    const k = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r' }[e.key];
+    if (!k) return;
+    e.preventDefault(); game.sn.keys[k] = 1; game.sn.aim = null; snGo();
+  });
+  const keyUp = (e) => { const k = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r' }[e.key]; if (k && game.sn) game.sn.keys[k] = 0; };
+  document.addEventListener('keyup', keyUp);
+  game.cleanups.push(() => document.removeEventListener('keyup', keyUp));
   snTask();
-  gLater(() => { if (game.sn) { game.sn.started = true; const g = $('#sngo'); if (g) { g.textContent = 'Los!'; g.classList.add('out'); } } }, 1100);
+  gLater(() => snGo(), 1400);
   const loop = (now) => {
     const s = game.sn;
     if (!s || !$('#sncv')) return;
     game.raf = requestAnimationFrame(loop);
-    const dt = Math.max(0, Math.min(0.1, (now - (s.last || now)) / 1000)); s.last = now;
-    s.flash = Math.max(0, s.flash - dt);
-    if (s.started && runOn()) {
-      s.acc += dt * 1000;
-      const stepMs = Math.max(105, 235 * 0.92 ** (surviveLevel() - 1));
-      while (s.acc >= stepMs && runOn()) { s.acc -= stepMs; snStep(); }
-    }
-    snDraw(now);
+    const dt = Math.max(0, Math.min(0.05, (now - (s.last || now)) / 1000)); s.last = now;
+    if (s.started && !s.dead && runOn()) snStep(dt);
+    snFx(dt);
+    snDraw(performance.now() / 1000);
   };
   game.raf = requestAnimationFrame(loop);
 }
-const rnd2 = (v, a, b) => Math.max(a, Math.min(b, v));
+function snGo() {
+  const s = game.sn;
+  if (!s || s.started) return;
+  s.started = true;
+  const g = $('#sngo'); if (g) { g.textContent = 'Los!'; g.classList.add('out'); }
+}
 function snResize() {
   const s = game.sn, cv = $('#sncv'), st = $('#snstage');
   if (!s || !cv || !st) return;
-  const W = st.clientWidth, cell = Math.floor(W / s.COLS);
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  s.cell = cell;
-  cv.width = s.COLS * cell * dpr; cv.height = s.ROWS * cell * dpr;
-  cv.style.width = `${s.COLS * cell}px`; cv.style.height = `${s.ROWS * cell}px`;
-  s.dpr = dpr;
-  st.style.height = `${s.ROWS * cell}px`;
-}
-function snTurn(d) {
-  const s = game.sn;
-  if (!s || !runOn()) return;
-  const last = s.queue.length ? s.queue[s.queue.length - 1] : s.dir;
-  if ((d[0] === -last[0] && d[1] === -last[1]) || (d[0] === last[0] && d[1] === last[1])) return; // nicht umkehren
-  if (s.queue.length < 2) s.queue.push(d);
-  if (!s.started) { s.started = true; const g = $('#sngo'); if (g) { g.textContent = 'Los!'; g.classList.add('out'); } }
+  const W = st.clientWidth, H = st.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+  // Spielfeld bleibt gleich gross (Koordinaten), nur die Darstellung passt sich an
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = `${W}px`; cv.style.height = `${H}px`;
+  s.scale = (W / s.W) * dpr; s.scaleY = (H / s.H) * dpr;
 }
 function snTask() {
   const s = game.sn;
@@ -427,159 +433,247 @@ function snTask() {
   const t = game.picker.next();
   t.shownAt = performance.now();
   s.t = t;
-  $('#sntask').innerHTML = taskHTML(t, '<span class="slot">?</span>');
-  // drei Zahlen aufs Feld, nicht direkt vor die Schlange
+  const el = $('#sntask');
+  if (el) { el.innerHTML = `<span class="task">${taskHTML(t, '<span class="slot">?</span>')}</span>`; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+  // drei Zahlen aufs Feld: weg vom Kopf und nicht auf den Körper
   const vals = shuffle([t.answer, ...distractors(t, 2)]);
-  const head = s.body[0];
-  const free = [];
-  for (let x = 0; x < s.COLS; x++) for (let y = 0; y < s.ROWS; y++) {
-    if (s.body.some(([a, b]) => a === x && b === y)) continue;
-    const dx = Math.min(Math.abs(x - head[0]), s.COLS - Math.abs(x - head[0])), dy = Math.min(Math.abs(y - head[1]), s.ROWS - Math.abs(y - head[1]));
-    if (dx + dy < 4) continue;
-    if (x === 0 || y === 0 || x === s.COLS - 1 || y === s.ROWS - 1) continue;
-    free.push([x, y]);
-  }
+  const M = 34;
   s.foods = [];
   for (const v of vals) {
-    const opts = shuffle(free.filter(([x, y]) => s.foods.every((f) => Math.abs(f.x - x) + Math.abs(f.y - y) >= 3)));
-    const p = opts[0] || free[0];
-    if (p) s.foods.push({ x: p[0], y: p[1], v, ok: v === t.answer, born: performance.now() });
+    let p = null;
+    for (let k = 0; k < 80 && !p; k++) {
+      const q = { x: M + Math.random() * (s.W - 2 * M), y: M + Math.random() * (s.H - 2 * M) };
+      if (Math.hypot(q.x - s.x, q.y - s.y) < 130) continue;
+      if (s.foods.some((f) => Math.hypot(f.x - q.x, f.y - q.y) < 90)) continue;
+      if (s.path.some((b, i) => i % 4 === 0 && Math.hypot(b.x - q.x, b.y - q.y) < SN.R * 2.6)) continue;
+      p = q;
+    }
+    p = p || { x: M + Math.random() * (s.W - 2 * M), y: M + Math.random() * (s.H - 2 * M) };
+    s.foods.push({ ...p, v, ok: v === t.answer, born: performance.now() / 1000, ph: Math.random() * 6 });
   }
 }
-function snStep() {
+const snNorm = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
+function snStep(dt) {
+  const s = game.sn, r = game.run;
+  const v = Math.min(SN.VMAX, SN.V0 + (surviveLevel() - 1) * 14);
+  // lenken
+  const kt = s.keys.r - s.keys.l;
+  if (kt) s.ang += kt * SN.TURN * dt;
+  else if (s.aim) {
+    const want = Math.atan2(s.aim.y - s.y, s.aim.x - s.x);
+    if (Math.hypot(s.aim.x - s.x, s.aim.y - s.y) > SN.R) s.ang += Math.max(-SN.TURN * dt, Math.min(SN.TURN * dt, snNorm(want - s.ang)));
+  }
+  s.x += Math.cos(s.ang) * v * dt; s.y += Math.sin(s.ang) * v * dt;
+  s.travel += v * dt;
+  // Rand: sanft abprallen (kein Ende)
+  const m = SN.R + 2;
+  if (s.x < m) { s.x = m; s.ang = Math.PI - s.ang; } else if (s.x > s.W - m) { s.x = s.W - m; s.ang = Math.PI - s.ang; }
+  if (s.y < m) { s.y = m; s.ang = -s.ang; } else if (s.y > s.H - m) { s.y = s.H - m; s.ang = -s.ang; }
+  // Spur des Körpers
+  const h = s.path[0];
+  if (!h || Math.hypot(h.x - s.x, h.y - s.y) >= 2.5) s.path.unshift({ x: s.x, y: s.y });
+  let acc = 0;
+  for (let i = 1; i < s.path.length; i++) {
+    acc += Math.hypot(s.path[i].x - s.path[i - 1].x, s.path[i].y - s.path[i - 1].y);
+    if (acc > s.len) { s.path.length = i + 1; break; }
+  }
+  // Mund auf, wenn eine Zahl nah ist
+  const near = s.foods.reduce((d, f) => Math.min(d, Math.hypot(f.x - s.x, f.y - s.y)), 999);
+  s.open += ((near < 60 ? 1 : 0) - s.open) * Math.min(1, dt * 10);
+  // in sich selbst gebissen? (die ersten Stücke hinter dem Kopf zählen nicht)
+  acc = 0;
+  for (let i = 1; i < s.path.length; i++) {
+    acc += Math.hypot(s.path[i].x - s.path[i - 1].x, s.path[i].y - s.path[i - 1].y);
+    if (acc < SN.R * 2 * SN.BITE_SKIP) continue;
+    if (Math.hypot(s.path[i].x - s.x, s.path[i].y - s.y) < SN.R * 1.25) { snBite(); return; }
+  }
+  // fressen
+  for (let i = 0; i < s.foods.length; i++) {
+    const f = s.foods[i];
+    if (Math.hypot(f.x - s.x, f.y - s.y) > SN.R + 22) continue;
+    const t = s.t;
+    recordAnswer(t, f.v, performance.now() - t.shownAt);
+    snBurst(f.x, f.y, f.ok ? ['#fde047', '#86efac', '#ffffff', s.skin.a] : ['#fca5a5', '#f87171', '#ffffff'], f.ok ? 26 : 14);
+    if (f.ok) {
+      sfx.good();
+      s.len += SN.GROW;
+      s.floats.push({ x: f.x, y: f.y, text: taskText(t, true), good: true, t: 0 });
+      if (runRight()) return;
+      snTask();
+    } else {
+      sfx.bad();
+      s.foods.splice(i, 1);
+      s.len = Math.max(SN.LEN0 * 0.7, s.len - SN.SHRINK);
+      s.flash = 0.45;
+      s.floats.push({ x: f.x, y: f.y, text: `Nein: ${taskText(t, true)}`, good: false, t: 0 });
+      // kostet kein Leben – nur Länge; für «Merk dir» festhalten
+      r.wrong++; r.streak = 0; r.wrongs.push(t); runHud();
+    }
+    return;
+  }
+}
+function snBite() {
   const s = game.sn;
-  if (s.queue.length) s.dir = s.queue.shift();
-  const [hx, hy] = s.body[0];
-  const nx = (hx + s.dir[0] + s.COLS) % s.COLS, ny = (hy + s.dir[1] + s.ROWS) % s.ROWS;
-  // eigener Schwanz? (das letzte Stück rückt gerade weiter)
-  const hit = s.body.findIndex(([a, b], i) => i < s.body.length - 1 && a === nx && b === ny);
-  s.body.unshift([nx, ny]);
-  if (s.grow > 0) s.grow--; else s.body.pop();
-  if (hit > 0) {
-    s.body = s.body.slice(0, Math.max(3, hit));
-    s.flash = 0.5;
-    sfx.bad();
-    snFloat('Autsch!', 'bad');
-    if (runWrong()) return;
-  }
-  const fi = s.foods.findIndex((f) => f.x === nx && f.y === ny);
-  if (fi < 0) return;
-  const f = s.foods[fi], t = s.t;
-  recordAnswer(t, f.v, performance.now() - t.shownAt);
-  if (f.ok) {
-    sfx.good();
-    s.grow += 1;
-    snFloat(`${taskText(t, true)}`, 'good');
-    if (runRight()) return;
-    snTask();
-  } else {
-    s.foods.splice(fi, 1);
-    s.flash = 0.5;
-    sfx.bad();
-    if (s.body.length > 3) s.body.pop();
-    snFloat(`Nein: ${taskText(t, true)}`, 'bad');
-    if (runWrong(t)) return;
-  }
+  s.dead = true; s.flash = 1;
+  snBurst(s.x, s.y, ['#ef4444', '#fca5a5', '#ffffff'], 30);
+  s.floats.push({ x: s.x, y: s.y, text: 'Autsch – in dich selbst gebissen!', good: false, t: 0 });
+  sfx.bad(); tone([330, 220, 147], 0.14, 'sawtooth', 0.06);
+  runWrong();
 }
-function snFloat(text, cls) {
-  const st = $('#snstage'), s = game.sn;
-  if (!st || !s) return;
-  const [x, y] = s.body[0];
-  const f = document.createElement('span');
-  f.className = `mz-float ${cls}`; f.textContent = text;
-  f.style.left = `${(x + 0.5) * s.cell}px`; f.style.top = `${(y + 0.2) * s.cell}px`;
-  st.appendChild(f);
-  setTimeout(() => f.remove(), 1300);
+function snBurst(x, y, cols, n) {
+  const s = game.sn;
+  if (reduceMotion()) return;
+  for (let k = 0; k < n; k++) { const a = Math.random() * 7, sp = 40 + Math.random() * 140; s.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.5 + Math.random() * 0.5, t: 0, c: cols[k % cols.length], r: 2 + Math.random() * 3 }); }
 }
-function snDraw(now) {
+function snFx(dt) {
+  const s = game.sn;
+  s.flash = Math.max(0, s.flash - dt);
+  s.tongue = (s.tongue + dt) % 2.4;
+  s.parts = s.parts.filter((p) => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; return p.t < p.life; });
+  s.floats = s.floats.filter((f) => { f.t += dt; return f.t < 1.5; });
+}
+/** Linie entlang des Körpers von Länge a bis b (vom Kopf aus gemessen) */
+function snSegs(path) {
+  const out = [{ ...path[0], d: 0 }];
+  let acc = 0;
+  for (let i = 1; i < path.length; i++) { acc += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y); out.push({ ...path[i], d: acc }); }
+  return out;
+}
+function snDraw(T) {
   const s = game.sn, cv = $('#sncv');
   if (!s || !cv) return;
-  const g = cv.getContext('2d'), c = s.cell;
-  g.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  // Wiese mit Schachbrett
-  for (let x = 0; x < s.COLS; x++) for (let y = 0; y < s.ROWS; y++) { g.fillStyle = (x + y) % 2 ? '#a3e635' : '#bef264'; g.fillRect(x * c, y * c, c, c); }
-  if (s.flash > 0) { g.fillStyle = `rgba(239, 68, 68, ${s.flash * 0.5})`; g.fillRect(0, 0, s.COLS * c, s.ROWS * c); }
-  // Zahlen (alle gleich aussehend – lesen muss man selbst)
+  const g = cv.getContext('2d');
+  g.setTransform(s.scale, 0, 0, s.scaleY, 0, 0);
+  // Hintergrund: Nachtwiese mit leuchtenden Punkten
+  const bg = g.createRadialGradient(s.W * 0.5, s.H * 0.45, 20, s.W * 0.5, s.H * 0.5, Math.max(s.W, s.H) * 0.75);
+  bg.addColorStop(0, '#1e3a5f'); bg.addColorStop(1, '#0b1326');
+  g.fillStyle = bg; g.fillRect(0, 0, s.W, s.H);
+  g.fillStyle = 'rgba(148, 197, 255, .09)';
+  for (let y = 14; y < s.H; y += 28) for (let x = (y / 28) % 2 ? 14 : 28; x < s.W; x += 28) { g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.fill(); }
+  if (s.flash > 0) { g.fillStyle = `rgba(239, 68, 68, ${s.flash * 0.35})`; g.fillRect(0, 0, s.W, s.H); }
+  // Zahlen: leuchtende Kugeln
   for (const f of s.foods) {
-    const k = Math.max(0.05, Math.min(1, (now - f.born) / 250)), bob = Math.sin(now / 300 + f.x) * c * 0.04;
-    const cx = (f.x + 0.5) * c, cy = (f.y + 0.5) * c + bob, r = c * 0.62 * k;
-    g.fillStyle = 'rgba(0, 0, 0, .18)'; g.beginPath(); g.ellipse(cx, (f.y + 0.92) * c, r * 0.8, r * 0.25, 0, 0, 7); g.fill();
-    const gr = g.createRadialGradient(cx - r * 0.3, cy - r * 0.4, r * 0.1, cx, cy, r);
-    gr.addColorStop(0, '#fff7ed'); gr.addColorStop(1, '#fb923c');
-    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
-    g.lineWidth = 2; g.strokeStyle = '#c2410c'; g.stroke();
-    g.fillStyle = '#431407'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = `800 ${Math.round(c * (String(f.v).length > 2 ? 0.48 : 0.6) * k)}px "Bricolage Grotesque", Lexend, system-ui, sans-serif`;
-    g.fillText(String(f.v), cx, cy + c * 0.03);
+    const age = Math.max(0, T - f.born), k = Math.min(1, age / 0.3), bob = Math.sin(T * 2.2 + f.ph) * 2.5;
+    const x = f.x, y = f.y + bob, r = 23 * (0.6 + 0.4 * k);
+    const glow = g.createRadialGradient(x, y, r * 0.4, x, y, r * 2.1);
+    glow.addColorStop(0, 'rgba(253, 224, 71, .45)'); glow.addColorStop(1, 'rgba(253, 224, 71, 0)');
+    g.fillStyle = glow; g.beginPath(); g.arc(x, y, r * 2.1, 0, 7); g.fill();
+    const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+    gr.addColorStop(0, '#fffbeb'); gr.addColorStop(0.55, '#fde68a'); gr.addColorStop(1, '#f59e0b');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    g.fillStyle = '#451a03'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `800 ${Math.round(r * (String(f.v).length > 2 ? 0.78 : 0.95))}px "Bricolage Grotesque", Lexend, system-ui, sans-serif`;
+    g.fillText(String(f.v), x, y + 1);
   }
-  // Schlange
-  const n = s.body.length;
-  for (let i = n - 1; i >= 0; i--) {
-    const [x, y] = s.body[i], t = i / Math.max(1, n - 1);
-    const pad = c * (0.08 + t * 0.1);
-    g.fillStyle = i === 0 ? '#15803d' : `hsl(${142 - t * 20}, 70%, ${34 + t * 12}%)`;
-    const rr = c * 0.32;
-    g.beginPath(); g.roundRect ? g.roundRect(x * c + pad, y * c + pad, c - pad * 2, c - pad * 2, rr) : g.rect(x * c + pad, y * c + pad, c - pad * 2, c - pad * 2); g.fill();
-    if (i === 0) { // Augen in Laufrichtung
-      const [dx, dy] = s.dir, ex = (x + 0.5) * c + dx * c * 0.16, ey = (y + 0.5) * c + dy * c * 0.16;
-      for (const sd of [-1, 1]) {
-        const ox = ex + (dy !== 0 ? sd * c * 0.18 : 0), oy = ey + (dx !== 0 ? sd * c * 0.18 : 0);
-        g.fillStyle = '#fff'; g.beginPath(); g.arc(ox, oy, c * 0.12, 0, 7); g.fill();
-        g.fillStyle = '#111827'; g.beginPath(); g.arc(ox + dx * c * 0.04, oy + dy * c * 0.04, c * 0.06, 0, 7); g.fill();
-      }
-    }
+  // Schlange: ein durchgehender Körper (Rand, Farbe mit Verlauf, Querstreifen, Glanz), hinten spitz
+  const pts = snSegs(s.path), L = pts[pts.length - 1].d || 1, R = SN.R;
+  const widthAt = (d) => R * 2 * (d / L > 0.7 ? 1 - ((d / L - 0.7) / 0.3) * 0.65 : 1);
+  const N = Math.max(8, Math.ceil(L / 14));
+  const chunks = [];
+  for (let c = 0; c < N; c++) {
+    const a = (c / N) * L, b = ((c + 1) / N) * L;
+    const seg = pts.filter((p) => p.d >= a - 3 && p.d <= b + 3);
+    if (seg.length > 1) chunks.push({ seg, w: widthAt((a + b) / 2), t: (a + b) / 2 / L });
   }
+  const stroke = (seg, w, style, dash) => {
+    g.beginPath(); g.moveTo(seg[0].x, seg[0].y);
+    for (let i = 1; i < seg.length; i++) g.lineTo(seg[i].x, seg[i].y);
+    g.lineWidth = w; g.strokeStyle = style;
+    if (dash) { g.setLineDash(dash); g.lineDashOffset = -(s.travel - seg[0].d); g.lineCap = 'butt'; } else { g.setLineDash([]); g.lineCap = 'round'; }
+    g.stroke();
+  };
+  g.lineJoin = 'round';
+  g.save(); g.shadowColor = s.skin.a; g.shadowBlur = 16;
+  for (let i = chunks.length - 1; i >= 0; i--) stroke(chunks[i].seg, chunks[i].w + 5, 'rgba(8, 15, 35, .85)');
+  g.restore();
+  const mix = (t) => { const A = parseInt(s.skin.a.slice(1), 16), B = parseInt(s.skin.b.slice(1), 16); const c = [16, 8, 0].map((sh) => Math.round(((A >> sh) & 255) * (1 - t) + ((B >> sh) & 255) * t)); return `rgb(${c.join(',')})`; };
+  for (let i = chunks.length - 1; i >= 0; i--) stroke(chunks[i].seg, chunks[i].w, mix(chunks[i].t));
+  for (let i = chunks.length - 1; i >= 0; i--) stroke(chunks[i].seg, chunks[i].w * 0.92, s.skin.band, [7, 13]);
+  for (let i = chunks.length - 1; i >= 0; i--) stroke(chunks[i].seg, chunks[i].w * 0.28, 'rgba(255, 255, 255, .28)');
+  // Kopf
+  const hx = s.x, hy = s.y, ca = Math.cos(s.ang), sa = Math.sin(s.ang);
+  g.save(); g.translate(hx, hy); g.rotate(s.ang);
+  g.fillStyle = 'rgba(8, 15, 35, .85)'; g.beginPath(); g.ellipse(2, 0, R * 1.42, R * 1.22, 0, 0, 7); g.fill();
+  const hg = g.createRadialGradient(-2, -4, 2, 2, 0, R * 1.4); hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.25, s.skin.a); hg.addColorStop(1, mix(0.15));
+  g.fillStyle = hg; g.beginPath(); g.ellipse(2, 0, R * 1.3, R * 1.1, 0, 0, 7); g.fill();
+  // Maul (öffnet sich vor einer Zahl) und Zunge
+  if (s.open > 0.05) { g.fillStyle = '#7f1d1d'; g.beginPath(); g.moveTo(R * 1.35, 0); g.arc(R * 0.95, 0, R * 0.55, -0.6 * s.open, 0.6 * s.open); g.closePath(); g.fill(); }
+  else if (s.tongue < 0.35) { g.strokeStyle = '#ef4444'; g.lineWidth = 2; g.beginPath(); g.moveTo(R * 1.3, 0); g.lineTo(R * 2.0, 0); g.lineTo(R * 2.3, -3); g.moveTo(R * 2.0, 0); g.lineTo(R * 2.3, 3); g.stroke(); }
+  for (const sd of [-1, 1]) {
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(R * 0.45, sd * R * 0.55, R * 0.42, 0, 7); g.fill();
+    // Augen schauen zur Zahl, wenn eine nah ist
+    const f = s.foods.find((x) => x.ok) || null;
+    let ex = 0.12, ey = 0;
+    if (f) { const la = Math.atan2(f.y - hy, f.x - hx) - s.ang; ex = Math.cos(la) * 0.14; ey = Math.sin(la) * 0.14; }
+    g.fillStyle = s.skin.eye; g.beginPath(); g.arc(R * (0.45 + ex), sd * R * 0.55 + R * ey, R * 0.22, 0, 7); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(R * (0.45 + ex) - 1.5, sd * R * 0.55 + R * ey - 1.5, R * 0.07, 0, 7); g.fill();
+  }
+  g.restore();
+  void ca; void sa;
+  // Funken und Texte
+  for (const p of s.parts) { g.globalAlpha = 1 - p.t / p.life; g.fillStyle = p.c; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+  for (const f of s.floats) {
+    const a = Math.min(1, (1.5 - f.t) / 0.4);
+    g.globalAlpha = a; g.font = '800 15px "Bricolage Grotesque", Lexend, system-ui, sans-serif'; g.textAlign = 'center';
+    const tw = g.measureText(f.text).width + 18, yy = f.y - 26 - f.t * 22;
+    g.fillStyle = f.good ? 'rgba(220, 252, 231, .95)' : 'rgba(254, 226, 226, .95)';
+    g.beginPath(); g.roundRect ? g.roundRect(f.x - tw / 2, yy - 13, tw, 26, 13) : g.rect(f.x - tw / 2, yy - 13, tw, 26); g.fill();
+    g.fillStyle = f.good ? '#14532d' : '#7f1d1d'; g.textBaseline = 'middle'; g.fillText(f.text, f.x, yy + 1);
+  }
+  g.globalAlpha = 1;
 }
 
 /* =========================================================
-   🧩 1×1-Tafel-Puzzle: Teile mit Zahlen an die richtige Stelle der Einmaleins-Tafel legen
+   🧩 1×1-Tafel-Puzzle: die ganze Einmaleins-Tafel (klein 10 × 10 oder gross 20 × 10), einzelne Ergebnisse fehlen.
+   Unten liegen die fehlenden Ergebnisse – ziehen oder antippen und dann das Feld antippen.
+   Ein Kärtchen passt in jedes leere Feld mit diesem Ergebnis (12 passt zu 3 · 4 und zu 2 · 6).
    ========================================================= */
 const PZ_PENALTY = 3000;
+const pzBig = () => (db.settings.pzBig ?? practiceSettings().big) === true;
 function startPuzzle() {
-  const rows = shuffle(g2Rows()).slice(0, 4).sort((a, b) => a - b);
-  // Jede Zeile: Abschnitte – einige Zahlen stehen schon da, der Rest kommt als Teile (2 oder 3 Felder)
-  const given = new Set(), pieces = [];
-  rows.forEach((r, ri) => {
-    let c = 1;
-    while (c <= 10) {
-      const left = 11 - c;
-      if (Math.random() < 0.28 && left > 2) { const n = Math.random() < 0.6 ? 1 : 2; for (let k = 0; k < n; k++) given.add(`${ri}:${c + k}`); c += n; continue; }
-      let n = left <= 3 ? left : Math.random() < 0.55 ? 2 : 3;
-      if (left - n === 1) n = left >= 4 ? n + (n === 2 ? 1 : -1) : left; // kein einzelnes Feld am Ende
-      if (n === 1) { given.add(`${ri}:${c}`); c++; continue; }
-      pieces.push({ ri, c0: c, n, vals: Array.from({ length: n }, (_, k) => rows[ri] * (c + k)) });
-      c += n;
-    }
-  });
-  Object.assign(game, { pz: { rows, given, filled: new Set(), pieces: shuffle(pieces), sel: null }, over: false });
-  runStart('puzzle', { goal: pieces.length });
-  const cell = (ri, c) => {
-    const k = `${ri}:${c}`, v = rows[ri] * c;
-    return `<div class="pz-cell ${given.has(k) ? 'given' : 'empty'}" data-ri="${ri}" data-c="${c}">${given.has(k) ? v : ''}</div>`;
-  };
+  const big = pzBig(), R = big ? 20 : 10, n = big ? 16 : 12;
+  const ps = practiceSettings();
+  // fehlende Felder: vor allem aus den gewählten Reihen, schwierige Rechnungen öfter
+  const sel = new Set(ps.reihen.filter((r) => r <= R));
+  const cand = [];
+  for (let r = 1; r <= R; r++) for (let c = 1; c <= 10; c++) {
+    let w = sel.has(r) || sel.has(c) ? 4 : 1;
+    if (r === 1 || c === 1) w *= 0.25; else if (r === 10 || c === 10) w *= 0.5;
+    const lv = typeof levelOf === 'function' ? levelOf(db.prog.f[`${r}x${c}`]) : 'none';
+    if (lv === 'weak' || lv === 'shaky') w *= 2;
+    cand.push({ r, c, w });
+  }
+  const miss = [];
+  while (miss.length < n && cand.length) {
+    let t = Math.random() * cand.reduce((s, x) => s + x.w, 0), i = 0;
+    for (; i < cand.length - 1; i++) { t -= cand[i].w; if (t <= 0) break; }
+    miss.push(cand.splice(i, 1)[0]);
+  }
+  const gone = new Set(miss.map((m) => `${m.r}:${m.c}`));
+  const tiles = shuffle(miss.map((m) => m.r * m.c));
+  Object.assign(game, { pz: { R, gone, filled: new Set(), tiles, used: new Set(), sel: null }, over: false });
+  runStart('puzzle', { goal: tiles.length });
   $('#view').innerHTML = gameShell('puzzle', `
     ${runHudHTML('bar-hud')}
     <div class="pz-wrap">
-      <div class="pz-table" id="pztable" style="--cols:11">
-        <div class="pz-h corner">${SIGN()}</div>${Array.from({ length: 10 }, (_, i) => `<div class="pz-h">${i + 1}</div>`).join('')}
-        ${rows.map((r, ri) => `<div class="pz-h row">${r}</div>${Array.from({ length: 10 }, (_, i) => cell(ri, i + 1)).join('')}`).join('')}
+      <div class="pz-table ${big ? 'big' : ''}" id="pztable">
+        <div class="pz-h corner">${SIGN()}</div>${Array.from({ length: 10 }, (_, i) => `<div class="pz-h col">${i + 1}</div>`).join('')}
+        ${Array.from({ length: R }, (_, ri) => { const r = ri + 1; return `<div class="pz-h row ${sel.has(r) ? 'sel' : ''}">${r}</div>${Array.from({ length: 10 }, (_, ci) => { const c = ci + 1, k = `${r}:${c}`; return gone.has(k) ? `<div class="pz-cell empty" data-r="${r}" data-c="${c}"></div>` : `<div class="pz-cell given${r === c ? ' sq' : ''}">${r * c}</div>`; }).join('')}`; }).join('')}
       </div>
     </div>
-    <div class="pz-tray" id="pztray">${game.pz.pieces.map((p, i) => `<div class="pz-piece" data-p="${i}" style="--n:${p.n}">${p.vals.map((v) => `<span>${v}</span>`).join('')}</div>`).join('')}</div>
-    <p class="mode-hint">Zieh ein Teil an die richtige Stelle – oder tippe zuerst das Teil und dann das Feld, wo seine erste Zahl hingehört. Ein falscher Platz kostet 3 Sekunden.</p>`);
+    <div class="pz-dock"><p class="pz-dock-h">Wohin gehören diese Ergebnisse?</p><div class="pz-tray" id="pztray">${tiles.map((v, i) => `<button type="button" class="pz-tile" data-t="${i}">${v}</button>`).join('')}</div></div>
+    <p class="mode-hint">Zieh ein Ergebnis in das richtige leere Feld – oder tippe zuerst das Ergebnis und dann das Feld an. Ein falscher Platz kostet 3 Sekunden.</p>`);
   pzBind();
 }
 function pzBind() {
   const tray = $('#pztray');
   let drag = null;
   tray.addEventListener('pointerdown', (e) => {
-    const el = e.target.closest('.pz-piece');
+    const el = e.target.closest('.pz-tile');
     if (!el || el.classList.contains('placed') || !runOn()) return;
     e.preventDefault();
-    const r = el.getBoundingClientRect();
-    const p = game.pz.pieces[+el.dataset.p];
-    const grab = Math.max(0, Math.min(p.n - 1, Math.floor(((e.clientX - r.left) / r.width) * p.n)));
-    drag = { el, p, grab, x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false, ghost: null };
+    drag = { el, i: +el.dataset.t, x0: e.clientX, y0: e.clientY, moved: false, ghost: null };
     el.setPointerCapture(e.pointerId);
   });
   tray.addEventListener('pointermove', (e) => {
@@ -587,19 +681,16 @@ function pzBind() {
     if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 8) return;
     if (!drag.moved) {
       drag.moved = true;
-      const tbl = $('#pztable .pz-cell.empty');
-      const cw = tbl ? tbl.getBoundingClientRect().width : 40;
       const g = drag.el.cloneNode(true);
-      g.classList.add('ghost'); g.style.setProperty('--cw', `${cw}px`);
+      g.classList.add('ghost');
       document.body.appendChild(g);
-      drag.ghost = g; drag.cw = cw;
+      drag.ghost = g;
       drag.el.classList.add('lifted');
     }
-    const g = drag.ghost;
-    g.style.left = `${e.clientX - (drag.grab + 0.5) * drag.cw}px`; g.style.top = `${e.clientY - drag.cw * 0.8}px`;
-    const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pz-cell');
+    drag.ghost.style.left = `${e.clientX}px`; drag.ghost.style.top = `${e.clientY}px`;
     $$('.pz-cell.hover').forEach((c) => c.classList.remove('hover'));
-    if (t && !t.classList.contains('given')) pzCells(t, drag.p, drag.grab).forEach((c) => c?.classList.add('hover'));
+    const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pz-cell.empty:not(.filled)');
+    t?.classList.add('hover');
   });
   const up = (e) => {
     if (!drag) return;
@@ -608,47 +699,45 @@ function pzBind() {
     d.el.classList.remove('lifted');
     if (d.ghost) {
       d.ghost.remove();
-      const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pz-cell');
-      if (t) pzPlace(d.p, +d.el.dataset.p, +t.dataset.ri, +t.dataset.c - d.grab);
+      const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.pz-cell.empty');
+      if (t) pzPlace(d.i, t);
       return;
     }
-    // nur getippt: auswählen
-    $$('.pz-piece.sel').forEach((x) => x.classList.remove('sel'));
-    if (game.pz.sel === +d.el.dataset.p) { game.pz.sel = null; return; }
-    game.pz.sel = +d.el.dataset.p; d.el.classList.add('sel');
+    // nur getippt: auswählen (nochmals tippen = abwählen)
+    $$('.pz-tile.sel').forEach((x) => x.classList.remove('sel'));
+    $('#pztable').classList.toggle('picking', game.pz.sel !== d.i);
+    if (game.pz.sel === d.i) { game.pz.sel = null; return; }
+    game.pz.sel = d.i; d.el.classList.add('sel');
   };
   tray.addEventListener('pointerup', up); tray.addEventListener('pointercancel', up);
   $('#pztable').addEventListener('click', (e) => {
-    const t = e.target.closest('.pz-cell');
+    const t = e.target.closest('.pz-cell.empty');
     if (!t || game.pz.sel == null || !runOn()) return;
-    const i = game.pz.sel;
-    pzPlace(game.pz.pieces[i], i, +t.dataset.ri, +t.dataset.c);
+    pzPlace(game.pz.sel, t);
   });
 }
-/** Felder, die ein Teil belegen würde, wenn das gegriffene Feld auf t liegt */
-function pzCells(t, p, grab = 0) {
-  const ri = +t.dataset.ri, c0 = +t.dataset.c - grab;
-  return Array.from({ length: p.n }, (_, k) => $(`#pztable .pz-cell[data-ri="${ri}"][data-c="${c0 + k}"]`));
-}
-function pzPlace(p, idx, ri, c0) {
+function pzPlace(i, cell) {
   const pz = game.pz, r = game.run;
-  if (!runOn() || p.done) return;
-  const cells = Array.from({ length: p.n }, (_, k) => $(`#pztable .pz-cell[data-ri="${ri}"][data-c="${c0 + k}"]`));
-  const fits = cells.every((el, k) => el && el.classList.contains('empty') && !el.classList.contains('filled') && pz.rows[ri] * (c0 + k) === p.vals[k]);
-  const pel = $(`#pztray .pz-piece[data-p="${idx}"]`);
-  pel?.classList.remove('sel'); pz.sel = null;
-  if (!fits) {
+  if (!runOn() || pz.used.has(i) || cell.classList.contains('filled')) return;
+  const v = pz.tiles[i], want = +cell.dataset.r * +cell.dataset.c;
+  const tile = $(`#pztray .pz-tile[data-t="${i}"]`);
+  tile?.classList.remove('sel'); pz.sel = null; $('#pztable')?.classList.remove('picking');
+  if (v !== want) {
     sfx.bad();
     r.penalty += PZ_PENALTY;
-    pel?.classList.remove('nope'); void pel?.offsetWidth; pel?.classList.add('nope');
-    cells.forEach((el) => { if (el) { el.classList.remove('miss'); void el.offsetWidth; el.classList.add('miss'); setTimeout(() => el.classList.remove('miss'), 450); } });
+    tile?.classList.remove('nope'); void tile?.offsetWidth; tile?.classList.add('nope');
+    cell.classList.remove('miss'); void cell.offsetWidth; cell.classList.add('miss');
+    setTimeout(() => cell.classList.remove('miss'), 450);
+    // fürs Gedächtnis: diese Rechnung war gemeint, das Kind hat v hingesetzt
+    try { recordAnswer(makeTask(+cell.dataset.r, +cell.dataset.c, 'mul'), v, 6000); } catch { /* */ }
     runWrong();
     return;
   }
-  p.done = true;
+  pz.used.add(i);
   sfx.good();
-  cells.forEach((el, k) => { el.textContent = p.vals[k]; el.classList.add('filled'); el.style.animationDelay = `${k * 60}ms`; });
-  pel?.classList.add('placed');
-  sparkle(cells[0], 8);
+  try { recordAnswer(makeTask(+cell.dataset.r, +cell.dataset.c, 'mul'), v, 4000); } catch { /* */ }
+  cell.textContent = v; cell.classList.add('filled');
+  tile?.classList.add('placed');
+  sparkle(cell, 8);
   runRight();
 }
