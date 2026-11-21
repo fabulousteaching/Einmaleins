@@ -7,7 +7,7 @@
  */
 'use strict';
 
-const KV = { U: 0.05, UW: 0.035, DRIVER: 0.7 };
+const KV = { FIELD: 1.4, ITER: 6, U: 0.05, UW: 0.035, DRIVER: 0.7 };
 const KV_DARK = 0x23262e, KV_RUBBER = 0x1b1d22, KV_CHROME = 0xdfe6ee, KV_GOLD = 0xf5b400, KV_WHITE = 0xf8fafc, KV_SEAT = 0x1f2430;
 const kvLerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
 
@@ -549,7 +549,8 @@ function kartVoxModel(T, look, driver = null, { lite = false, fig: figIn = null 
   const body = new T.Group(); g.add(body);
   const own = [];
   // Computer-Fahrer (lite): halbe Auflösung – etwa ein Viertel der Dreiecke
-  const { geo } = vxSmoothGeometry(T, lite ? kvDown(B.s) : B.s, { iter: lite ? 3 : spec.iter ?? 5 });
+  // glatte Oberfläche: weiches Volumen für Normalen und Hülle (sonst sieht der Lack „geknetet“ aus)
+  const { geo } = vxSmoothGeometry(T, lite ? kvDown(B.s) : B.s, { iter: lite ? 3 : spec.iter ?? KV.ITER, field: lite ? KV.FIELD / 2 : KV.FIELD });
   own.push(geo);
   const mesh = new T.Mesh(geo, kvMats(T, L.finish));
   mesh.scale.setScalar(lite ? k * 2 : k); mesh.position.set(lite ? -U : -U / 2, 0, lite ? -U : -U / 2); mesh.castShadow = true; mesh.receiveShadow = true;

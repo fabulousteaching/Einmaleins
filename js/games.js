@@ -21,6 +21,8 @@ const GAMES = [
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
     howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
+  { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'countdown'],
+    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, nach oben zum Springen und nach unten zum Rutschen. Spring über Hürden und Lücken, rutsch unter Balken durch. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis!' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -85,9 +87,9 @@ const RUN = { ms: 60000, goal: 20, lives: 3 };
 const HEART_SVG = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2 10.6 20C5.4 15.3 2 12.2 2 8.4 2 5.3 4.4 3 7.4 3c1.7 0 3.4.8 4.6 2.1C13.2 3.8 14.9 3 16.6 3 19.6 3 22 5.3 22 8.4c0 3.8-3.4 6.9-8.6 11.6z"/></svg>';
 const GAME_MODES = {
   countdown: { name: 'Countdown', icon: () => icon('clock'), short: '60 Sekunden',
-    desc: () => 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.' },
+    desc: (id) => (id === 'runner' ? 'Lauf 60 Sekunden lang durch möglichst viele richtige Bögen. Hindernisse bremsen dich, kosten aber kein Leben.' : 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.') },
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
-    desc: (id) => `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
+    desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in eine Lücke kostet ein Leben. Alle 5 richtigen wird es schneller.' : `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
     desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.'
       : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Jede 4. richtige Antwort = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
@@ -230,8 +232,8 @@ function runFinish(why) {
 /* ---------------- Ergebnis und Bestenliste ---------------- */
 // Sterne: [1, 2, 3 Sterne]; Speed in Sekunden (weniger ist besser)
 const STAR_LIMITS = {
-  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32] },
-  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35] },
+  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32], runner: [4, 7, 10] },
+  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35], runner: [5, 10, 18] },
   speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32] },
 };
 function runStars(r, score) {
@@ -316,6 +318,7 @@ function boardListHTML(data, { kid: forKid = false } = {}) {
 function gateOptionsHTML(id) {
   const seg = (action, cur, list) => `<div class="seg">${list.map(([v, t]) => `<button class="seg-btn" data-action="${action}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
   if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
+  if (id === 'runner' && typeof w3RunWorldsHTML === 'function') return `<p class="label">Welt</p>${w3RunWorldsHTML(runWorldId())}`;
   if (id === 'kart' && typeof KART_TRACKS === 'object') {
     const cur = kartTrackId();
     return `<p class="label kart-track-label">Strecke</p><div class="kart-tracks" role="radiogroup" aria-label="Strecke">${KART_TRACKS.map((t) => `<button type="button" class="kart-track t-${t.id}" data-action="kart-track" data-v="${t.id}" role="radio" aria-checked="${t.id === cur}"><span aria-hidden="true">${t.emo}</span><b>${esc(t.name)}</b></button>`).join('')}</div>`;
@@ -357,19 +360,71 @@ function renderGame() {
       ${opPickHTML('game-op', 'gate-ops')}
       <p class="gate-reihen-text muted small">${esc(gateReihenText())}</p>
       ${opts ? `<div class="gate-opts">${opts}</div>` : ''}
-      ${g.id === 'kart' && !webglOK() ? '<div class="gate-need"><p><b>Dieses Spiel braucht 3D-Grafik.</b><br>Auf diesem Gerät geht das leider nicht. Probier ein anderes Spiel!</p></div>'
+      ${(g.id === 'kart' || g.id === 'runner') && !webglOK() ? '<div class="gate-need"><p><b>Dieses Spiel braucht 3D-Grafik.</b><br>Auf diesem Gerät geht das leider nicht. Probier ein anderes Spiel!</p></div>'
     : can ? `<button class="btn primary big gate-go" data-action="game-start">${icon('play')} ${free ? 'Spielen' : `Spielen für ${COIN_SVG} ${GAME_COST} Münze`}</button>
         <p class="muted small">${free ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Du hast ${have} ${have === 1 ? 'Münze' : 'Münzen'}.`}</p>`
     : `<div class="gate-need">${COIN_SVG}<p><b>Dir fehlt noch eine Münze.</b><br>Münzen verdienst du beim Üben: für jede richtige Antwort gibt es Punkte. ${coinThreshold()} Punkte = 1 Münze.</p></div>
         <button class="btn primary big" data-action="open-ex" data-id="trainer">${icon('keypad')} Zum Trainer</button>`}
       ${g.id === 'kart' && webglOK() && typeof renderWorld3D === 'function' ? '<button class="btn secondary" data-action="garage-open">🔧 Garage: dein Kart gestalten</button>' : ''}
+      ${g.id === 'runner' && webglOK() && typeof renderWorld3D === 'function' && isKid() ? '<button class="btn secondary" data-action="avatar-open">🧍 Deinen Avatar gestalten</button>' : ''}
       <button class="btn ghost" data-action="home">Zurück</button>
     </div>
   </section>`;
 }
 const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel(),
-  kart: () => { toast('Das Rennen konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); } };
-const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D(), kart: () => startKart3D() };
+  kart: () => { toast('Das Rennen konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); },
+  runner: () => { toast('Der Welten-Lauf konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); } };
+const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D(), kart: () => startKart3D(), runner: () => startRunner3D() };
+
+/* =========================================================
+   🏃 Welten-Lauf (3D, mit dem eigenen Avatar; Spiel in js/runner3d.js, Welten in js/runworlds.js)
+   Survive: 3 Leben – falsche Antwort, Hindernis oder Sturz kostet eines; alle 5 richtigen schneller.
+   Countdown: 60 Sekunden; Hindernisse bremsen nur.
+   ========================================================= */
+const runWorldId = () => ((typeof RUN_WORLD_INFO === 'object' && RUN_WORLD_INFO.some((w) => w.id === db.settings.runWorld)) ? db.settings.runWorld : 'jungle');
+async function startRunner3D() {
+  await w3LoadRunner();
+  Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
+  let run = null;
+  const r = runStart('runner', { onEnd: () => { try { run?.stop(); } catch { /* */ } } });
+  runPause(true); // die Uhr läuft erst nach dem Countdown
+  $('#view').innerHTML = gameShell('runner', `<div id="rnwrap"></div>
+    <p class="mode-hint">Wischen oder Pfeiltasten: ← → Spur wechseln, ↑ springen, ↓ rutschen. Kurz tippen geht auch: links/rechts aussen = Spur, Mitte = springen.</p>`);
+  const host = $('#rnwrap');
+  game.stage3d = { dispose: () => { try { run?.dispose(); } catch (e) { console.warn(e); } } };
+  const lose = () => { // Hindernis oder Sturz: Survive kostet ein Leben (zählt nicht als falsche Antwort)
+    if (!runOn() || r.mode !== 'survive') return false;
+    r.lives--;
+    $$('[data-run="lives"]').forEach((el) => { const h = el.children[r.lives]; if (h) { h.classList.toggle('lost', false); void h.getBoundingClientRect(); h.classList.add('lost'); } });
+    runHud();
+    if (r.lives <= 0) { runFinish('lives'); return true; }
+    return false;
+  };
+  run = await runnerStart(host, {
+    world: runWorldId(),
+    look: typeof a3Mine === 'function' ? a3Mine() : null,
+    hudHTML: runHudHTML('rn-hud'),
+    sound: !!db.settings.sound,
+    gateEvery: r.mode === 'countdown' ? 56 : 76,
+    speed: (lv) => (r.mode === 'countdown' ? 10 : Math.min(15, 8.8 + (lv - 1) * 0.6)),
+    level: () => (r.mode === 'survive' ? surviveLevel() : 1),
+    ask: () => {
+      const t = game.picker.next();
+      const vals = choicesFor(t, 3);
+      return { html: taskHTML(t, '<span class="slot">?</span>'), answers: vals.map(String), correct: vals.indexOf(t.answer), solved: esc(taskText(t, true)), t, vals };
+    },
+    onAnswer: (ok, q, lane) => {
+      if (!runOn()) return { over: true };
+      recordAnswer(q.t, q.vals[lane], 3000);
+      if (ok) return { over: runRight() };
+      return { over: runWrong(q.t) };
+    },
+    onHit: () => ({ over: lose() }),
+    onStart: () => runPause(false),
+  });
+  // inzwischen weggegangen (z. B. Zurück gedrückt)? Dann gleich wieder aufräumen
+  if (game.run !== r || ui.view !== 'game') run.dispose();
+}
 async function startGameNow() {
   if (game.paying) return;
   if (!gamesFree() && kidWallet() && typeof w3PayGame === 'function') {
