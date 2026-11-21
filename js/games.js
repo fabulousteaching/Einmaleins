@@ -22,7 +22,7 @@ const GAMES = [
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
     howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
   { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'sudden'],
-    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis! Jede richtige Antwort macht dich ein bisschen schneller. Mit der Zeit kommt Neues dazu: Löcher, hohe Wände (zweimal nach oben wischen = Doppelsprung), rollende Fässer, nur noch zwei oder eine Spur und Kurven (rechtzeitig nach links oder rechts wischen). Auf nur einer Spur stehen die Ergebnisse übereinander: oben = springen, Mitte = weiterlaufen, unten = nach unten wischen (rutschen).' },
+    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung, und über den Spuren schweben Blasen mit Ergebnissen: Lauf unter der richtigen durch! Jede richtige Antwort macht dich ein bisschen schneller. Mit der Zeit kommt Neues dazu: Löcher, hohe Wände (zweimal nach oben wischen = Doppelsprung), rollende Fässer, eine schmale Strasse und Kurven (rechtzeitig nach links oder rechts wischen). Auf nur einer Spur schweben die Ergebnisse übereinander: oben = springen, Mitte = weiterlaufen, unten = nach unten wischen (rutschen). Wie früh die schwierigeren Hindernisse kommen, hängt davon ab, wie sicher du im Training rechnest.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -325,7 +325,13 @@ function boardListHTML(data, { kid: forKid = false } = {}) {
 function gateOptionsHTML(id) {
   const seg = (action, cur, list) => `<div class="seg">${list.map(([v, t]) => `<button class="seg-btn" data-action="${action}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${t}</button>`).join('')}</div>`;
   if (id === 'duel') return seg('duel-goal', db.settings.duelGoal || 10, [[5, 'bis 5'], [10, 'bis 10'], [15, 'bis 15']]);
-  if (id === 'runner' && typeof w3RunWorldsHTML === 'function') return `<p class="label">Welt</p>${w3RunWorldsHTML(runWorldId())}`;
+  if (id === 'runner' && typeof w3RunWorldsHTML === 'function') {
+    const sk = runnerSkill();
+    const pct = (x) => `${Math.round(x * 100)} %`;
+    const why = sk.n < RUN_SKILL_MIN ? 'Je sicherer du im Training rechnest, desto anspruchsvoller startet der Lauf.'
+      : `Im Training rechnest du ${pct(sk.quote)} richtig, ${pct(sk.sure)} deiner Rechnungen sitzen sicher. ${sk.stage > 1 ? 'Darum kommen schon früh schwierigere Hindernisse.' : 'Der Lauf startet gemütlich – so kannst du dich aufs Rechnen konzentrieren.'}`;
+    return `<p class="label">Welt</p>${w3RunWorldsHTML(runWorldId())}${typeof w3RunStartHTML === 'function' ? w3RunStartHTML(sk.stage, why) + w3RunRulesHTML('Ergebnis') : ''}`;
+  }
   if (id === 'kart' && typeof KART_TRACKS === 'object') {
     const cur = kartTrackId();
     return `<p class="label kart-track-label">Strecke</p><div class="kart-tracks" role="radiogroup" aria-label="Strecke">${KART_TRACKS.map((t) => `<button type="button" class="kart-track t-${t.id}" data-action="kart-track" data-v="${t.id}" role="radio" aria-checked="${t.id === cur}"><span aria-hidden="true">${t.emo}</span><b>${esc(t.name)}</b></button>`).join('')}</div>`;
@@ -389,6 +395,29 @@ const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3
    Countdown: 60 Sekunden; Hindernisse bremsen nur.
    ========================================================= */
 const runWorldId = () => ((typeof RUN_WORLD_INFO === 'object' && RUN_WORLD_INFO.some((w) => w.id === db.settings.runWorld)) ? db.settings.runWorld : 'jungle');
+/**
+ * Start-Stufe aus dem Trainingsstand der gerade gewählten Rechnungen: Quote (je Rechnung die letzten 10 Antworten)
+ * und Anteil sicherer Rechnungen. Stufe 1 = Start wie gewohnt, höhere Stufen bringen die neuen Hindernisse früher.
+ * Nie leichter als Stufe 1; unter RUN_SKILL_MIN Antworten immer Stufe 1.
+ */
+const RUN_SKILL_MIN = 30;
+function runnerSkill(prog = db.prog) {
+  let n = 0, ok = 0, sure = 0;
+  try {
+    const keys = new Set(buildPool(practiceSettings()).map((x) => makeTask(x.a, x.b, x.op).key));
+    keys.forEach((k) => { const h = prog.f[k]?.h || ''; n += h.length; ok += h.replace(/0/g, '').length; });
+    sure = masteryNow(prog);
+  } catch (e) { console.warn('Start-Stufe', e); }
+  const quote = n ? ok / n : 0;
+  let stage = 1;
+  if (n >= RUN_SKILL_MIN) {
+    if (quote >= 0.95 && sure >= 0.85) stage = 5;
+    else if (quote >= 0.9 && sure >= 0.65) stage = 4;
+    else if (quote >= 0.85 && sure >= 0.45) stage = 3;
+    else if (quote >= 0.75 && sure >= 0.25) stage = 2;
+  }
+  return { stage, quote, sure, n, start: (typeof W3_RUN_START === 'object' ? W3_RUN_START : [0, 4, 8, 12, 16])[stage - 1] };
+}
 async function startRunner3D() {
   await w3LoadRunner();
   Object.assign(game, { picker: gamePicker(), over: false, cleanups: game.cleanups || [] });
@@ -413,6 +442,7 @@ async function startRunner3D() {
     hudHTML: runHudHTML('rn-hud'),
     sound: !!db.settings.sound,
     gateEvery: 76,
+    startLevel: runnerSkill().start, // wer im Training sicher rechnet, bekommt früher schwierigere Hindernisse
     speed: (n) => Math.min(14.5, 8.8 + n * 0.18), // jede richtige Antwort ein bisschen schneller
     ask: () => {
       const t = game.picker.next();

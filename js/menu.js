@@ -88,7 +88,7 @@ const classReihenText = (c) => `${c.settings.big ? 'Grosses' : 'Kleines'} Einmal
 function menuSectionHTML(sec) {
   const s = db.settings;
   const needLogin = (what) => `<div class="menu-empty">${icon('user')}<p>${what} gibt es mit einem Konto für Lehrpersonen.</p>
-    <button type="button" class="btn primary" data-action="login-choose">Anmelden oder Konto erstellen</button></div>`;
+    <button type="button" class="btn primary" data-action="login" data-mode="login">Als Lehrperson anmelden</button></div>`;
   const seg = (action, attr, val, items) => `<div class="seg" role="group">${items.map(([v, t]) => `<button type="button" class="seg-btn" data-action="${action}" data-${attr}="${v}" aria-pressed="${String(val) === String(v)}">${t}</button>`).join('')}</div>`;
   const setSeg = (key, items) => `<div class="seg" role="radiogroup">${items.map(([v, t]) => `<button type="button" class="seg-btn" data-action="set-setting" data-key="${key}" data-val="${v}" aria-pressed="${String(s[key]) === String(v)}">${t}</button>`).join('')}</div>`;
   switch (sec) {
@@ -96,7 +96,7 @@ function menuSectionHTML(sec) {
       if (!cloud.user) {
         return `<p class="muted">Du bist nicht angemeldet. Alle Übungen und Spiele gehen auch so – dein Übungsstand wird dann nur in diesem Browser gespeichert.</p>
           <div class="menu-cards">
-            <button type="button" class="menu-card" data-action="login-choose">${icon('user')}<strong>Anmelden</strong><small>Lehrperson: Klassen und Kinder-Logins, Login-Kärtchen, Übersicht und persönliche Übungsblätter.</small></button>
+            <button type="button" class="menu-card" data-action="login" data-mode="login">${icon('user')}<strong>Als Lehrperson anmelden</strong><small>Klassen und Kinder-Logins, Login-Kärtchen, Übersicht und persönliche Übungsblätter. Noch kein Konto? Im nächsten Fenster registrieren.</small></button>
             <button type="button" class="menu-card" data-action="kid-login">${icon('image')}<strong>Kinder-Login</strong><small>Mit Benutzername und Bilder-Passwort vom Kärtchen.</small></button>
           </div>`;
       }

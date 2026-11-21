@@ -1012,14 +1012,72 @@ async function startKart3D() {
     const sl = new T.Mesh(new T.PlaneGeometry(W, 2.4), new T.MeshStandardMaterial({ map: kartCheckerTex(16, 2), roughness: 0.7 }));
     sl.rotation.set(-Math.PI / 2, 0, yawAt(q) + Math.PI, 'YXZ'); sl.rotation.set(-Math.PI / 2, 0, 0); sl.rotateOnWorldAxis(new T.Vector3(0, 1, 0), yawAt(q));
     sl.position.set(q.x, q.y + 0.12, q.z); scene.add(sl);
-    const archMat = new T.MeshStandardMaterial({ color: TH.night ? 0x312e81 : 0xe5e7eb, metalness: 0.5, roughness: 0.35 });
-    const arch = new T.Group(); arch.position.set(q.x, q.y, q.z); arch.rotation.y = yawAt(q); scene.add(arch);
-    for (const x of [WL + 1, -WL - 1]) { const p = new T.Mesh(new T.BoxGeometry(1.1, 9, 1.1), archMat); p.position.set(-x, 4.5, 0); p.castShadow = true; arch.add(p); }
-    const ban = new T.Mesh(new T.BoxGeometry(2 * WL + 4, 2.2, 0.6), [archMat, archMat, archMat, archMat, new T.MeshStandardMaterial({ map: kartSignTex('TEILMAL · TURBO-RENNEN', '#FF6B4A') }), new T.MeshStandardMaterial({ map: kartSignTex('START · ZIEL', '#0F766E') })]);
-    ban.position.set(0, 8.6, 0); ban.castShadow = true; arch.add(ban);
-    const chk = new T.Mesh(new T.BoxGeometry(2 * WL + 4, 0.6, 0.62), new T.MeshStandardMaterial({ map: kartCheckerTex(30, 2) }));
-    chk.position.set(0, 7.2, 0); arch.add(chk);
   }
+  /* Start und Ziel: schwebendes Schild hoch über der Linie (kein Torbogen). Es zeigt, was beim nächsten Durchfahren
+     kommt (START, RUNDE 2, LETZTE RUNDE, ZIEL), schwebt leicht und dreht sich beim Durchfahren einmal mit Konfetti. */
+  const startSign = (() => {
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 360;
+    const tex = new T.CanvasTexture(cv); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 8;
+    const g = cv.getContext('2d');
+    const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+    function draw(title, sub, accent) {
+      const w = cv.width, h = cv.height;
+      g.clearRect(0, 0, w, h);
+      g.save(); g.shadowColor = accent; g.shadowBlur = 40; g.fillStyle = 'rgba(15, 23, 42, .92)'; rr(26, 26, w - 52, h - 52, 70); g.fill(); g.restore();
+      const gr = g.createLinearGradient(0, 26, 0, h - 26); gr.addColorStop(0, 'rgba(76, 64, 196, .97)'); gr.addColorStop(1, 'rgba(15, 23, 42, .96)');
+      g.fillStyle = gr; rr(26, 26, w - 52, h - 52, 70); g.fill();
+      // Zielflaggen-Muster als Band oben
+      g.save(); rr(26, 26, w - 52, h - 52, 70); g.clip();
+      for (let i = 0; i < 40; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? 'rgba(255,255,255,.9)' : 'rgba(17,24,39,.9)'; g.fillRect(26 + i * 25, 26 + j * 25, 25, 25); }
+      const hl = g.createLinearGradient(0, 76, 0, h * 0.55); hl.addColorStop(0, 'rgba(255,255,255,.22)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = hl; g.fillRect(26, 76, w - 52, h * 0.3);
+      g.restore();
+      g.lineWidth = 9; g.strokeStyle = accent; rr(30, 30, w - 60, h - 60, 66); g.stroke();
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+      g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 12; g.shadowOffsetY = 4;
+      let fs = 150; g.font = NUM_FONT(fs);
+      while (g.measureText(title).width > w - 140 && fs > 60) { fs -= 6; g.font = NUM_FONT(fs); }
+      g.fillText(title, w / 2, sub ? h * 0.53 : h * 0.58);
+      if (sub) { g.font = NUM_FONT(52); g.fillStyle = 'rgba(255,255,255,.8)'; g.fillText(sub, w / 2, h * 0.8); }
+      g.shadowColor = 'transparent';
+      tex.needsUpdate = true;
+    }
+    const mat = new T.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false });
+    const geo = new T.PlaneGeometry(13, 4.55);
+    const grp = new T.Group(), spin = new T.Group();
+    const f1 = new T.Mesh(geo, mat), f2 = new T.Mesh(geo, mat); f2.rotation.y = Math.PI; f1.renderOrder = f2.renderOrder = 5;
+    spin.add(f1, f2); grp.add(spin);
+    const base = new T.Vector3(q.x, q.y + 8.4, q.z);
+    grp.position.copy(base); grp.rotation.y = yawAt(q); scene.add(grp);
+    let state = '', spinT = -1, pending = null;
+    const show = (n) => {
+      if (n <= 0) draw('START', `${KART.LAPS} Runden`, '#facc15');
+      else if (n < KART.LAPS - 1) draw(`RUNDE ${n + 1}`, `von ${KART.LAPS}`, '#22d3ee');
+      else if (n === KART.LAPS - 1) draw('LETZTE RUNDE', '', '#f472b6');
+      else draw('🏁 ZIEL', '', '#22c55e');
+    };
+    return {
+      /** n = wie oft die Linie schon überquert wurde – kurz vor der Linie gezählt, damit man die Drehung noch sieht */
+      set(n) {
+        const key = String(n);
+        if (key === state) return;
+        if (state === '') show(n);
+        else { spinT = 0; pending = n; burst(st, base, { n: 90, colors: [0xfacc15, 0x22d3ee, 0xf472b6, 0xffffff], speed: 8, life: 1.1, size: 0.45, gravity: -5 }); }
+        state = key;
+      },
+      update(dt, t) {
+        grp.position.y = base.y + Math.sin(t * 1.6) * 0.18;
+        if (spinT >= 0) {
+          spinT += dt;
+          const a = Math.min(1, spinT / 0.9), e = 1 - (1 - a) ** 3;
+          spin.rotation.y = e * Math.PI * 2;
+          if (pending != null && e > 0.25) { show(pending); pending = null; } // neuer Text, wenn das Schild gerade von der Seite zu sehen ist
+          spin.scale.setScalar(1 + Math.sin(a * Math.PI) * 0.18);
+          if (a >= 1) { spinT = -1; spin.rotation.y = 0; spin.scale.setScalar(1); }
+        }
+      },
+    };
+  })();
+  startSign.set(0);
 
   /* Weggabelungen: Stationen nicht im Tunnel und nicht am Start */
   const freeAt = (s) => { if (s < 60 || s > L - 30) return false; for (let d = -KART.ZONE - 6; d <= KART.ZONE + 6; d += 2) { kartAt(tr, s + d, q); if (q.ty === 2) return false; } return true; };
@@ -1963,6 +2021,8 @@ async function startKart3D() {
     if (engine) { const f = 55 + me.v * 3.2 + (me.fx === 'turbo' ? 40 : 0); engine.o.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.05); engine.o2.frequency.setTargetAtTime(f * 0.5, audioCtx.currentTime, 0.05); }
     S.hudT = (S.hudT || 0) + dt;
     if (S.hudT > 0.2) { S.hudT = 0; hud(); }
+    { const ahead = me.p + 16; startSign.set(ahead >= 0 ? Math.min(KART.LAPS, Math.floor(ahead / L) + 1) : 0); }
+    startSign.update(dt, st.time);
     drawMap(dt);
     {   // Kurven-Turbo: Balken mit drei Stufen; Funken an den Hinterrädern
       const tier = mtTier(S.mt), flash = S.mtFlash && now < S.mtFlash.until ? S.mtFlash.tier : 0;
