@@ -158,3 +158,54 @@
 .bg-cell.line { background: var(--green); border-color: var(--green); color: #fff; }
 .bg-cell.wrong { background: var(--red-wash); border-color: var(--red); color: var(--red-ink); }
 .bingo-btn { font-size: 1.6rem; letter-spacing: .05em; }
+
+/* Live: Avatar-Köpfe in Farbe des Kindes */
+.av-mini { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: inline-grid; place-items: center; flex: none; background: #fff; box-shadow: 0 0 0 3px var(--pc, #e2e8f0); color: var(--pc, #64748b); font-weight: 800; }
+.av-mini :is(svg, img) { width: 100%; height: 100%; object-fit: cover; }
+/* 🏁 Avatar-Wettrennen am Beamer */
+.rc-track { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 24px; background: linear-gradient(180deg, #14532d, #166534); box-shadow: var(--shadow-card); }
+.rc-lane { display: grid; grid-template-columns: minmax(70px, 140px) 1fr 44px; align-items: center; gap: 10px; color: #fff; transition: order .3s; }
+.rc-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.rc-road { position: relative; height: clamp(30px, 4.6vh, 46px); border-radius: 99px; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .1) 0 18px, transparent 18px 36px), #b45309;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .35); background-clip: padding-box; border-right: 10px solid transparent; border-image: repeating-linear-gradient(0deg, #111 0 6px, #fff 6px 12px) 10; }
+.rc-runner { position: absolute; top: 50%; left: calc(var(--p) * (100% - 40px)); transform: translateY(-50%); transition: left .45s cubic-bezier(.3, 1.3, .5, 1); }
+.rc-runner .av-mini { width: clamp(30px, 4.4vh, 44px); height: clamp(30px, 4.4vh, 44px); box-shadow: 0 0 0 3px var(--pc), 0 4px 10px rgba(0, 0, 0, .4); }
+.rc-lane.fin .rc-runner { animation: rc-jump .6s ease 2; }
+@keyframes rc-jump { 50% { transform: translateY(-90%); } }
+.rc-n { font: 800 1.3rem var(--font-display); text-align: center; }
+.rc-podium { list-style: none; padding: 0; margin: 1rem auto; display: flex; justify-content: center; align-items: flex-end; gap: 14px; }
+.rc-podium li { display: grid; justify-items: center; gap: .3rem; padding: 1rem 1.2rem; border-radius: 20px; background: var(--paper); box-shadow: var(--shadow-card); min-width: 130px; animation: lv-pop .5s ease backwards; }
+.rc-podium .pod-1 { padding-top: 2.4rem; background: linear-gradient(180deg, #fef3c7, var(--paper)); animation-delay: .9s; }
+.rc-podium .pod-2 { animation-delay: .45s; }
+.rc-podium .pod-face .av-mini { width: 64px; height: 64px; font-size: 1.6rem; }
+.rc-podium .pod-1 .pod-face .av-mini { width: 84px; height: 84px; }
+.pod-medal { font-size: 2.4rem; }
+.rc-podium b { font-size: 1.2rem; }
+.rc-podium i { font-style: normal; color: var(--ink-3); }
+.rc-rest { max-width: 420px; margin: 0 auto; }
+.rc-rest li { display: flex; justify-content: space-between; padding: .3rem 0; border-bottom: 1px dashed var(--line); font-weight: 600; }
+/* 🏰 Klassen-Bauprojekt am Beamer */
+.bd-stage { display: grid; place-items: end center; padding: clamp(12px, 3vw, 28px) clamp(12px, 3vw, 28px) 34px; border-radius: 28px; background: linear-gradient(180deg, #1e3a8a 0%, #3b82f6 55%, #93c5fd calc(100% - 36px), #4ade80 calc(100% - 36px), #15803d 100%); box-shadow: var(--shadow-card); }
+.bd-svg { width: min(100%, 760px); max-height: 56vh; }
+.bd-svg rect { stroke: rgba(255, 255, 255, .22); stroke-width: .05; transition: fill .3s; }
+.bd-svg rect.on { stroke: rgba(0, 0, 0, .25); animation: bd-drop .35s cubic-bezier(.3, 1.4, .5, 1); transform-box: fill-box; transform-origin: center; }
+@keyframes bd-drop { from { transform: translateY(-1.6px) scale(.7); opacity: .3; } }
+.build-host.done .bd-svg { animation: bd-glow 1.6s ease-in-out infinite; }
+@keyframes bd-glow { 50% { filter: drop-shadow(0 0 18px rgba(253, 224, 71, .9)); } }
+.bd-progress { display: flex; align-items: center; gap: 12px; font: 800 1.3rem var(--font-display); }
+.bd-bar { flex: 1; height: 16px; border-radius: 99px; background: var(--sunken); overflow: hidden; }
+.bd-bar b { display: block; height: 100%; transform-origin: left; background: linear-gradient(90deg, #f97316, #facc15, #22c55e); transition: transform .3s; }
+.bd-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--pc); }
+.bd-chips .live-chip b { margin-left: .2rem; }
+/* Kinder: rechnen (Wettrennen und Bauprojekt) */
+.lq-status { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-weight: 800; }
+.lq-bar { height: 12px; border-radius: 99px; background: var(--sunken); overflow: hidden; }
+.lq-bar b { display: block; height: 100%; transform-origin: left; background: var(--brand); transition: transform .3s; }
+.lq-box { display: grid; gap: 14px; padding: 16px; border-radius: 24px; background: var(--paper); box-shadow: var(--shadow-card); transition: background .2s; }
+.lq-box.good { background: var(--green-wash); }
+.lq-box.bad { background: var(--red-wash); animation: shake .35s; }
+.lq-task { font-size: clamp(2.4rem, 11vw, 3.6rem); }
+.lq-ans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lq-btn { min-height: 76px; border: 0; border-radius: 18px; background: var(--qc); color: #fff; font: 800 clamp(1.6rem, 7vw, 2.2rem) var(--font-display); cursor: pointer; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2); touch-action: manipulation; }
+.lq-btn:active { transform: scale(.96); }
+.lq-btn:disabled { opacity: .55; }
