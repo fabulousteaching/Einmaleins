@@ -21,8 +21,8 @@ const GAMES = [
     howto: 'Stimmt die Rechnung oder nicht? Wische nach rechts (stimmt) oder links (stimmt nicht). Ist eine Rechnung falsch, siehst du danach immer die richtige.' },
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
     howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
-  { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'countdown'],
-    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, nach oben zum Springen und nach unten zum Rutschen. Spring über Hürden und Lücken, rutsch unter Balken durch. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis!' },
+  { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'sudden'],
+    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis! Jede richtige Antwort macht dich ein bisschen schneller.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -88,8 +88,10 @@ const HEART_SVG = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><pa
 const GAME_MODES = {
   countdown: { name: 'Countdown', icon: () => icon('clock'), short: '60 Sekunden',
     desc: (id) => (id === 'runner' ? 'Lauf 60 Sekunden lang durch möglichst viele richtige Bögen. Hindernisse bremsen dich, kosten aber kein Leben.' : 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.') },
+  sudden: { name: 'Ein Leben', icon: () => HEART_SVG, short: 'bis zum 1. Fehler',
+    desc: () => 'Nur ein Leben: Lauf so weit du kannst. Beim ersten Hindernis, Absturz oder falscher Antwort ist es vorbei.' },
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
-    desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in eine Lücke kostet ein Leben. Alle 5 richtigen wird es schneller.' : `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
+    desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in einen Abgrund kostet ein Leben. Jede richtige Antwort macht dich ein bisschen schneller.' : `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
     desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.'
       : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Jede 4. richtige Antwort = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
@@ -101,7 +103,10 @@ function gameModeOf(id) {
   return list.includes(m) ? m : list[0];
 }
 // Turbo-Rennen: seit den neuen Strecken und dem Windschatten eine neue Bestenliste («rennen»)
-const boardOf = (id, mode) => `${id === 'kart' ? 'rennen' : id}:${mode}:${practiceSettings().op}`;
+const boardKey = (id, mode, op) => (id === 'runner' && mode === 'sudden' ? `laufeins:survive:${op}` : `${id === 'kart' ? 'rennen' : id}:${mode}:${op}`);
+const boardOf = (id, mode) => boardKey(id, mode, practiceSettings().op);
+/** Modi mit Leben: Survive (3) und Ein Leben (1) */
+const livesMode = (m) => m === 'survive' || m === 'sudden';
 const fmtSec = (ms, d = 1) => (ms / 1000).toFixed(d).replace('.', ',');
 const fmtScore = (v, lower) => (lower ? `${fmtSec(v)} s` : String(v));
 const runOn = () => !!(game.run && !game.run.done);
@@ -109,7 +114,8 @@ const runOn = () => !!(game.run && !game.run.done);
 function runStart(id, { goal = RUN.goal, onEnd = null } = {}) {
   clearInterval(game.runTimer);
   const mode = gameModeOf(id);
-  game.run = { id, mode, goal, ok: 0, wrong: 0, lives: RUN.lives, maxLives: RUN.lives, t0: performance.now(), end: 0, pausedAt: 0, done: false, penalty: 0, streak: 0, best: 0, wrongs: [], onEnd };
+  const lives = mode === 'sudden' ? 1 : RUN.lives;
+  game.run = { id, mode, goal, ok: 0, wrong: 0, lives, maxLives: lives, t0: performance.now(), end: 0, pausedAt: 0, done: false, penalty: 0, streak: 0, best: 0, wrongs: [], onEnd };
   game.runTimer = setInterval(runTick, 100);
   return game.run;
 }
@@ -138,8 +144,8 @@ function runHudHTML(cls = '') {
   if (!r) return '';
   const m = r.mode;
   return `<div class="run-hud ${cls} m-${m}">
-    ${m === 'survive' ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span>` : ''}
-    ${m === 'survive' || r.id === 'meteor' ? '<span class="run-level" data-run="levelbox">Level <b data-run="level">1</b><em class="run-levelup" data-run="levelup">schneller!</em></span>' : ''}
+    ${livesMode(m) ? `<span class="run-lives" data-run="lives" aria-label="Leben">${HEART_SVG.repeat(r.maxLives)}</span>` : ''}
+    ${livesMode(m) || r.id === 'meteor' ? '<span class="run-level" data-run="levelbox">Level <b data-run="level">1</b><em class="run-levelup" data-run="levelup">schneller!</em></span>' : ''}
     ${m === 'countdown' ? `<span class="run-clock"><span class="run-bar"><i data-run="bar"></i></span><b data-run="time">${RUN.ms / 1000}</b><small>s</small></span>` : ''}
     ${m === 'speed' ? `<span class="run-clock">${icon('clock')}<b data-run="time">0,0</b><small>s</small></span>` : ''}
     <span class="run-ok" data-run="okbox">${icon('check')}<b data-run="ok">0</b>${m === 'speed' ? `<small>/${r.goal}</small>` : ''}</span>
@@ -169,7 +175,7 @@ function runRight() {
   if (r.mode === 'speed' && r.ok >= r.goal) { runFinish('done'); return true; }
   // Survive: alle 5 richtigen ein neues Level – ab jetzt bleibt etwas weniger Zeit
   // (Meteoriten werden in allen Modi pro Level schneller)
-  if ((r.mode === 'survive' || r.id === 'meteor') && r.ok % SURVIVE.step === 0) {
+  if ((livesMode(r.mode) || r.id === 'meteor') && r.ok % SURVIVE.step === 0) {
     runPop('[data-run="levelbox"]', 'up');
     tone([660, 880, 1175], 0.07, 'triangle', 0.07);
   }
@@ -181,7 +187,7 @@ function runWrong(t = null) {
   if (!runOn()) return true;
   r.wrong++; r.streak = 0;
   if (t) r.wrongs.push(t);
-  if (r.mode === 'survive') {
+  if (livesMode(r.mode)) {
     r.lives--;
     $$('[data-run="lives"]').forEach((el) => { const h = el.children[r.lives]; if (h) { h.classList.toggle('lost', false); void h.getBoundingClientRect(); h.classList.add('lost'); } });
     runHud();
@@ -234,6 +240,7 @@ function runFinish(why) {
 const STAR_LIMITS = {
   countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32], runner: [4, 7, 10] },
   survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35], runner: [5, 10, 18] },
+  sudden: { runner: [3, 7, 12] },
   speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32] },
 };
 function runStars(r, score) {
@@ -265,7 +272,7 @@ function showRunResult(r) {
   const title = { time: 'Zeit ist um!', lives: 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : 'Geschafft!' }[r.why] || 'Fertig!';
   const line = lower
     ? `${r.id === 'memory' ? `${r.goal} Paare` : `${r.goal} richtige`} in <b>${fmtSec(score)} s</b>${r.wrong ? ` · ${r.wrong} falsch` : ' · ohne Fehler'}`
-    : `<b>${r.ok}</b> ${r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten'}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${r.mode === 'survive' ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
+    : `<b>${r.ok}</b> ${r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten'}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${livesMode(r.mode) ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
   const wrongs = [...new Map(r.wrongs.map((t) => [t.key + t.op, t])).values()].slice(0, 8);
   $('#view').innerHTML = gameShell(r.id, `<div class="run-result">
       <div class="result">
@@ -389,11 +396,11 @@ async function startRunner3D() {
   const r = runStart('runner', { onEnd: () => { try { run?.stop(); } catch { /* */ } } });
   runPause(true); // die Uhr läuft erst nach dem Countdown
   $('#view').innerHTML = gameShell('runner', `<div id="rnwrap"></div>
-    <p class="mode-hint">Wischen oder Pfeiltasten: ← → Spur wechseln, ↑ springen, ↓ rutschen. Kurz tippen geht auch: links/rechts aussen = Spur, Mitte = springen.</p>`);
+    <p class="mode-hint">Wischen oder Pfeiltasten: ← → Spur wechseln, ↑ springen (↓ in der Luft: schnell landen). Kurz tippen geht auch: links/rechts aussen = Spur, Mitte = springen.</p>`);
   const host = $('#rnwrap');
   game.stage3d = { dispose: () => { try { run?.dispose(); } catch (e) { console.warn(e); } } };
   const lose = () => { // Hindernis oder Sturz: Survive kostet ein Leben (zählt nicht als falsche Antwort)
-    if (!runOn() || r.mode !== 'survive') return false;
+    if (!runOn() || !livesMode(r.mode)) return false;
     r.lives--;
     $$('[data-run="lives"]').forEach((el) => { const h = el.children[r.lives]; if (h) { h.classList.toggle('lost', false); void h.getBoundingClientRect(); h.classList.add('lost'); } });
     runHud();
@@ -405,9 +412,8 @@ async function startRunner3D() {
     look: typeof a3Mine === 'function' ? a3Mine() : null,
     hudHTML: runHudHTML('rn-hud'),
     sound: !!db.settings.sound,
-    gateEvery: r.mode === 'countdown' ? 56 : 76,
-    speed: (lv) => (r.mode === 'countdown' ? 10 : Math.min(15, 8.8 + (lv - 1) * 0.6)),
-    level: () => (r.mode === 'survive' ? surviveLevel() : 1),
+    gateEvery: 76,
+    speed: (n) => Math.min(14.5, 8.8 + n * 0.18), // jede richtige Antwort ein bisschen schneller
     ask: () => {
       const t = game.picker.next();
       const vals = choicesFor(t, 3);

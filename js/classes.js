@@ -1507,7 +1507,7 @@ async function loadClassBoard(c) {
   const b = klass.board;
   try {
     const cl = await cloudClient();
-    const { data, error } = await cl.rpc('einmaleins_class_board', { p_class: c.id, p_board: `${b.game}:${b.mode}:${b.op}` });
+    const { data, error } = await cl.rpc('einmaleins_class_board', { p_class: c.id, p_board: boardKey(b.game, b.mode, b.op) });
     if (error) throw error;
     if ($('#cboard') === el) el.innerHTML = boardListHTML(data);
   } catch (e) {
