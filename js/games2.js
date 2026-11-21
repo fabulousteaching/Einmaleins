@@ -7,7 +7,7 @@
 
 /** Wie die Punkte im Ergebnis heissen (sonst «richtige Antworten») */
 function g2Noun(id, n) {
-  const W = { maze: ['richtiger Schritt', 'richtige Schritte'], tower: ['Block im Turm', 'Blöcke im Turm'], snake: ['richtige Zahl gefressen', 'richtige Zahlen gefressen'], puzzle: ['Teil', 'Teile'] }[id];
+  const W = { maze: ['richtiger Schritt', 'richtige Schritte'], tower: ['Stockwerk', 'Stockwerke'], snake: ['richtige Zahl gefressen', 'richtige Zahlen gefressen'], puzzle: ['Teil', 'Teile'] }[id];
   return W ? W[n === 1 ? 0 : 1] : null;
 }
 const g2Pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -178,15 +178,27 @@ function mzStep(i) {
 /* =========================================================
    🏗️ Turmbau: richtige Antwort → Block am Kran → im richtigen Moment loslassen
    ========================================================= */
-const TW = { BH: 34, GROUND: 46, COLORS: ['#F97316', '#0EA5E9', '#22C55E', '#A855F7', '#EF4444', '#EAB308', '#14B8A6', '#EC4899'] };
+// Hausstockwerke: Fassadenfarben (Backstein, Sand, Mint, Himmelblau …)
+const TW = { BH: 42, GROUND: 46, COLORS: ['#E76F51', '#E9C46A', '#2A9D8F', '#8AB17D', '#F4A261', '#6D8DB8', '#B56576', '#D4A373', '#5FA8D3', '#C9ADA7'] };
+/** Stadt-Silhouette im Hintergrund (zufällige Häuser mit Fenstern) */
+function twCity() {
+  let x = 0, d = '', w = '';
+  while (x < 600) {
+    const bw = 30 + Math.random() * 50, bh = 50 + Math.random() * 120;
+    d += `M${x} 200V${200 - bh}h${bw}V200z`;
+    for (let yy = 200 - bh + 10; yy < 190; yy += 16) for (let xx = x + 6; xx < x + bw - 8; xx += 12) if (Math.random() < 0.45) w += `M${xx} ${yy}h5v7h-5z`;
+    x += bw + 4 + Math.random() * 8;
+  }
+  return `<svg class="tw-city" viewBox="0 0 600 200" preserveAspectRatio="none" aria-hidden="true"><path d="${d}" fill="rgba(30, 64, 120, .22)"/><path d="${w}" fill="rgba(255, 240, 180, .35)"/></svg>`;
+}
 function startTower() {
-  Object.assign(game, { picker: gamePicker(), tw: { blocks: [{ x: 30, w: 40, label: 'Start' }], phase: 'ask', hang: null, t: null, swingT: 0, shift: 0 }, over: false });
+  Object.assign(game, { picker: gamePicker(), tw: { blocks: [{ x: 30, w: 40, label: '🏪 Erdgeschoss' }], phase: 'ask', hang: null, t: null, swingT: 0, shift: 0 }, over: false });
   const r = runStart('tower');
   $('#view').innerHTML = gameShell('tower', `
     ${runHudHTML('bar-hud')}
     ${r.mode === 'survive' ? '<div class="shot-clock tw-clock" id="twclock"><i></i></div>' : ''}
     <div class="tw-stage" id="twstage">
-      <div class="tw-world" id="twworld"><div class="tw-ground"></div></div>
+      <div class="tw-world" id="twworld">${twCity()}<div class="tw-ground"></div><div class="tw-roof" id="twroof"><i></i></div></div>
       <div class="tw-crane" aria-hidden="true"><div class="tw-beam"></div><div class="tw-trolley" id="twtrolley"><i class="tw-rope"></i></div></div>
       <div class="tw-tip" id="twtip" hidden>Tippe, um den Block loszulassen!</div>
     </div>
@@ -207,13 +219,24 @@ function twBlockEl(b, level) {
   const w = $('#twworld');
   if (!w) return null;
   const el = document.createElement('div');
-  el.className = `tw-block${level === 0 ? ' base' : ''}`;
-  el.style.cssText = `left:${b.x}%;width:${b.w}%;bottom:${TW.GROUND + level * TW.BH}px;--bc:${level === 0 ? '#64748b' : TW.COLORS[level % TW.COLORS.length]}`;
+  el.className = `tw-block house${level === 0 ? ' base' : ''}`;
+  el.style.cssText = `left:${b.x}%;width:${b.w}%;bottom:${TW.GROUND + level * TW.BH}px;--bc:${level === 0 ? '#94a3b8' : b.c || TW.COLORS[level % TW.COLORS.length]}`;
+  el.dataset.lit = b.lit ?? Math.floor(Math.random() * 3);
   el.innerHTML = `<span>${esc(b.label)}</span>`;
-  w.appendChild(el);
+  w.insertBefore(el, $('#twroof'));
   twFit(el, b.w);
   b.el = el;
+  twRoof();
   return el;
+}
+/** Dach auf dem obersten Stockwerk */
+function twRoof() {
+  const tw = game.tw, r = $('#twroof');
+  if (!tw || !r) return;
+  const top = tw.blocks[tw.blocks.length - 1];
+  r.style.left = `${top.x}%`; r.style.width = `${top.w}%`;
+  r.style.bottom = `${TW.GROUND + tw.blocks.length * TW.BH}px`;
+  r.hidden = tw.blocks.length < 2;
 }
 /** Schrift passt sich der Blockbreite an */
 function twFit(el, wPct) {
@@ -251,12 +274,13 @@ function twAnswer(v) {
   // Block erscheint am Kran: so breit wie der oberste Block des Turms
   const top = tw.blocks[tw.blocks.length - 1];
   const el = document.createElement('div');
-  el.className = 'tw-block hang';
-  el.style.cssText = `width:${top.w}%;--bc:${TW.COLORS[tw.blocks.length % TW.COLORS.length]}`;
+  const col = TW.COLORS[Math.floor(Math.random() * TW.COLORS.length)], lit = Math.floor(Math.random() * 3);
+  el.className = 'tw-block house hang';
+  el.style.cssText = `width:${top.w}%;--bc:${col}`; el.dataset.lit = lit;
   el.innerHTML = `<span>${esc(taskText(t, true))}</span>`;
   $('#twstage').appendChild(el);
   twFit(el, top.w);
-  tw.hang = { el, w: top.w, label: taskText(t, true) };
+  tw.hang = { el, w: top.w, label: taskText(t, true), c: col, lit };
   tw.phase = 'drop';
   $('#twtip').hidden = false;
 }
@@ -305,13 +329,13 @@ function twDrop() {
   h.el.style.top = `${landTop}px`;
   gLater(() => {
     const perfect = Math.abs(x - top.x) < 1.3;
-    const nb = perfect ? { x: top.x, w: Math.min(46, top.w + 2.5), label: h.label } : { x: Math.max(x, top.x), w: ov, label: h.label };
+    const nb = perfect ? { x: top.x, w: Math.min(46, top.w + 2.5), label: h.label, c: h.c, lit: h.lit } : { x: Math.max(x, top.x), w: ov, label: h.label, c: h.c, lit: h.lit };
     // überstehendes Stück fällt ab
     if (!perfect) {
       const cutL = x < top.x, cw = h.w - ov;
       const cut = document.createElement('div');
-      cut.className = 'tw-block cut';
-      cut.style.cssText = `left:${cutL ? x : top.x + top.w}%;width:${cw}%;top:${landTop}px;--bc:${getComputedStyle(h.el).getPropertyValue('--bc')}`;
+      cut.className = 'tw-block house cut';
+      cut.style.cssText = `left:${cutL ? x : top.x + top.w}%;width:${cw}%;top:${landTop}px;--bc:${h.c}`; cut.dataset.lit = h.lit;
       stage.appendChild(cut);
       requestAnimationFrame(() => { cut.style.top = `${H + 60}px`; cut.style.transform = `rotate(${cutL ? -50 : 50}deg)`; cut.style.opacity = '0'; });
       setTimeout(() => cut.remove(), 900);

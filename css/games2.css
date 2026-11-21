@@ -44,15 +44,39 @@
 .tw-beam { position: absolute; left: 0; right: 0; top: 10px; height: 14px; background: repeating-linear-gradient(90deg, #facc15 0 16px, #1f2937 16px 22px); box-shadow: 0 3px 6px rgba(0, 0, 0, .25); }
 .tw-trolley { position: absolute; top: 6px; width: 34px; height: 20px; margin-left: -17px; border-radius: 6px; background: #374151; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .3); }
 .tw-rope { position: absolute; left: 50%; top: 20px; width: 3px; height: 32px; margin-left: -1.5px; background: #374151; }
-.tw-tip { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; background: rgba(17, 24, 39, .75); color: #fff; font-weight: 700; font-size: .9rem; white-space: nowrap; pointer-events: none; animation: tw-tip 1.2s ease-in-out infinite; }
+.tw-tip { position: absolute; left: 50%; top: 112px; transform: translateX(-50%); z-index: 3; padding: 6px 14px; border-radius: 99px; background: rgba(17, 24, 39, .75); color: #fff; font-weight: 700; font-size: .9rem; white-space: nowrap; pointer-events: none; animation: tw-tip 1.2s ease-in-out infinite; }
 @keyframes tw-tip { 50% { transform: translateX(-50%) translateY(-4px); } }
-.tw-block { position: absolute; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; color: #fff; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bc) 78%, #fff), var(--bc)); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .35); text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
-.tw-block span { overflow: hidden; text-overflow: clip; padding: 0 4px; }
-.tw-block.base { border-radius: 8px 8px 0 0; }
+.tw-city { position: absolute; left: 0; right: 0; bottom: 40px; width: 100%; height: 160px; pointer-events: none; }
+/* Hausstockwerke: Fassade mit Fensterreihe (einige beleuchtet), Bodenplatte, Schild mit der Rechnung */
+.tw-block { position: absolute; height: 42px; display: grid; place-items: center; overflow: hidden; color: #1f2937; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tw-block.house { border-radius: 3px 3px 0 0;
+  background:
+    linear-gradient(180deg, transparent 0 calc(100% - 6px), color-mix(in srgb, var(--bc) 55%, #1f2937) calc(100% - 6px)),
+    repeating-linear-gradient(90deg, transparent 0 4px, rgba(0, 0, 0, .05) 4px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--bc) 82%, #fff), var(--bc));
+  box-shadow: inset 3px 0 0 rgba(255, 255, 255, .22), inset -3px 0 0 rgba(0, 0, 0, .14), 0 2px 0 rgba(0, 0, 0, .08); }
+.tw-block.house::before { content: ''; position: absolute; left: 7px; right: 7px; top: 8px; height: 20px;
+  background: repeating-linear-gradient(90deg, transparent 0 5px, var(--win, #cfe8ff) 5px 19px, transparent 19px 26px);
+  -webkit-mask: linear-gradient(180deg, #000 0 100%); border-top: 2px solid rgba(255, 255, 255, .35); opacity: .95; }
+.tw-block.house[data-lit="1"]::before { --win: #fde68a; }
+.tw-block.house[data-lit="2"]::before { background: repeating-linear-gradient(90deg, transparent 0 5px, #cfe8ff 5px 19px, transparent 19px 26px, transparent 26px 31px, #fde68a 31px 45px, transparent 45px 52px); }
+.tw-block.house::after { content: ''; position: absolute; left: 7px; right: 7px; top: 18px; height: 2px; background: repeating-linear-gradient(90deg, transparent 0 5px, rgba(255, 255, 255, .7) 5px 19px, transparent 19px 26px); }
+.tw-block span { position: relative; z-index: 1; padding: 2px 9px; border-radius: 7px; background: rgba(255, 255, 255, .94); color: #1f2937; box-shadow: 0 2px 4px rgba(0, 0, 0, .25); overflow: hidden; text-overflow: clip; max-width: calc(100% - 8px); margin-top: -4px; }
+/* Erdgeschoss: Laden mit Markise und Tür */
+.tw-block.house.base { border-radius: 0;
+  background: linear-gradient(90deg, transparent 0 calc(50% - 9px), #7c2d12 calc(50% - 9px) calc(50% + 9px), transparent calc(50% + 9px)) bottom / 100% 26px no-repeat,
+    repeating-linear-gradient(90deg, #ef4444 0 12px, #fff 12px 24px) top / 100% 9px no-repeat,
+    linear-gradient(180deg, #e2e8f0, #94a3b8); }
+.tw-block.house.base::before, .tw-block.house.base::after { display: none; }
+.tw-block.house.base span { font-size: .8em; margin-top: 0; }
+/* Dach auf dem obersten Stockwerk */
+.tw-roof { position: absolute; height: 22px; transition: bottom .3s ease, left .3s ease, width .3s ease; pointer-events: none; }
+.tw-roof::before { content: ''; position: absolute; left: -4%; right: -4%; bottom: 0; height: 18px; background: repeating-linear-gradient(90deg, #7f1d1d 0 8px, #991b1b 8px 16px); clip-path: polygon(0 100%, 8% 0, 92% 0, 100% 100%); }
+.tw-roof i { position: absolute; left: 70%; bottom: 16px; width: 3px; height: 16px; background: #374151; }
+.tw-roof i::after { content: ''; position: absolute; left: -6px; top: 0; width: 15px; height: 3px; background: #374151; }
 .tw-block.hang { top: 58px; z-index: 2; }
 .tw-block.land { animation: tw-land .25s ease-out; }
-@keyframes tw-land { 0% { transform: scaleY(.8) translateY(4px); } }
+@keyframes tw-land { 0% { transform: scaleY(.85) translateY(4px); } }
 .tw-block.cut { z-index: 2; transition: top .8s cubic-bezier(.5, 0, 1, 1), transform .8s, opacity .8s; }
 .tw-ask { display: grid; justify-items: center; gap: 8px; margin: 10px auto 4px; width: min(94vw, 560px); }
 .tw-task { font-size: clamp(2rem, 7vw, 2.8rem); }
