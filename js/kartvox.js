@@ -125,6 +125,15 @@ function kvFinishMat(T, f) {
       m.customProgramCacheKey = () => 'kv-glow';
       return m;
     }
+    case 'carbon': return new T.MeshPhysicalMaterial({ ...o, color: 0x9a9a9a, metalness: 0.35, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.04, sheen: 0.6, sheenColor: 0x888888 });
+    case 'candy': return new T.MeshPhysicalMaterial({ ...o, metalness: 0.25, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.02, iridescence: 0.55, iridescenceIOR: 1.4, sheen: 1, sheenColor: 0xffffff });
+    case 'neon': {
+      const m = new T.MeshStandardMaterial({ ...o, roughness: 0.2, emissive: 0xffffff, emissiveIntensity: 0.85 });
+      m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vColor.rgb;'); };
+      m.customProgramCacheKey = () => 'kv-neon';
+      return m;
+    }
+    case 'gold': return new T.MeshPhysicalMaterial({ color: 0xf4c542, metalness: 1, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05 });
     default: return new T.MeshPhysicalMaterial({ ...o, metalness: 0.1, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08 });
   }
 }
@@ -183,6 +192,37 @@ function kvPattern(s, L) {
         if (a > 1 - len) c = a > 1 - len * 0.42 ? Y : P2;
         break;
       }
+      case 'waves': if (Math.abs(y - ymid - Math.sin(z * 0.32 + (side ? 0 : x * 0.3)) * sy * 0.18) <= 1.1 || Math.abs(y - ymid + sy * 0.28 - Math.sin(z * 0.32 + 1.5) * sy * 0.12) <= 0.8) c = P2; break;
+      case 'camo': { const n = vxRand(Math.floor((x + 99) / 4), Math.floor((y + 99) / 4), Math.floor((z + 99) / 5), 11); c = n < 0.3 ? P2 : n < 0.55 ? vxShade(v.c, -0.35) : n < 0.7 ? vxShade(P2, -0.3) : null; break; }
+      case 'hearts': {
+        const cu = side ? z : x * 2, cv = side ? y * 1.4 : z;
+        const gx = Math.floor((cu + 100) / 10), gy = Math.floor((cv + 100) / 10);
+        const X = ((cu + 100) - gx * 10 - 5) / 3.2, Yh = -(((cv + 100) - gy * 10 - 5) / 3.2) + 0.25;
+        if ((gx + gy) % 2 === 0 && (X * X + Yh * Yh - 1) ** 3 - X * X * Yh ** 3 < 0) c = P2;
+        break;
+      }
+      case 'zebra': if (Math.sin(z * 0.5 + Math.sin(y * 0.45 + x * 0.2) * 1.6) > 0.35) c = P2; break;
+      case 'pixel': { const n = vxRand(Math.floor((x + 99) / 3), Math.floor((y + 99) / 3), Math.floor((z + 99) / 3), 21); if (n < 0.28) c = P2; else if (n < 0.4) c = vxShade(v.c, 0.25); break; }
+      case 'leopard': {
+        const cx = Math.floor((x + 100) / 6), cy2 = Math.floor((y + 100) / 6), cz = Math.floor((z + 100) / 6);
+        const ox = cx * 6 - 100 + 3 + (vxRand(cx, cy2, cz, 3) - 0.5) * 2, oy = cy2 * 6 - 100 + 3 + (vxRand(cx, cy2, cz, 4) - 0.5) * 2, oz = cz * 6 - 100 + 3 + (vxRand(cx, cy2, cz, 5) - 0.5) * 2;
+        const d = Math.hypot(x - ox, y - oy, z - oz);
+        if (d < 2.6 && d > 1.3) c = P2; else if (d <= 1.3) c = vxShade(v.c, -0.25);
+        break;
+      }
+      case 'tiger': if (Math.sin(z * 0.55 + (side ? y : x) * 0.35) > 0.72 && vxRand(Math.floor(z / 3), Math.floor(y / 4), 0, 9) > 0.2) c = P2; break;
+      case 'circuit': {
+        const onLine = ((z + 99) % 7 === 0 && vxRand(Math.floor((y + 99) / 5), Math.floor((z + 99) / 7), 0, 2) < 0.6) || ((y + 99) % 6 === 0 && vxRand(Math.floor((z + 99) / 6), Math.floor((y + 99) / 6), 1, 2) < 0.55);
+        if (onLine) { c = P2; v.mat = 2; } else if (vxRand(x, y, z, 8) < 0.015) { c = 0xffd34d; v.mat = 2; }
+        break;
+      }
+      case 'galaxy': {
+        const n = vxRand(Math.floor((x + 99) / 5), Math.floor((y + 99) / 4), Math.floor((z + 99) / 6), 13);
+        c = vxMix(0x1e1b4b, n < 0.5 ? 0x7c3aed : 0x2563eb, Math.min(1, n * 1.4));
+        if (vxRand(x, y, z, 14) < 0.035) { c = 0xffffff; v.mat = 2; }
+        break;
+      }
+      case 'rainbow': { const k = Math.floor(a * 6.99), R6 = [0xef4444, 0xf97316, 0xfacc15, 0x22c55e, 0x3b82f6, 0x8b5cf6]; c = R6[Math.max(0, Math.min(5, k))]; break; }
       default: break;
     }
     if (c != null) v.c = c;
@@ -204,6 +244,10 @@ function kvRimColor(style, t, ang) {
     case 'turbine': { if (t < 0.2) return [0xf97316, 1]; const f = ((((ang + t * 1.6) / P2) * 9) % 1 + 1) % 1; return f < 0.5 ? [0xe5e7eb, 3] : [0x4b5563, 4]; }
     case 'black': if (t < 0.18) return [0xef4444, 1]; if (t > 0.84) return [0x111827, 1]; return Math.abs(sec(6)) < 0.2 ? [0x1f2430, 1] : [0x0b0d12, 4];
     case 'neon': if (t > 0.76 && t < 0.94) return [0x22d3ee, 2]; if (t < 0.18) return [0xa5f3fc, 2]; return Math.abs(sec(3)) < 0.1 ? [0xf472b6, 2] : [0x0b1020, 4];
+    case 'flower': { if (t < 0.22) return [0xfacc15, 1]; const petal = Math.abs(sec(6)) < 0.3 * (1 - Math.abs(t - 0.6)); return petal && t < 0.9 ? [0xf472b6, 1] : t > 0.86 ? [0xf9fafb, 1] : [0x86efac, 1]; }
+    case 'fire': { if (t < 0.2) return [0xfff1a8, 2]; const f = (((ang / P2) * 7 + t * 1.2) % 1 + 1) % 1; return f < 0.45 ? [t > 0.6 ? 0xef4444 : 0xf97316, 2] : [0x1f1410, 4]; }
+    case 'rainbow': { if (t < 0.18) return [0xffffff, 1]; const h = ((ang / P2) % 1 + 1) % 1; const R6 = [0xef4444, 0xf97316, 0xfacc15, 0x22c55e, 0x3b82f6, 0x8b5cf6]; return [R6[Math.floor(h * 6) % 6], 1]; }
+    case 'diamond': { if (t < 0.2) return [0xe0f7ff, 2]; const s2 = Math.abs(sec(8)); return s2 < 0.12 ? [0xffffff, 2] : (Math.floor(t * 5) % 2 ? [0xbae6fd, 3] : [0xe0f2fe, 3]); }
     default: { // klassisch: Scheibe mit fünf Löchern
       if (t < 0.2) return [0xf1f5f9, 3];
       if (t > 0.36 && t < 0.72 && Math.abs(sec(5)) < 0.17) return [0x334155, 4];
@@ -261,16 +305,28 @@ function kvWing(B, L, m) {
       struts(y, z, y - 6); plate(y, z, w, 5, P); ends(y, z, w, 6, 6, KV_DARK);
       for (let k = 0; k <= 14; k++) { const top = Math.round(y + 2 + (k / 14) * 8); for (let yy = y - 6; yy <= top; yy++) B.put(0, yy, z + 16 - k, P2, 0, 'paint2'); }
       break;
+    case 'heart': {
+      struts(y, z, y - 6);
+      for (let x = -12; x <= 12; x++) for (let yy = -9; yy <= 10; yy++) { const X = x / 10, Y2 = yy / 10 + 0.2; if ((X * X + Y2 * Y2 - 1) ** 3 - X * X * Y2 ** 3 < 0) for (let dz = -1; dz <= 1; dz++) B.put(x, y + 6 + yy, z + dz, Math.abs(X) < 0.3 && Y2 > 0.4 ? vxShade(P2, 0.25) : P2, 0, 'paint2'); }
+      break;
+    }
+    case 'jet': struts(y, z, y - 6); for (let k = 0; k <= 7; k++) B.rbox(-w - 4 + k, y + k * 0.2, z - 6 + k * 2, w + 4 - k, y + 1 + k * 0.2, z - 5 + k * 2, k % 3 === 0 ? P2 : P, { tag: 'paint', p: 4 }); B.both((sg) => { for (let k = 0; k <= 8; k++) B.rbox(sg * (w + 3) - 1, y + 1, z - 6 + k, sg * (w + 3) + 1, y + 1 + k, z - 5 + k, P2, { tag: 'paint2', p: 4 }); }); break;
+    case 'dragon': B.both((sg) => { for (let i = 0; i <= 12; i++) { const x = sg * (4 + i * 1.6), yu = y + 2 + Math.round(i * 0.9), yl = y - 2 + Math.round(Math.abs(Math.sin(i * 0.7)) * 3); for (let yy = yl; yy <= yu; yy++) for (const dz of [0, 1]) B.put(Math.round(x), yy, z + dz - Math.round(i * 0.5), i % 4 === 0 ? vxShade(P2, -0.35) : P2, 0, 'paint2'); } }); struts(y, z, y - 6); break;
+    case 'angel': B.both((sg) => { for (let i = 0; i <= 14; i++) { const x = sg * (5 + i * 1.4), yl = y - 4 + Math.round(i * 0.3), yu = y + 6 + Math.round(Math.sin(i * 0.25) * 6) - (i > 11 ? (i - 11) * 2 : 0); for (let yy = yl; yy <= yu; yy++) for (const dz of [0, 1]) B.put(Math.round(x), yy, z + dz - Math.round(i * 0.35), (yy - yl) % 3 === 0 ? 0xe2e8f0 : 0xffffff, 1); } }); struts(y, z, y - 6); break;
     default: struts(y, z, y - 6); plate(y, z, w, 5, P); ends(y, z, w, 6, 6, KV_DARK); break;
   }
 }
 function kvPipes(B, L, pts) {
-  const c = L.exhaust === 'gold' ? [KV_GOLD, 3] : L.exhaust === 'black' ? [0x111827, 1] : [KV_CHROME, 3];
+  const ex = L.exhaust;
+  const c = ex === 'gold' || ex === 'trumpet' ? [KV_GOLD, 3] : ex === 'black' ? [0x111827, 1] : ex === 'rocket' ? [0x374151, 3] : ex === 'candy' ? [0xffffff, 1] : [KV_CHROME, 3];
   const list = [];
   for (const [x, y, z] of pts) {
-    const xs = L.exhaust === 'quad' ? [x - Math.sign(x || 1) * 2, x + Math.sign(x || 1) * 2] : [x];
+    const xs = ex === 'quad' ? [x - Math.sign(x || 1) * 2, x + Math.sign(x || 1) * 2] : [x];
     for (const xx of xs) {
-      B.tubeZ(z, z + 5, xx, y, 1.6, c[0], { mat: c[1] });
+      if (ex === 'trumpet') B.tubeZ(z - 2, z + 5, xx, y, (zz) => (zz < z + 1 ? 1.6 + (z + 1 - zz) * 0.7 : 1.4), c[0], { mat: c[1] });
+      else if (ex === 'rocket') { B.tubeZ(z - 1, z + 6, xx, y, (zz) => (zz < z + 2 ? 2.6 : 1.8), c[0], { mat: c[1] }); B.tubeZ(z - 1, z - 1, xx, y, 1.6, 0xff8a3d, { mat: 2 }); }
+      else if (ex === 'candy') B.tubeZ(z, z + 5, xx, y, 1.7, (vx, vy, vz) => ((vz + vy + vx) % 4 < 2 ? 0xef4444 : 0xffffff), { mat: 1 });
+      else B.tubeZ(z, z + 5, xx, y, 1.6, c[0], { mat: c[1] });
       B.cut((vx, vy, vz) => vz === z && (vx - xx) ** 2 + (vy - y) ** 2 < 1.1);   // Öffnung
       list.push([xx, y, z]);
     }
@@ -501,10 +557,110 @@ const KART_BODIES = {
         pipes: [[9, 20, -34], [-9, 20, -34]], wing: { y: 42, z: -12, w: 13 }, num: [['+x', 20, 19], ['-x', 20, 19]], lights: { front: [35, 19], back: [-33, 19] }, glow: [3.4, 4.8] };
     },
   },
+  banana: {
+    build(B) {
+      const Yc = 0xf7d84a, BR = 0x6b4423;
+      for (let z = -34; z <= 34; z++) {
+        const t = z / 34, r = 10 * Math.sqrt(Math.max(0, 1 - t * t * 0.92)) + 1, cy = 12 + t * t * 9;
+        for (let x = -Math.ceil(r); x <= Math.ceil(r); x++) for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+          if (x * x + (y - cy) ** 2 > r * r || y < 4) continue;
+          B.put(x, y, z, Math.abs(t) > 0.93 ? BR : (Math.abs(x) % 5 === 0 ? 0xe8c43a : Yc), Math.abs(t) > 0.93 ? 4 : 0, 'fixed');
+        }
+      }
+      B.cut((x, y, z) => Math.abs(x) <= 7 && y >= 15 && z >= -14 && z <= 6);
+      B.rbox(-7, 8, -14, 7, 15, 2, KV_SEAT, { mat: 4, p: 4 });
+      return { wheels: [[14, 18, 7, 1], [-14, 18, 7, 1], [14, -18, 7.2, 0], [-14, -18, 7.2, 0]], wheelW: 0.3, seat: { y: 15, z: -6 }, steer: { y: 22, z: 5 },
+        pipes: [[4, 9, -31], [-4, 9, -31]], wing: null, num: [['+x', -2, 13], ['-x', -2, 13]], lights: { front: [99, 0], back: [-99, 0] }, glow: [2.6, 4.6] };
+    },
+  },
+  shoe: {
+    build(B, L) {
+      const P = L.paint, P2 = L.paint2;
+      B.rbox(-12, 3, -30, 12, 7, 30, 0xf8fafc, { mat: 1, p: 4 });
+      B.rbox(-12, 2, -30, 12, 3, 30, vxShade(P2, -0.1), { mat: 4, p: 6 });
+      B.ell(0, 8, 14, 11.5, 9, 17, P, { tag: 'paint', keep: (x, y) => y >= 7 });
+      B.rbox(-11, 7, -30, 11, 22, 2, P, { tag: 'paint', p: 3 });
+      for (let z = 4; z <= 22; z += 4) B.rbox(-6, 16 - Math.round((z - 4) * 0.22), z, 6, 17 - Math.round((z - 4) * 0.22), z + 1, 0xffffff, { mat: 1, p: 6 });
+      B.both((sg) => { for (let z = -24; z <= 18; z++) { const y = Math.round(10 + Math.sin(((z + 24) / 42) * Math.PI) * 5); B.put(sg * 12, y, z, P2, 0, 'paint2'); B.put(sg * 12, y + 1, z, P2, 0, 'paint2'); } });
+      B.cut((x, y, z) => Math.abs(x) <= 8 && y >= 13 && z >= -24 && z <= 0);
+      B.rbox(-8, 7, -24, 8, 13, 0, KV_SEAT, { mat: 4, p: 4 });
+      B.rbox(-10, 18, -31, 10, 25, -28, P2, { tag: 'paint2', p: 4 });
+      return { wheels: [[15, 19, 7, 1], [-15, 19, 7, 1], [15, -20, 7, 0], [-15, -20, 7, 0]], wheelW: 0.32, seat: { y: 13, z: -12 }, steer: { y: 21, z: 2 },
+        pipes: [[5, 9, -32], [-5, 9, -32]], wing: null, num: [['+x', -14, 15], ['-x', -14, 15]], lights: { front: [99, 0], back: [-99, 0] }, glow: [2.8, 4.8] };
+    },
+  },
+  snail: {
+    build(B, L) {
+      const P = L.paint, P2 = L.paint2, skin = 0xa7c4a0;
+      B.rbox(-10, 4, -30, 10, 10, 24, skin, { mat: 1, p: 3 });
+      B.ell(0, 13, 25, 8, 8, 8, skin, { mat: 1 });
+      B.both((sg) => { B.bar([sg * 4, 18, 27], [sg * 7, 30, 31], 1.1, skin, { mat: 1 }); B.ell(sg * 7, 31, 31, 2.2, 2.2, 2.2, 0xffffff, { mat: 1 }); B.put(sg * 7, 31, 33, 0x111111, 1); });
+      B.put(-2, 12, 33, 0x7b2b3a, 1); B.put(-1, 11, 33, 0x7b2b3a, 1); B.put(0, 11, 33, 0x7b2b3a, 1); B.put(1, 12, 33, 0x7b2b3a, 1);
+      for (let z = -34; z <= 2; z++) for (let y = 6; y <= 40; y++) {
+        const dy = y - 22, dz = z + 16, r = Math.hypot(dy, dz);
+        if (r > 17) continue;
+        const w = 9.5 * Math.sqrt(Math.max(0, 1 - (r / 17.5) ** 2)) + 1, a = Math.atan2(dy, dz), band = Math.floor((r + (a / (2 * Math.PI)) * 6 + 6) / 3) % 2;
+        for (let x = -Math.round(w); x <= Math.round(w); x++) B.put(x, y, z, band ? P : P2, 0, band ? 'paint' : 'paint2');
+      }
+      B.rbox(-7, 10, 2, 7, 13, 16, KV_SEAT, { mat: 4, p: 4 });
+      return { wheels: [[13, 18, 6, 1], [-13, 18, 6, 1], [13, -20, 6.4, 0], [-13, -20, 6.4, 0]], wheelW: 0.3, seat: { y: 13, z: 9 }, steer: { y: 22, z: 20 },
+        pipes: [[4, 8, -32], [-4, 8, -32]], wing: null, num: [['+x', -16, 22], ['-x', -16, 22]], lights: { front: [99, 0], back: [-99, 0] }, glow: [2.6, 4.6] };
+    },
+  },
+  bee: {
+    build(B) {
+      const Yc = 0xfacc15, K = 0x1f2430;
+      B.ell(0, 14, -2, 12, 10, 26, (x, y, z) => (Math.floor((z + 40) / 6) % 2 ? Yc : K), { keep: (x, y) => y >= 4 });
+      B.ell(0, 17, 25, 8, 8, 7, K);
+      B.both((sg) => { B.ell(sg * 4, 20, 31, 2.3, 2.6, 1.5, 0xffffff, { mat: 1 }); B.bar([sg * 3, 24, 27], [sg * 7, 33, 30], 0.8, K); B.ell(sg * 7, 33, 30, 1.6, 1.6, 1.6, K); });
+      B.both((sg) => { for (let z = -16; z <= 6; z++) for (let y = 0; y <= 12; y++) { if (((z + 5) / 11) ** 2 + (y / 12) ** 2 <= 1) B.put(sg * (11 + Math.round(y * 0.5)), 20 + y, z, 0xe0f2fe, 1); } });
+      for (let k = 0; k < 6; k++) B.put(0, 12, -29 - k, K, 1);
+      B.cut((x, y, z) => Math.abs(x) <= 7 && y >= 17 && z >= -12 && z <= 6);
+      B.rbox(-7, 9, -12, 7, 17, 4, KV_SEAT, { mat: 4, p: 4 });
+      return { wheels: [[14, 16, 7, 1], [-14, 16, 7, 1], [14, -18, 7, 0], [-14, -18, 7, 0]], wheelW: 0.3, seat: { y: 17, z: -4 }, steer: { y: 24, z: 6 },
+        pipes: [[4, 8, -28], [-4, 8, -28]], wing: null, num: [['+x', -14, 14], ['-x', -14, 14]], lights: { front: [99, 0], back: [-99, 0] }, glow: [2.6, 4.6] };
+    },
+  },
+  dragon: {
+    build(B, L) {
+      const P = L.paint, P2 = L.paint2, belly = 0xfde68a;
+      B.ell(0, 13, -4, 12, 9, 24, (x, y) => (y < 9 && Math.abs(x) < 7 ? belly : P), { tag: 'paint', keep: (x, y) => y >= 4 });
+      B.ell(0, 20, 24, 8, 7, 10, P, { tag: 'paint' });
+      B.rbox(-5, 15, 30, 5, 20, 37, P, { tag: 'paint', p: 3 });
+      B.both((sg) => { B.put(sg * 3, 21, 37, 0x111111, 1); B.ell(sg * 5, 24, 30, 1.8, 1.8, 1.4, 0xfacc15, { mat: 2 }); B.bar([sg * 4, 26, 22], [sg * 8, 34, 15], 1.2, 0xf5f5f4, { mat: 1 }); });
+      for (let z = -26; z <= 20; z += 5) B.bar([0, 21, z], [0, 26, z - 2], 1.3, P2, { mat: 0 });
+      B.both((sg) => { for (let i = 0; i <= 10; i++) { const z0 = -8 - i, y0 = 20 + i * 0.8; for (let y = Math.round(y0 - 6 + i * 0.3); y <= Math.round(y0); y++) B.put(sg * (12 + i), y, z0, i % 3 === 0 ? vxShade(P2, -0.3) : P2, 0, 'paint2'); } });
+      for (let k = 0; k < 14; k++) B.ell(0, 12 + k * 0.2, -28 - k * 1.5, 3 - k * 0.18, 3 - k * 0.18, 2, P, { tag: 'paint' });
+      B.cut((x, y, z) => Math.abs(x) <= 7 && y >= 17 && z >= -14 && z <= 6);
+      B.rbox(-7, 9, -14, 7, 17, 4, KV_SEAT, { mat: 4, p: 4 });
+      return { wheels: [[15, 17, 7.4, 1], [-15, 17, 7.4, 1], [15, -19, 7.6, 0], [-15, -19, 7.6, 0]], wheelW: 0.32, seat: { y: 17, z: -5 }, steer: { y: 24, z: 6 },
+        pipes: [[4, 9, -27], [-4, 9, -27]], wing: null, num: [['+x', -14, 13], ['-x', -14, 13]], lights: { front: [99, 0], back: [-99, 0] }, glow: [2.8, 5] };
+    },
+  },
 };
 
 /* ---------------- Fahrerin/Fahrer ---------------- */
 /** Avatar-Look fürs Kart: ohne Gegenstand, Haustier, Rucksack und Effekt */
+/* ---------------- Dach-Deko (hinten oben auf dem Kart) ---------------- */
+const KV_TOPPERS = {
+  flag() { const s = new VoxSet(); s.box(0, 0, 0, 0, 22, 0, 0x9ca3af, 3); for (let y = 13; y <= 22; y++) for (let z = 1; z <= Math.round((22 - y) * 0.9) + 1; z++) s.set(0, y, -z, (Math.floor(y / 2) + Math.floor(z / 2)) % 2 ? 0x111827 : 0xffffff, 1); return { main: s }; },
+  antenna() { const s = new VoxSet(); s.box(0, 0, 0, 0, 20, 0, 0x6b7280, 3); for (let x = -3; x <= 2; x++) for (let y = 20; y <= 25; y++) for (let z = -3; z <= 2; z++) if (Math.hypot(x + 0.5, y - 22.5, z + 0.5) <= 2.8) s.set(x, y, z, 0xef4444, 1); return { main: s }; },
+  duck() { const s = new VoxSet(); vxBall(s, 0, 3, 0, 4, 0xfacc15, { mat: 1 }); vxBall(s, 0, 8, 2, 2.6, 0xfacc15, { mat: 1 }); s.box(-1, 7, 5, 0, 7, 6, 0xf97316, 1); s.set(-2, 9, 4, 0x111111, 1).set(1, 9, 4, 0x111111, 1); return { main: s }; },
+  propeller() { const m = new VoxSet(); m.box(0, 0, 0, 0, 10, 0, 0x6b7280, 3); m.box(-1, 10, -1, 1, 11, 1, 0xef4444, 1); const sp = new VoxSet(); for (let x = -10; x <= 10; x++) sp.set(x, 0, Math.abs(x) < 2 ? 0 : (x < 0 ? -1 : 1), x < 0 ? 0x3b82f6 : 0xfacc15, 1); return { main: m, spin: sp, spinY: 12 }; },
+  siren() { const m = new VoxSet(); m.box(-4, 0, -3, 3, 1, 2, 0x1f2430, 1); const l = new VoxSet(); vxBall(l, -0.5, 1, -0.5, 3.2, 0x60a5fa, { mat: 2, avoid: (x, y) => y < 0 }); return { main: m, flash: l, flashY: 2 }; },
+  crown() { const s = new VoxSet(); for (let a = 0; a < 48; a++) { const t = (a / 48) * Math.PI * 2, x = Math.round(Math.cos(t) * 6 - 0.5), z = Math.round(Math.sin(t) * 6 - 0.5), pk = a % 8 === 0 ? 4 : 0; for (let y = 0; y <= 3 + pk; y++) s.set(x, y, z, 0xfacc15, 3); if (a % 8 === 4) s.set(x, 2, z, [0xef4444, 0x3b82f6, 0x22c55e, 0xec4899, 0x8b5cf6, 0xef4444][(a / 8) | 0], 1); } return { main: s }; },
+  unicorn() { const s = new VoxSet(); for (let k = 0; k < 16; k++) { const r = 3 * (1 - k / 17); for (let x = -3; x <= 2; x++) for (let z = -3; z <= 2; z++) if (Math.hypot(x + 0.5, z + 0.5) <= r + 0.3) s.set(x, k, z, (k + x + z) % 3 === 0 ? 0xf9a8d4 : 0xfde68a, 3); } return { main: s }; },
+  trophy() { const s = new VoxSet(), g = 0xfacc15; s.box(-3, 0, -3, 2, 1, 2, 0x7c4a1c, 1); s.box(-1, 2, -1, 0, 5, 0, g, 3); for (let y = 6; y <= 13; y++) { const r = y < 8 ? 2 : 3.6; for (let x = -4; x <= 3; x++) for (let z = -4; z <= 3; z++) { const d = Math.hypot(x + 0.5, z + 0.5); if (d <= r && (y < 13 || d > r - 1.2)) s.set(x, y, z, g, 3); } } for (const x of [-5, 4]) s.box(x, 8, -1, x, 11, 0, g, 3); return { main: s }; },
+};
+/** Wo die Dach-Deko sitzt: höchster Punkt ganz hinten in der Mitte (meist der Spoiler) */
+function kvMount(s) {
+  let z0 = Infinity;
+  for (const v of s.m.values()) if (v.z < z0) z0 = v.z;
+  let best = null;
+  for (const v of s.m.values()) if (Math.abs(v.x) <= 2 && v.z <= z0 + 9 && (!best || v.y > best.y)) best = v;
+  return best ? [0, best.y + 1, best.z] : [0, 20, z0 + 4];
+}
+
 function kvDriverLook(look) {
   const d = { ...look };
   delete d.hand; delete d.pet; delete d.back; delete d.effect; delete d.bag;
@@ -560,6 +716,25 @@ function kartVoxModel(T, look, driver = null, { lite = false, fig: figIn = null 
     const dm = new T.MeshPhysicalMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0, clearcoat: 1, depthWrite: false });
     const dome = new T.Mesh(new T.SphereGeometry(spec.dome.r, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), dm); dome.position.y = spec.dome.y * U; dome.renderOrder = 3;
     own.push(dm, dome.geometry); body.add(dome);
+  }
+  // Dach-Deko
+  let topSpin = null, topFlash = null;
+  if (!lite && L.topper && L.topper !== 'none' && KV_TOPPERS[L.topper]) {
+    try {
+      const [mx, my, mz] = kvMount(B.s);
+      const parts = KV_TOPPERS[L.topper]();
+      const tg = new T.Group(); tg.position.set(mx * U - U / 2, my * U, mz * U - U / 2);
+      for (const key of ['main', 'spin', 'flash']) {
+        if (!parts[key]) continue;
+        const { geo: tgeo } = vxSmoothGeometry(T, parts[key], { iter: 2, field: 0.9 });
+        own.push(tgeo);
+        const tm = new T.Mesh(tgeo, kvMats(T, 'gloss')); tm.scale.setScalar(k); tm.castShadow = true;
+        if (key === 'spin') { const pv = new T.Group(); pv.position.y = (parts.spinY || 0) * U; pv.add(tm); tg.add(pv); topSpin = pv; }
+        else if (key === 'flash') { tm.position.y = (parts.flashY || 0) * U; tg.add(tm); topFlash = tm; }
+        else tg.add(tm);
+      }
+      body.add(tg);
+    } catch (e) { console.warn('Dach-Deko', e); }
   }
   // Lenkrad
   let steerWheel = null;
@@ -619,6 +794,8 @@ function kartVoxModel(T, look, driver = null, { lite = false, fig: figIn = null 
       if (rainbow) flameMat.color.setHSL((t * 0.6) % 1, 1, 0.6);
       if (glow) { glow.material.opacity = 0.7 + Math.sin(t * 3) * 0.15; if (glowRainbow) glow.material.color.setHSL((t * 0.25) % 1, 1, 0.55); }
       if (steerWheel) steerWheel.rotation.z = -steerNow * 0.9;
+      if (topSpin) topSpin.rotation.y = t * 14;
+      if (topFlash) topFlash.material[2] && (topFlash.visible = Math.floor(t * 4) % 2 === 0);
       fig?.update(dt);
     },
     setSteer(s) { steerNow = Math.max(-1, Math.min(1, s)); fig?.setSteer(steerNow); },

@@ -406,7 +406,7 @@ function kartGrid(T, tr, cols, fn, { keep = null, step = 4, vScale = 8, shade = 
 /* ---------------- Garage-Optik ----------------
    Nur das Aussehen: Lack, Lackart, Muster, Felgen, Spoiler, Auspuff, Turbo-Flammen, Unterboden-Licht, Helm.
    Alle Karts fahren gleich schnell – die Fahrphysik schaut sich diese Werte nie an. */
-const KART_LOOK0 = { paint: 0xff5a36, paint2: 0xffffff, finish: 'gloss', pattern: 'none', rims: 'classic', wing: 'standard', exhaust: 'chrome', flames: 'classic', glow: 'none', helmet: 0xffffff, visor: 'dark', num: 1 };
+const KART_LOOK0 = { paint: 0xff5a36, paint2: 0xffffff, finish: 'gloss', pattern: 'none', rims: 'classic', wing: 'standard', exhaust: 'chrome', flames: 'classic', glow: 'none', topper: 'none', helmet: 0xffffff, visor: 'dark', num: 1 };
 const KART_FLAMES = {
   classic: ['rgba(255,240,180,1)', 'rgba(255,90,20,0)', 0xffffff],
   blue: ['rgba(220,250,255,1)', 'rgba(30,120,255,0)', 0xbfe9ff],
@@ -414,8 +414,12 @@ const KART_FLAMES = {
   violet: ['rgba(255,225,255,1)', 'rgba(160,60,255,0)', 0xf0c8ff],
   plasma: ['rgba(255,255,255,1)', 'rgba(255,60,190,0)', 0xffd6f3],
   rainbow: ['rgba(255,255,255,1)', 'rgba(255,255,255,0)', 0xff4040],
+  gold: ['rgba(255,250,220,1)', 'rgba(255,190,0,0)', 0xffe08a],
+  sun: ['rgba(255,255,255,1)', 'rgba(255,230,120,0)', 0xfff7d6],
+  ice: ['rgba(240,255,255,1)', 'rgba(120,220,255,0)', 0xd9f7ff],
+  shadow: ['rgba(200,160,255,1)', 'rgba(40,0,80,0)', 0x8b5cf6],
 };
-const KART_GLOWS = { cyan: 0x22d3ee, pink: 0xf472b6, green: 0x4ade80, gold: 0xfacc15, violet: 0xa78bfa, rainbow: 0xff4040 };
+const KART_GLOWS = { cyan: 0x22d3ee, pink: 0xf472b6, green: 0x4ade80, gold: 0xfacc15, violet: 0xa78bfa, rainbow: 0xff4040, red: 0xef4444, orange: 0xfb923c, white: 0xf8fafc };
 const kartLookOf = (look) => ({ ...KART_LOOK0, ...(look || {}) });
 
 function kartRimTex(style = 'classic') {
