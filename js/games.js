@@ -23,6 +23,14 @@ const GAMES = [
     howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
   { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'sudden'],
     howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung, und über den Spuren schweben Blasen mit Ergebnissen: Lauf unter der richtigen durch! Jede richtige Antwort macht dich ein bisschen schneller. Mit der Zeit kommt Neues dazu: Löcher, hohe Wände (zweimal nach oben wischen = Doppelsprung), rollende Fässer, eine schmale Strasse und Kurven (rechtzeitig nach links oder rechts wischen). Auf nur einer Spur schweben die Ergebnisse übereinander: oben = springen, Mitte = weiterlaufen, unten = nach unten wischen (rutschen). Wie früh die schwierigeren Hindernisse kommen, hängt davon ab, wie sicher du im Training rechnest.' },
+  { id: 'maze', name: 'Rechen-Labyrinth', desc: 'Finde den Weg zum Schatz – nur über Zahlen der Reihe.', color: 'purple', art: '<span class="emo">🧭</span>', modes: ['countdown', 'survive'],
+    howto: 'Der Fuchs sucht den Schatz. Er darf nur auf Zahlen der Reihe treten, die oben steht (zum Beispiel 21, 28, 35 bei der 7er-Reihe). Tippe auf ein Nachbarfeld: Gehört die Zahl zur Reihe, geht er hin – sonst zerbricht das Feld. Manche Wege sind Sackgassen!' },
+  { id: 'tower', name: 'Turmbau', desc: 'Richtig gerechnet? Dann kommt ein Block – bau den höchsten Turm!', color: 'sun', art: '<span class="emo">🏗️</span>', modes: ['countdown', 'survive'],
+    howto: 'Rechne die Aufgabe und tippe das richtige Ergebnis an. Dann hängt ein Block am Kran und schwingt hin und her. Tippe im richtigen Moment ins Bild – der Block fällt auf den Turm. Was übersteht, bricht ab, und der nächste Block wird schmaler. Triffst du genau, gibt es «Perfekt!» und der Block wird wieder etwas breiter.' },
+  { id: 'snake', name: 'Zahlen-Schlange', desc: 'Lenk die Schlange zum richtigen Ergebnis!', color: 'lime', art: '<span class="emo">🐍</span>', modes: ['countdown', 'survive'],
+    howto: 'Oben steht eine Rechnung, auf der Wiese liegen drei Zahlen. Lenk die Schlange zur richtigen – sie frisst sie und wird länger. Falsche Zahlen und Bisse in den eigenen Schwanz sind schlecht! Am Rand geht es auf der anderen Seite weiter. Lenken: Pfeiltasten, Wischen oder die Knöpfe.' },
+  { id: 'puzzle', name: '1×1-Tafel-Puzzle', desc: 'Leg die Zahlenteile an den richtigen Platz der Einmaleins-Tafel.', color: 'purple', art: '<span class="emo">🧩</span>', modes: ['speed'],
+    howto: 'Ein Stück der Einmaleins-Tafel fehlt. Unten liegen Teile mit Zahlen. Zieh jedes Teil an seinen Platz – zum Beispiel gehört 21 · 24 · 27 in die 3er-Zeile unter 7, 8 und 9. Ein falscher Platz kostet 3 Sekunden.' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -87,13 +95,17 @@ const RUN = { ms: 60000, goal: 20, lives: 3 };
 const HEART_SVG = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2 10.6 20C5.4 15.3 2 12.2 2 8.4 2 5.3 4.4 3 7.4 3c1.7 0 3.4.8 4.6 2.1C13.2 3.8 14.9 3 16.6 3 19.6 3 22 5.3 22 8.4c0 3.8-3.4 6.9-8.6 11.6z"/></svg>';
 const GAME_MODES = {
   countdown: { name: 'Countdown', icon: () => icon('clock'), short: '60 Sekunden',
-    desc: (id) => (id === 'runner' ? 'Lauf 60 Sekunden lang durch möglichst viele richtige Bögen. Hindernisse bremsen dich, kosten aber kein Leben.' : 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.') },
+    desc: (id) => ({ runner: 'Lauf 60 Sekunden lang durch möglichst viele richtige Bögen. Hindernisse bremsen dich, kosten aber kein Leben.', maze: 'Möglichst viele richtige Schritte in 60 Sekunden. Falsche Felder halten dich nur auf.', tower: 'Bau in 60 Sekunden einen möglichst hohen Turm.', snake: 'Friss in 60 Sekunden möglichst viele richtige Zahlen.' }[id] || 'Möglichst viele richtige Antworten in 60 Sekunden. Extrazeit gibt es nicht.') },
   sudden: { name: 'Ein Leben', icon: () => HEART_SVG, short: 'bis zum 1. Fehler',
     desc: () => 'Nur ein Leben: Lauf so weit du kannst. Beim ersten Hindernis, Absturz oder falscher Antwort ist es vorbei.' },
   survive: { name: 'Survive', icon: () => HEART_SVG, short: '3 Leben',
-    desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in einen Abgrund kostet ein Leben. Jede richtige Antwort macht dich ein bisschen schneller.' : `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
+    desc: (id) => id === 'runner' ? '3 Leben – lauf so weit wie möglich. Eine falsche Antwort, ein Hindernis oder ein Sturz in einen Abgrund kostet ein Leben. Jede richtige Antwort macht dich ein bisschen schneller.'
+      : id === 'maze' ? '3 Leben – jede falsche Zahl kostet eines, ebenso zu langes Überlegen. Alle 5 richtigen Schritte hast du etwas weniger Zeit.'
+        : id === 'tower' ? '3 Leben – eine falsche Antwort oder ein Block, der danebenfällt, kostet eines. Je höher der Turm, desto schneller schwingt der Kran.'
+          : id === 'snake' ? '3 Leben – eine falsche Zahl oder ein Biss in den eigenen Schwanz kostet eines. Alle 5 richtigen wird die Schlange schneller.' : `3 Leben – halte so lange wie möglich durch. Jede falsche Antwort kostet ein Leben. Alle 5 richtigen kommt ein neues Level, und du hast 10 % weniger Zeit pro Rechnung.${id === 'meteor' ? ' Beim letzten Leben fliegt ab und zu ein Ufo vorbei: Triffst du es, gibt es ein Extraleben.' : ''}` },
   speed: { name: 'Speed', icon: () => icon('bolt'), short: '20 richtige',
     desc: (id) => (id === 'memory' ? 'Finde alle Paare so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.'
+      : id === 'puzzle' ? 'Leg alle Teile so schnell wie möglich an den richtigen Platz. Ein falscher Platz kostet 3 Sekunden.'
       : id === 'kart' ? 'Drei Runden, so schnell wie möglich. Jede 4. richtige Antwort = Turbo, falsch = kurz langsamer. Deine Zeit kommt in die Bestenliste.'
         : '20 richtige Antworten – so schnell wie möglich. Jede falsche verlangt eine Rechnung mehr.') },
 };
@@ -238,10 +250,10 @@ function runFinish(why) {
 /* ---------------- Ergebnis und Bestenliste ---------------- */
 // Sterne: [1, 2, 3 Sterne]; Speed in Sekunden (weniger ist besser)
 const STAR_LIMITS = {
-  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32], runner: [4, 7, 10] },
-  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35], runner: [5, 10, 18] },
+  countdown: { elfmeter: [6, 11, 16], meteor: [6, 11, 16], frog: [6, 11, 16], target: [6, 11, 16], truefalse: [12, 22, 32], runner: [4, 7, 10], maze: [8, 14, 20], tower: [4, 8, 12], snake: [5, 9, 14] },
+  survive: { elfmeter: [6, 12, 20], meteor: [6, 12, 20], frog: [6, 12, 20], target: [6, 12, 20], truefalse: [10, 20, 35], runner: [5, 10, 18], maze: [10, 20, 32], tower: [5, 10, 18], snake: [5, 10, 18] },
   sudden: { runner: [3, 7, 12] },
-  speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32] },
+  speed: { elfmeter: [140, 100, 75], meteor: [140, 100, 70], frog: [150, 110, 80], target: [150, 105, 80], truefalse: [90, 60, 40], memory: [80, 50, 32], puzzle: [150, 100, 65] },
 };
 function runStars(r, score) {
   const l = STAR_LIMITS[r.mode]?.[r.id];
@@ -269,10 +281,10 @@ function showRunResult(r) {
   if (rec) { db.prog.best[key] = score; saveDB(); }
   const st = runStars(r, score);
   if (st >= 2 || rec) { sfx.win(); confetti(); }
-  const title = { time: 'Zeit ist um!', lives: 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : 'Geschafft!' }[r.why] || 'Fertig!';
+  const title = { time: 'Zeit ist um!', lives: 'Keine Leben mehr!', done: r.id === 'memory' ? 'Alle Paare gefunden!' : r.id === 'puzzle' ? 'Puzzle fertig!' : 'Geschafft!' }[r.why] || 'Fertig!';
   const line = lower
-    ? `${r.id === 'memory' ? `${r.goal} Paare` : `${r.goal} richtige`} in <b>${fmtSec(score)} s</b>${r.wrong ? ` · ${r.wrong} falsch` : ' · ohne Fehler'}`
-    : `<b>${r.ok}</b> ${r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten'}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${livesMode(r.mode) ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
+    ? `${r.id === 'memory' ? `${r.goal} Paare` : r.id === 'puzzle' ? `${r.goal} Teile` : `${r.goal} richtige`} in <b>${fmtSec(score)} s</b>${r.wrong ? ` · ${r.wrong} falsch` : ' · ohne Fehler'}`
+    : `<b>${r.ok}</b> ${(typeof g2Noun === 'function' && g2Noun(r.id, r.ok)) || (r.ok === 1 ? 'richtige Antwort' : 'richtige Antworten')}${r.mode === 'countdown' ? ' in 60 Sekunden' : ''}${livesMode(r.mode) ? ` · <b>Level ${Math.floor(r.ok / SURVIVE.step) + 1}</b> erreicht` : ''}${r.wrong ? ` · ${r.wrong} falsch` : ''}`;
   const wrongs = [...new Map(r.wrongs.map((t) => [t.key + t.op, t])).values()].slice(0, 8);
   $('#view').innerHTML = gameShell(r.id, `<div class="run-result">
       <div class="result">
@@ -384,7 +396,7 @@ function renderGame() {
     </div>
   </section>`;
 }
-const START_2D = { elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel(),
+const START_2D = { maze: () => startMaze(), tower: () => startTower(), snake: () => startSnake(), puzzle: () => startPuzzle(), elfmeter: () => startElfmeter(), meteor: () => startMeteor(), frog: () => startFrog(), target: () => startTarget(), memory: () => startMemory(), truefalse: () => startTrueFalse(), duel: () => startDuel(),
   kart: () => { toast('Das Rennen konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); },
   runner: () => { toast('Der Welten-Lauf konnte nicht starten. Probier es nochmals.', 'bad'); renderGame(); } };
 const START_3D = { elfmeter: () => startElfmeter3D(), meteor: () => startMeteor3D(), frog: () => startFrog3D(), kart: () => startKart3D(), runner: () => startRunner3D() };

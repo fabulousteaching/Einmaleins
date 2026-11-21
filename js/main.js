@@ -78,6 +78,9 @@ const actions = {
   'g3-pick': (el) => game.pick?.(el),
   'mem-flip': (el) => memFlip(el),
   'tf-answer': (el) => tfAnswer(el.dataset.v === '1'),
+  'mz-step': (el) => mzStep(+el.dataset.i),
+  'tw-answer': (el) => twAnswer(el.dataset.v),
+  'sn-dir': (el) => snTurn(el.dataset.d.split(',').map(Number)),
   'duel-tap': (el) => duelTap(el),
   'duel-goal': (el) => { db.settings.duelGoal = +el.dataset.v; saveDB(); renderGame(); },
   'kart-track': (el) => { db.settings.kartTrack = el.dataset.v; saveDB(); renderGame(); },
@@ -96,7 +99,7 @@ if (typeof world3dActions === 'object') Object.assign(actions, world3dActions); 
 
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
-const FAST = new Set(['meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
+const FAST = new Set(['mz-step', 'tw-answer', 'sn-dir', 'meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
 let lastFast = { el: null, t: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;

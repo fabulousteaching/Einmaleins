@@ -1,0 +1,104 @@
+/* Teilmal – weitere Spiele (js/games2.js): Rechen-Labyrinth, Turmbau, Zahlen-Schlange, 1×1-Tafel-Puzzle */
+
+/* Uhr pro Schritt/Rechnung (Survive) – als Balken unter der Anzeige */
+.game :is(.mz-clock, .tw-clock) { position: relative; left: auto; right: auto; bottom: auto; margin: 6px auto 0; width: min(560px, 92%); background: var(--sunken); }
+
+/* ---------------- 🧭 Rechen-Labyrinth ---------------- */
+.mz-head { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 10px auto 8px; max-width: 640px; text-align: center; font-weight: 600; color: var(--ink-2); }
+.mz-badge { padding: 4px 14px; border-radius: 99px; background: var(--c); color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; box-shadow: 0 6px 16px -8px var(--c); }
+.mz-wrap { display: grid; place-items: center; }
+.mz-board { position: relative; display: grid; grid-template-columns: repeat(var(--w), 1fr); grid-template-rows: repeat(var(--h), 1fr); gap: 7px; padding: 12px;
+  width: min(94vw, 500px, calc((100dvh - 330px) * var(--w) / var(--h))); aspect-ratio: var(--w) / var(--h); border-radius: 26px;
+  background: radial-gradient(circle at 20% 15%, rgba(255, 255, 255, .12), transparent 40%), radial-gradient(circle at 80% 90%, rgba(0, 0, 0, .25), transparent 45%), linear-gradient(160deg, #2f6b3a, #1d4a2c);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .08), var(--shadow-card); }
+.mz-board.in { animation: mz-in .45s ease; }
+@keyframes mz-in { from { opacity: 0; transform: scale(.94); } }
+.mz-cell { position: relative; display: grid; place-items: center; min-width: 0; border: 0; border-radius: 16px; cursor: pointer; font: 800 clamp(1rem, 4.4vw, 1.55rem) var(--font-display); color: #3b2f1e; font-variant-numeric: tabular-nums;
+  background: linear-gradient(160deg, #f3e7cf, #d9c39c); box-shadow: inset 0 -5px 0 rgba(120, 90, 50, .35), 0 4px 8px -4px rgba(0, 0, 0, .5); transition: transform .15s, background .25s, opacity .3s; }
+.mz-cell:hover { transform: translateY(-2px); }
+.mz-cell.start { background: linear-gradient(160deg, #fde68a, #f59e0b); font-size: clamp(1.2rem, 5vw, 1.8rem); }
+.mz-cell.goal { background: radial-gradient(circle, #a5f3fc, #22d3ee 70%); font-size: clamp(1.3rem, 5.4vw, 2rem); animation: mz-glow 1.6s ease-in-out infinite; }
+@keyframes mz-glow { 50% { box-shadow: 0 0 0 4px rgba(165, 243, 252, .55), 0 0 26px 6px rgba(34, 211, 238, .6); } }
+.mz-cell.visited:not(.start):not(.goal) { background: linear-gradient(160deg, #bbf7d0, #4ade80); color: #14532d; box-shadow: inset 0 -5px 0 rgba(21, 128, 61, .4), 0 0 14px -2px rgba(74, 222, 128, .8); }
+.mz-cell.bad { background: repeating-linear-gradient(135deg, #fca5a5 0 6px, #f87171 6px 12px); color: #7f1d1d; opacity: .55; cursor: not-allowed; animation: shake .35s; }
+.mz-cell.bad::after { content: '✕'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.8em; color: rgba(127, 29, 29, .55); }
+.mz-me { position: absolute; z-index: 3; width: 13%; aspect-ratio: 1; display: grid; place-items: center; transform: translate(-50%, -60%); font-size: clamp(1.6rem, 7vw, 2.6rem); pointer-events: none;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .45)); transition: left .26s cubic-bezier(.3, 1.4, .5, 1), top .26s cubic-bezier(.3, 1.4, .5, 1); }
+.mz-me.nope { animation: mz-nope .3s; }
+@keyframes mz-nope { 25% { transform: translate(-58%, -60%); } 75% { transform: translate(-42%, -60%); } }
+.mz-board.done .mz-me { animation: mz-jump .5s 2; }
+@keyframes mz-jump { 50% { transform: translate(-50%, -110%) scale(1.15); } }
+.mz-float { position: absolute; z-index: 4; transform: translate(-50%, -150%); padding: 4px 12px; border-radius: 99px; white-space: nowrap; pointer-events: none; font-weight: 800; font-size: .95rem;
+  background: rgba(255, 255, 255, .95); color: var(--green-ink); box-shadow: var(--shadow-soft); animation: mz-float 1.3s ease forwards; }
+.mz-float.bad { color: var(--red-ink); }
+.mz-float.big { font-size: 1.2rem; background: #fef9c3; color: #854d0e; }
+@keyframes mz-float { 0% { opacity: 0; transform: translate(-50%, -110%) scale(.8); } 15% { opacity: 1; transform: translate(-50%, -150%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -210%); } }
+
+/* ---------------- 🏗️ Turmbau ---------------- */
+.tw-stage { position: relative; overflow: hidden; margin: 10px auto 0; width: min(94vw, 560px); height: clamp(300px, calc(100dvh - 400px), 520px); border-radius: 24px; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(180deg, #7dd3fc 0%, #bae6fd 55%, #e0f2fe 100%); box-shadow: var(--shadow-card); user-select: none; -webkit-user-select: none; }
+.tw-stage::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 60px 22px at 18% 30%, rgba(255, 255, 255, .9), transparent 70%), radial-gradient(ellipse 80px 26px at 72% 18%, rgba(255, 255, 255, .85), transparent 70%), radial-gradient(ellipse 50px 18px at 85% 48%, rgba(255, 255, 255, .7), transparent 70%); pointer-events: none; }
+.tw-world { position: absolute; inset: 0; transition: transform .5s cubic-bezier(.3, 1.2, .5, 1); }
+.tw-ground { position: absolute; left: -10%; right: -10%; bottom: 0; height: 46px; background: linear-gradient(180deg, #4ade80 0 10px, #16a34a 10px 16px, #a16207 16px); }
+.tw-crane { position: absolute; inset: 0 0 auto 0; height: 60px; pointer-events: none; }
+.tw-beam { position: absolute; left: 0; right: 0; top: 10px; height: 14px; background: repeating-linear-gradient(90deg, #facc15 0 16px, #1f2937 16px 22px); box-shadow: 0 3px 6px rgba(0, 0, 0, .25); }
+.tw-trolley { position: absolute; top: 6px; width: 34px; height: 20px; margin-left: -17px; border-radius: 6px; background: #374151; box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .3); }
+.tw-rope { position: absolute; left: 50%; top: 20px; width: 3px; height: 32px; margin-left: -1.5px; background: #374151; }
+.tw-tip { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; background: rgba(17, 24, 39, .75); color: #fff; font-weight: 700; font-size: .9rem; white-space: nowrap; pointer-events: none; animation: tw-tip 1.2s ease-in-out infinite; }
+@keyframes tw-tip { 50% { transform: translateX(-50%) translateY(-4px); } }
+.tw-block { position: absolute; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; color: #fff; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bc) 78%, #fff), var(--bc)); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .35); text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+.tw-block span { overflow: hidden; text-overflow: clip; padding: 0 4px; }
+.tw-block.base { border-radius: 8px 8px 0 0; }
+.tw-block.hang { top: 58px; z-index: 2; }
+.tw-block.land { animation: tw-land .25s ease-out; }
+@keyframes tw-land { 0% { transform: scaleY(.8) translateY(4px); } }
+.tw-block.cut { z-index: 2; transition: top .8s cubic-bezier(.5, 0, 1, 1), transform .8s, opacity .8s; }
+.tw-ask { display: grid; justify-items: center; gap: 8px; margin: 10px auto 4px; width: min(94vw, 560px); }
+.tw-task { font-size: clamp(2rem, 7vw, 2.8rem); }
+.tw-answers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; }
+.tw-ans { position: relative; padding: 12px 6px; border: 2px solid var(--line); border-radius: 16px; background: var(--paper); font: 800 clamp(1.3rem, 5vw, 1.7rem) var(--font-display); color: var(--ink); cursor: pointer; box-shadow: var(--shadow-soft); transition: transform .12s; }
+.tw-ans:hover { transform: translateY(-2px); border-color: var(--c); }
+.tw-ans small { position: absolute; left: 7px; top: 4px; font-size: .62rem; color: var(--ink-3); font-family: var(--font-body, inherit); }
+.tw-ans.right { background: var(--green-wash); border-color: var(--green); color: var(--green-ink); }
+.tw-ans.wrong { background: var(--red-wash); border-color: var(--red); color: var(--red-ink); animation: shake .35s; }
+.tw-ans:disabled { cursor: default; }
+@media (max-width: 420px) { .tw-answers { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------------- 🐍 Zahlen-Schlange ---------------- */
+.sn-task { margin: 10px auto 6px; font-size: clamp(2rem, 7vw, 2.8rem); }
+.sn-stage { position: relative; margin: 0 auto; width: min(94vw, 600px, calc((100dvh - 400px) * 1.3)); height: min(64vw, 420px); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-card), inset 0 0 0 4px #65a30d; background: #bef264; }
+.sn-stage canvas { display: block; margin: 0 auto; }
+.sn-go { position: absolute; inset: 0; display: grid; place-items: center; font: 800 clamp(2rem, 8vw, 3.4rem) var(--font-display); color: #fff; text-shadow: 0 4px 16px rgba(0, 0, 0, .35); pointer-events: none; }
+.sn-go.out { animation: sn-go .9s ease forwards; }
+@keyframes sn-go { 0% { transform: scale(1); } 30% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+.sn-pad { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 50px); gap: 6px; justify-content: center; margin: 10px auto 4px; }
+.sn-dir { border: 0; border-radius: 14px; background: var(--paper); box-shadow: var(--shadow-soft); font-size: 1.3rem; color: var(--ink-2); cursor: pointer; touch-action: manipulation; }
+.sn-dir:active { background: var(--cw); color: var(--c); transform: scale(.95); }
+.sn-dir.up { grid-column: 2; grid-row: 1; }
+.sn-dir.left { grid-column: 1; grid-row: 2; }
+.sn-dir.down { grid-column: 2; grid-row: 2; }
+.sn-dir.right { grid-column: 3; grid-row: 2; }
+@media (hover: hover) and (pointer: fine) { .sn-pad { opacity: .75; } }
+
+/* ---------------- 🧩 1×1-Tafel-Puzzle ---------------- */
+.pz-wrap { display: grid; place-items: center; margin: 12px auto 8px; overflow-x: auto; max-width: 100%; }
+.pz-table { --cw: clamp(22px, calc((100vw - 86px) / 11), 48px); display: grid; grid-template-columns: repeat(var(--cols), var(--cw)); gap: 3px; padding: 8px; border-radius: 18px; background: var(--paper); box-shadow: var(--shadow-card); }
+.pz-h { display: grid; place-items: center; height: var(--cw); font-weight: 800; color: var(--ink-3); font-size: clamp(.75rem, 2.6vw, 1rem); }
+.pz-h.row { color: #fff; background: var(--c); border-radius: 10px; }
+.pz-h.corner { color: var(--c); font-size: 1.2rem; }
+.pz-cell { display: grid; place-items: center; height: var(--cw); border-radius: 9px; font: 800 clamp(.72rem, 2.7vw, 1.05rem) var(--font-display); font-variant-numeric: tabular-nums; }
+.pz-cell.given { background: var(--sunken); color: var(--ink-2); }
+.pz-cell.empty { border: 2px dashed var(--line-2); cursor: pointer; }
+.pz-cell.empty.hover { border-color: var(--c); background: var(--cw); }
+.pz-cell.filled { border-style: solid; border-color: var(--c); background: var(--cw); color: var(--c); animation: pz-pop .35s ease backwards; }
+.pz-cell.miss { animation: shake .35s; border-color: var(--red); }
+@keyframes pz-pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.12); } }
+.pz-tray { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 6px auto 8px; max-width: 760px; padding: 0 8px; touch-action: none; }
+.pz-piece { --cw: clamp(30px, 8vw, 44px); display: grid; grid-template-columns: repeat(var(--n), var(--cw)); gap: 3px; padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--c) 18%, var(--paper)); box-shadow: var(--shadow-soft); cursor: grab; user-select: none; -webkit-user-select: none; transition: transform .15s, opacity .25s; }
+.pz-piece span { display: grid; place-items: center; height: var(--cw); border-radius: 8px; background: var(--paper); font: 800 clamp(.78rem, 2.8vw, 1.05rem) var(--font-display); color: var(--c); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .08); }
+.pz-piece.sel { outline: 3px solid var(--c); transform: translateY(-4px); }
+.pz-piece.lifted { opacity: .35; }
+.pz-piece.placed { opacity: 0; pointer-events: none; transform: scale(.6); width: 0; padding: 0; margin: 0 -5px; overflow: hidden; transition: all .35s; }
+.pz-piece.nope { animation: shake .35s; }
+.pz-piece.ghost { position: fixed; z-index: 1000; pointer-events: none; grid-template-columns: repeat(var(--n), var(--cw)); opacity: .95; transform: rotate(-3deg) scale(1.04); box-shadow: var(--shadow-pop); }
