@@ -22,7 +22,7 @@ const GAMES = [
   { id: 'kart', name: 'Turbo-Rennen', desc: 'Kart-Rennen: Fahr durchs richtige Ergebnis – Turbo!', color: 'blue', art: '<span class="emo">🏎️</span>', three: true, modes: ['speed'],
     howto: 'Drei Runden gegen fünf Computer-Fahrer. Wo sich die Strecke teilt, fährst du durch einen ?-Würfel – dann erscheint eine Rechnung. Etwas weiter vorne kommen drei Tore mit Ergebnissen: Fahr durchs richtige! Jede richtige Antwort füllt ein Feld, bei der 4. gibt es Turbo. Ein falsches Tor bremst dich kurz. Tipps: Innen durch die Kurve lädt einen Kurven-Turbo auf, und wer genau bei «LOS!» tippt, hat einen Raketenstart.' },
   { id: 'runner', name: 'Welten-Lauf', desc: 'Renn mit deinem Avatar durch fünf Welten!', color: 'teal', art: '<span class="emo">🏃</span>', three: true, modes: ['survive', 'sudden'],
-    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis! Jede richtige Antwort macht dich ein bisschen schneller.' },
+    howto: 'Du rennst mit deinem Avatar auf drei Spuren. Wisch nach links oder rechts (oder Pfeiltasten), um die Spur zu wechseln, und nach oben zum Springen. Spring über Hürden, auf Blöcke und über Abgründe – wer hineinfällt, verliert ein Leben. Immer wieder kommt eine Rechnung: Lauf durch den Bogen mit dem richtigen Ergebnis! Jede richtige Antwort macht dich ein bisschen schneller. Mit der Zeit kommt Neues dazu: Löcher, hohe Wände (zweimal nach oben wischen = Doppelsprung), rollende Fässer, nur noch zwei oder eine Spur und Kurven (rechtzeitig nach links oder rechts wischen). Auf nur einer Spur stehen die Ergebnisse übereinander: oben = springen, Mitte = weiterlaufen, unten = nach unten wischen (rutschen).' },
   { id: 'memory', name: 'Memory', desc: 'Finde so schnell wie möglich alle Paare.', color: 'pink', art: '<span class="emo">🃏</span>', modes: ['speed'],
     howto: 'Alle Karten liegen offen. Tippe eine Rechnung und dann ihr Ergebnis an – so schnell wie möglich. Ein falsches Paar kostet 3 Sekunden.' },
   { id: 'duel', name: 'Duell zu zweit', desc: 'Zwei Kinder, ein Tablet: Wer ist schneller?', color: 'coral', art: '<span class="emo">⚔️</span>', modes: [],
@@ -396,7 +396,7 @@ async function startRunner3D() {
   const r = runStart('runner', { onEnd: () => { try { run?.stop(); } catch { /* */ } } });
   runPause(true); // die Uhr läuft erst nach dem Countdown
   $('#view').innerHTML = gameShell('runner', `<div id="rnwrap"></div>
-    <p class="mode-hint">Wischen oder Pfeiltasten: ← → Spur wechseln, ↑ springen (↓ in der Luft: schnell landen). Kurz tippen geht auch: links/rechts aussen = Spur, Mitte = springen.</p>`);
+    <p class="mode-hint">Wischen oder Pfeiltasten: ← → Spur wechseln (auf einer Spur: abbiegen), ↑ springen, in der Luft nochmals ↑ = Doppelsprung, ↓ rutschen. Kurz tippen geht auch: links/rechts aussen = Spur, Mitte = springen.</p>`);
   const host = $('#rnwrap');
   game.stage3d = { dispose: () => { try { run?.dispose(); } catch (e) { console.warn(e); } } };
   const lose = () => { // Hindernis oder Sturz: Survive kostet ein Leben (zählt nicht als falsche Antwort)
@@ -583,7 +583,7 @@ function meteorWave() {
   game.task.shownAt = performance.now();
 }
 function meteorLoop(now) {
-  const dt = Math.min(0.05, (now - game.last) / 1000);
+  const dt = Math.max(0, Math.min(0.05, (now - game.last) / 1000));
   game.last = now;
   const space = $('#space');
   if (!space || !runOn()) return;

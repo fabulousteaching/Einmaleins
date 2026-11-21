@@ -86,7 +86,7 @@ function createStage(host, { fov = 55, near = 0.05, far = 600, shadows = false, 
   const camShake = new T.Vector3();
   function frame(now) {
     if (st.disposed) return;
-    const dt = Math.min(0.05, (now - st.last) / 1000);
+    const dt = Math.max(0, Math.min(0.05, (now - st.last) / 1000));
     st.last = now; st.time += dt * 1000;
     for (const tw of [...st.tweens]) {
       const t = clamp((st.time - tw.t0) / tw.ms, 0, 1);
