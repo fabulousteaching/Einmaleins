@@ -96,10 +96,11 @@ const actions = {
 };
 if (typeof avatarActions === 'object') Object.assign(actions, avatarActions); // Mein Avatar (js/avatar.js, gemeinsam mit Vokaboom)
 if (typeof world3dActions === 'object') Object.assign(actions, world3dActions); // 3D-Welt und Garage (js/world3d.js)
+if (typeof liveActions === 'object') Object.assign(actions, liveActions); // Live in der Klasse: 1×1-Bingo (js/live.js)
 
 
 /* Bei schnellen Spielen zählt schon das Antippen (pointerdown), sonst der Klick */
-const FAST = new Set(['mz-step', 'tw-answer', 'sn-dir', 'meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
+const FAST = new Set(['bingo-mark', 'mz-step', 'tw-answer', 'sn-dir', 'meteor-hit', 'meteor-alien', 'elf-shoot', 'duel-tap', 'frog-jump', 'tf-answer', 'mem-flip', 'pad', 'ex-choice', 'g3-pick']);
 let lastFast = { el: null, t: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
@@ -120,7 +121,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && ui.modal) { e.preventDefault(); closeModal(); }
 });
-window.addEventListener('hashchange', () => kidLoginFromHash());
+window.addEventListener('hashchange', () => { if (typeof liveFromHash === 'function' && liveFromHash()) return; kidLoginFromHash(); });
 
 function init() {
   kidLoadSession();
@@ -128,6 +129,7 @@ function init() {
   renderShell();
   render();
   cloudInit().finally(async () => {
+    if (typeof liveFromHash === 'function' && liveFromHash()) return; // Live-Spiel über QR-Code
     const handled = await kidLoginFromHash();
     if (handled) return;
     const before = kid.token;

@@ -95,6 +95,7 @@ function renderCrumbs() {
   else if (ui.view === 'stand') html = `${sep}<span class="crumb current">Mein Stand</span>`;
   else if (ui.view === 'avatar') html = `${sep}<span class="crumb current">Mein Avatar</span>`;
   else if (ui.view === 'garage') html = `${sep}<span class="crumb current">Garage</span>`;
+  else if (ui.view === 'live') html = `${sep}<span class="crumb current">1×1-Bingo live</span>`;
   else if (ui.view === 'classes' || ui.view === 'class') html = classesCrumbs();
   el.innerHTML = html;
 }
@@ -115,10 +116,12 @@ function render() {
     case 'class': renderClass(); break;
     case 'avatar': if (w3 && !(isKid() && !avatarOn())) renderWorld3D('avatar'); else renderAvatar(); break;
     case 'garage': renderWorld3D('garage'); break;
+    case 'live': if (typeof renderLive === 'function') renderLive(); break;
     default: v.innerHTML = viewHome(); bindHome();
   }
 }
 function go(view, extra = {}) {
+  if (ui.view === 'live' && view !== 'live' && typeof liveStop === 'function') liveStop(); // Live-Spiel verlassen
   stopAll();
   Object.assign(ui, extra);
   ui.view = view;
@@ -293,6 +296,10 @@ function viewHome() {
     <div class="tiles">${EXERCISES.map((x) => tileHTML(x, 'ex')).join('')}</div>
     <div class="section-head"><h2>Spielen</h2><p class="hint">${gamesFree() ? 'Für Lehrpersonen gratis zum Ausprobieren.' : `Jedes Spiel kostet ${GAME_COST} Münze. Münzen verdienst du beim Üben.`}</p></div>
     <div class="tiles games">${GAMES.map((x) => tileHTML(x, 'game')).join('')}</div>
+    ${typeof liveActions === 'object' ? `<div class="live-strip panel">
+      <div><h2>🔢 1×1-Bingo – live in der Klasse</h2><p class="hint">${isKid() ? 'Deine Lehrperson startet das Bingo am Beamer. Du machst mit dem Code oder QR-Code mit.' : 'Am Beamer starten, die Kinder machen auf ihren Geräten mit (Code oder QR-Code). Gratis, ohne Münzen.'}</p></div>
+      <div class="row">${isKid() ? '' : '<button class="btn primary" data-action="live-host">🔢 Bingo starten</button>'}<button class="btn secondary" data-action="live-join">📲 Live-Spiel beitreten</button></div>
+    </div>` : ''}
     <div class="home-grid">
       <div class="panel stand-panel">
         <div class="stats-head"><h2>Mein Stand</h2><button class="btn small secondary" data-action="stand">${icon('chart')} Alles ansehen</button></div>
